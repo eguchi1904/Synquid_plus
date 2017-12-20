@@ -3,3 +3,5 @@
 *cmo
 *cmt
 *.d
+*.merlin
+*test/*

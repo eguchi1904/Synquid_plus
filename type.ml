@@ -56,9 +56,9 @@ let rec substitute_T (sita:subst) (t:t) =
   |TScalar( TVar(v) , p  ) when M.mem v sita ->
     (match M.find v sita with
      |TScalar( b , p') ->
-       if p' == Formula.Bool true then
+       if p' = Formula.Bool true then
          TScalar( b, p)
-       else if p == Formula.Bool true then
+       else if p = Formula.Bool true then
          TScalar( b, p')
        else
          TScalar( b, (Formula.And(p',p) ) )
@@ -150,8 +150,8 @@ let mk_constrain_pa env (args1, p1) (args2, p2) =
   let rec mk_subst args1 args2 =
     List.fold_left2
       (fun (sita1,sita2) (i1,s1) (i2,s2) ->
-        assert (s1 == s2);
-        let input = Formula.Any (s1, i1) in
+        assert (s1 = s2);
+        let input = Formula.Var (s1, i1) in
         let sita1' = M.add i1 input sita1 in
         let sita2' = M.add i2 input sita2 in
         (sita1', sita2'))
@@ -168,6 +168,7 @@ let mk_constrain_pa env (args1, p1) (args2, p2) =
 let rec split (cs:subtype_constrain list) (tsubst:subst) =
   match cs with
   |(env, (TScalar (b1,p1) as t1), (TScalar (b2,p2) as t2))  :: left ->
+    
     (match b1,b2 with
      |TVar a, _    when  M.mem a tsubst    ->
        let cs' = (env, M.find a tsubst, t2)::left in
@@ -175,7 +176,16 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
        
      |_ , TVar a   when M.mem a tsubst ->
        let cs' = (env, t1, M.find a tsubst)::left in
-       split cs' tsubst 
+       split cs' tsubst
+
+     |TVar a, TVar b ->
+       assert (p1 = Formula.Bool true);
+       assert (p2 = Formula.Bool true);
+       if a = b then
+         split left tsubst
+       else
+         let tsubst' = M.add a (id2Tvar b) tsubst in (* a=bという情報を加える,とりあえず近似 *)
+         split left tsubst'
        
      |TVar a, TData (i2, ts2, ps2) ->
        let ts1 = List.map (fun _ -> genTvar a) ts2 in (* 新たな型変数 *)
@@ -221,14 +231,16 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
        let cs' = (env, t1, refine) ::left in
        split cs' tsubst'       
                
-     |TData (i1, ts1, ps1), TData (i2, ts2, ps2)  when i1 == i2->
+     |TData (i1, ts1, ps1), TData (i2, ts2, ps2)  when i1 = i2->
        let ts1_ts2 = List.map2 (fun a b ->(env, a, b)) ts1 ts2 in
        let ps1_ps2 = List.map2 (mk_constrain_pa env) ps1 ps2 in
        let cs' = ts1_ts2@left in
-       ps1_ps2 @ (split cs' tsubst)
+       let cs_res, sub_res = split cs' tsubst in
+       (ps1_ps2 @ cs_res), sub_res
 
      |TBool, TBool |TInt, TInt ->
-       (env, p1, p2)::(split left tsubst)
+       let cs_res, sub_res = split left tsubst in
+       ((env, p1, p2)::cs_res), sub_res
 
      |_ -> raise (InferErr "basetipe miss match")
     )
@@ -241,12 +253,12 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
               ::((env, t1', t2')::left) in
     split cs' tsubst
 
-  |(env, TAny i1, TAny i2) :: left when i1 == i2 ->  split left tsubst
+  |(env, TAny i1, TAny i2) :: left when i1 = i2 ->  split left tsubst
 
   |(env, TBot, _) :: left -> split left tsubst
 
   |  _      :: left   -> raise (InferErr "type shape miss match")
-   
+                       
   |[] -> []
 
        

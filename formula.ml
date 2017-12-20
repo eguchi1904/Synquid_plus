@@ -15,9 +15,9 @@ type sort = BoolS | IntS | DataS of Id.t * (sort list) | SetS of sort | AnyS
 type t =
   |Bool of bool
   |Int of int
-  |Set of sort * (t list)
-  |Any of sort * Id.t        (* input variable *)
-  |Var of sort * Id.t        (* predicate unknown *)
+  |Set of sort * (t list)         (* set literal [1, 2, 3] *)
+  |Var of sort * Id.t             (* input variable *)
+  |Unknown of subst * Id.t        (* predicate unknown with pending substitution *)
   |Cons of sort * Id.t * (t list) (* datatype constructor *)
   |UF of sort * Id.t * (t list) (* uninterpreted function *)
   |All of (Id.t * sort) list * t
@@ -45,12 +45,23 @@ type t =
   |Subset of t * t
   |Neg of t 
   |Not of t 
-        
+and subst = t M.t (* 術後変数の代入　Boolソートが対象,ではないか *)
 
 type pa =                       (* for predicate abstraction *)
   (Id.t * sort) list  * t
 
-type subst = t M.t (* 術後変数の代入　Boolソートが対象,ではないか *)
+let subst_compose (sita1:subst) (sita2:subst) = (* sita t = sita1(sita2 t) *)
+  let sita2' = M.mapi
+                 (fun i t ->
+                   match t with
+                   |Var( _,i')|Unknown (_,i') when M.mem i' sita1 ->
+                     M.find i' sita1
+                   |_ -> t)
+                 sita2         
+  in
+  M.union (fun i t1 t2 -> Some t2) sita1 sita2'
+  
+  
 
 let genFvar s = Var (BoolS, (Id.genid s))
 
@@ -60,10 +71,22 @@ let genPavar ((args,p):pa) s = (args, genFvar s)
 let rec substitution (sita:subst) (t:t) =
 (* substitueは、Var i に対して、Any iではなく *)
   match t with
-  |Var (s,i) when (* s == BoolS && *) M.mem i sita ->
+  |Var (s,i) when (* s = BoolS && *) M.mem i sita ->
+    
     M.find i sita           (* 代入 *)
 
+  |Unknown (sita1, i) when M.mem i sita ->
+    let p = M.find i sita in
+    substitution sita1 p        (* pending substitution を展開する。 *)
+
+  |Unknown (sita1, i) ->
+    let sita' = subst_compose sita sita1 in
+    Unknown (sita', i)          (* pending substitution を合成 *)
+
   (* 残りはただの再起 *)
+  |Set (s, ts) ->
+    let ts' = List.map (substitution sita) ts in
+    Set (s, ts')
   |Cons (s, i, ts) ->
     let ts' = List.map (substitution sita) ts in
     Cons(s, i, ts')
@@ -112,8 +135,9 @@ let rec substitution (sita:subst) (t:t) =
   |Subset (t1, t2) -> Subset ((substitution sita t1),
                               (substitution sita t2))
   |Neg t1 -> Neg (substitution sita t1)
-  |Not t1 -> Not (substitution sita t1)           
-  |t' -> t'
+  |Not t1 -> Not (substitution sita t1)
+  |t ->t
+  
        
 
 let pa_substitution (sita:subst) ((args,t):pa) =
@@ -128,9 +152,12 @@ let pa_substitution (sita:subst) ((args,t):pa) =
 (* 単縦に変数の置換 *)
 let rec replace (x:Id.t) (y:Id.t) (t:t) =
   match t with
-  |Var (s,i) when i==x ->
+  |Var (s,i) when i = x ->
     Var (s,y)
   (* 残りはただの再起 *)
+  |Set (s, ts) ->
+    let ts' = List.map (replace x y) ts in
+    Set(s, ts')
   |Cons (s, i, ts) ->
     let ts' = List.map (replace x y) ts in
     Cons(s, i, ts')
@@ -180,7 +207,7 @@ let rec replace (x:Id.t) (y:Id.t) (t:t) =
                               (replace x y t2))
   |Neg t1 -> Neg (replace x y t1)
   |Not t1 -> Not (replace x y t1)           
-  |t' -> t'
+  |t ->t
 
 
 let pa_replace x y ((args,t):pa) =
