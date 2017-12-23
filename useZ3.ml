@@ -8,11 +8,19 @@ open Z3.Solver
 type sort_map = ((Formula.sort),(Sort.sort)) Hashtbl.t (* hashを試してみる *)
 type id_expr_map = ((Id.t),(Expr.expr)) Hashtbl.t
 type id_fun_map = ((Id.t), (FuncDecl.func_decl)) Hashtbl.t
-                    
+
+type z3_env = sort_map * id_expr_map * id_fun_map
+            
+let ctx = mk_context [] 
+
+let mk_z3_env () :z3_env=
+  (Hashtbl.create 12345),(Hashtbl.create 12345),(Hashtbl.create 12345)
+                
 let counter = ref 0
 let gen_string s =
   incr counter;
   Printf.sprintf "%s.%d" s !counter
+
 
 
 (*　副作用 適宜hashを更新する。 *)
@@ -220,4 +228,31 @@ let rec formula2z3 (ctx:context) (smap:sort_map) (emap:id_expr_map) (fmap:id_fun
  |Formula.Not e1 ->
    let z_e1, z_s1 = formula2z3 ctx smap emap fmap e1 in
    (assert (z_s1 = (Boolean.mk_sort ctx)));
-   (Boolean.mk_not ctx z_e1), z_s1  
+   (Boolean.mk_not ctx z_e1), z_s1
+
+(* let substitute_z3 ((smap,emap,fmap):z3_env) (sita:) (z3_e:Expr.expr) = *)
+(*   let sita_list = M.bindings sita in *)
+(*   let vars, ps = List.split *)
+(*                    List.map (fun i e ->(Hashtbl.find emap i), *)
+                                       
+                
+
+
+let convert ((smap,emap,fmap):z3_env) (e:Formula.t) =
+  formula2z3 ctx smap emap fmap e
+  
+exception CANT_SOLVE
+        
+let is_valid (e:Expr.expr) =
+  let solver = mk_solver ctx None in
+  let not_e =  (Boolean.mk_not ctx e) in
+  (Solver.add solver [not_e]);
+  let ret = Solver.check solver [] in
+  if ret = UNSATISFIABLE then
+    true
+  else if ret = SATISFIABLE then
+    false
+  else
+    raise CANT_SOLVE
+  
+  

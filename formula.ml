@@ -45,10 +45,34 @@ type t =
   |Subset of t * t
   |Neg of t 
   |Not of t 
-and subst = t M.t (* 術後変数の代入　Boolソートが対象,ではないか *)
+and subst = t M.t (* 術後変数の代入 *)
 
 type pa =                       (* for predicate abstraction *)
   (Id.t * sort) list  * t
+
+let rec fv = function               (* 自由変数、 *)
+  |Var (_,i) when i = Id.valueVar_id -> S.empty (* _v は自由変数でない *)
+  |Var (_,i) -> S.singleton i
+  |Bool _ | Int _ |Unknown _ -> S.empty
+  |Set (_, ts) |Cons (_,_, ts) |UF (_,_,ts) ->
+    List.fold_left (fun acc t -> S.union acc (fv t)) S.empty ts
+  |If (t1,t2,t3) ->S.union (fv t1) (S.union (fv t2) (fv t3) )
+  |Times(t1,t2) |Plus(t1,t2) |Minus (t1,t2) |Eq(t1,t2) | Neq(t1,t2)|Lt(t1,t2)
+   |Le(t1,t2)|Gt(t1,t2)|Ge(t1,t2)|And(t1,t2)|Or(t1,t2)|Implies(t1,t2)|Iff(t1,t2)
+   |Union(t1,t2) |Intersect(t1,t2) |Diff(t1,t2) |Member(t1,t2) |Subset(t1,t2)
+   ->S.union (fv t1) (fv t2)
+  |Neg t1 |Not t1 ->fv t1
+  |All (args,t1) |Exist (args,t1) ->
+    S.diff (fv t1) (S.of_list (List.map fst args))
+
+
+let rec and_list (es:t list) =
+  match es with
+  |[] -> Bool true
+  |(Bool true)::es' -> and_list es'
+  |e::es' -> And (e, and_list es')
+
+  
 
 let subst_compose (sita1:subst) (sita2:subst) = (* sita t = sita1(sita2 t) *)
   let sita2' = M.mapi
@@ -61,12 +85,15 @@ let subst_compose (sita1:subst) (sita2:subst) = (* sita t = sita1(sita2 t) *)
   in
   M.union (fun i t1 t2 -> Some t2) sita1 sita2'
   
-  
 
-let genFvar s = Var (BoolS, (Id.genid s))
+let genFvar s i = Var (s, (Id.genid i))
 
-let genPavar ((args,p):pa) s = (args, genFvar s)
-  
+                
+
+let genUnkownP i = Unknown (M.empty, (Id.genid i))
+                 
+let genUnknownPa ((args,p):pa) s = (args, genUnkownP s) (* for predicate abstraction *)
+
 
 let rec substitution (sita:subst) (t:t) =
 (* substitueは、Var i に対して、Any iではなく *)
@@ -137,8 +164,6 @@ let rec substitution (sita:subst) (t:t) =
   |Neg t1 -> Neg (substitution sita t1)
   |Not t1 -> Not (substitution sita t1)
   |t ->t
-  
-       
 
 let pa_substitution (sita:subst) ((args,t):pa) =
   (* 引数と変数名がかぶるものは置換しない *)

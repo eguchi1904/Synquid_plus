@@ -1,0 +1,73 @@
+open Formula
+open UseZ3
+
+exception PredicateNotExist of string
+
+let add_pcandi pcandi p_i e =
+  try
+    let candi = M.find p_i pcandi in
+    M.add p_i (e::candi) pcandi
+  with
+    Not_found ->
+    M.add p_i [e] pcandi
+   
+let rec guess_candidate' cs (pcandi:(t list) M.t) =
+  match cs with
+  |(env, Unknown _, Unknown _) :: cs' -> (* とりあえず *)
+    raise (Invalid_argument "predicateunknown vs predicateunknown")
+  |(env, Unknown (sita, i), e) :: cs' ->
+    guess_candidate' cs' (add_pcandi pcandi i e)
+  |(env, e, Unknown (sita, i)) :: cs'->
+    guess_candidate' cs' (add_pcandi pcandi i e)
+  |_ :: cs' -> guess_candidate' cs' pcandi
+  |[] ->
+    pcandi
+
+   
+   
+let guess_candidate cs = guess_candidate' cs (M.empty)
+
+let rec isnt_valid z3_env cs pcandi =
+  match cs with
+  |(env, e1, e2 )::cs' -> (* env/\e => sita*P *)
+    let sita:subst = M.map (fun tlist -> and_list tlist) pcandi in
+    let p = substitution sita (Implies ( (And (env,e1)), e2)) in
+    let z3_p,p_s = UseZ3.convert z3_env p in
+    if UseZ3.is_valid z3_p then
+      isnt_valid z3_env cs' pcandi
+    else
+      Some (env, e1, e2)
+  |[] -> None
+
+let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *)
+  match c with
+  |(env, e, Unknown (sita_i, i)) ->
+    let sita = M.map (fun tlist -> and_list tlist) pcandi in
+    let qs = M.find i pcandi in
+    let qs' = List.filter
+                (fun q ->let q' = substitution sita_i q in
+                         let p = substitution sita (Implies ((And(env,e), q'))) in
+                         let z3_p,p_s = UseZ3.convert z3_env p in
+                         UseZ3.is_valid z3_p)
+                qs
+    in
+    M.add i qs' pcandi
+  |_ -> raise (PredicateNotExist "can't refine")
+    
+    
+
+                       
+
+let rec iter_weak z3_env pcandi cs =
+  match isnt_valid z3_env cs pcandi with
+  |None -> pcandi
+  |Some c -> iter_weak z3_env (refine z3_env pcandi c) cs
+  
+   
+(*horn節を充足する、unknown predicateの対応を返す。 *)
+let f (cs:(t*t*t) list) z3_env =
+  let pcandi = guess_candidate cs  in (* とりあえず候補を荒くあげる *)
+  let pcandi' = iter_weak z3_env pcandi  cs in
+  M.map and_list pcandi'
+  
+  
