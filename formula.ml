@@ -11,7 +11,7 @@ type sort = BoolS | IntS | DataS of Id.t * (sort list) | SetS of sort | AnyS
 (*     Union | Intersect | Diff |     (\* Set -> Set -> Set *\) *)
 (*     Member | Subset                (\* Int/Set -> Set -> Bool *\) *)
 
-(* formula -- predicate unknownはなくて良いかな *)
+(* formula -- predicate unknownはなくて良いかな <= 嘘 *)
 type t =
   |Bool of bool
   |Int of int
@@ -19,7 +19,7 @@ type t =
   |Var of sort * Id.t             (* input variable *)
   |Unknown of subst * Id.t        (* predicate unknown with pending substitution *)
   |Cons of sort * Id.t * (t list) (* datatype constructor *)
-  |UF of sort * Id.t * (t list) (* uninterpreted function *)
+  |UF of sort * Id.t * (t list)   (* uninterpreted function *)
   |All of (Id.t * sort) list * t
   |Exist of (Id.t * sort) list * t
           
@@ -47,8 +47,20 @@ type t =
   |Not of t 
 and subst = t M.t (* 術後変数の代入 *)
 
-type pa =                       (* for predicate abstraction *)
-  (Id.t * sort) list  * t
+
+type pa = (Id.t * sort) list * t
+
+(* \x.y.r x y の形だった場合、rを返す。 *)
+let eta_shape ((arg,t):pa) =
+  match t with
+  |UF (_,r,ts) ->
+    if List.for_all2 (fun (i,sort) t ->t = Var(sort,i)) arg ts then
+      Some r
+    else
+      None
+  |_ -> None
+      
+type pa_shape = (sort list) * sort
 
 let rec fv = function               (* 自由変数、 *)
   |Var (_,i) when i = Id.valueVar_id -> S.empty (* _v は自由変数でない *)
@@ -64,6 +76,7 @@ let rec fv = function               (* 自由変数、 *)
   |Neg t1 |Not t1 ->fv t1
   |All (args,t1) |Exist (args,t1) ->
     S.diff (fv t1) (S.of_list (List.map fst args))
+
 
 
 let rec and_list (es:t list) =
@@ -93,6 +106,19 @@ let genFvar s i = Var (s, (Id.genid i))
 let genUnkownP i = Unknown (M.empty, (Id.genid i))
                  
 let genUnknownPa ((args,p):pa) s = (args, genUnkownP s) (* for predicate abstraction *)
+
+let genUnknownPa_shape ((arg_sort,rets):pa_shape) s =
+  let args,_ = List.fold_right
+               (fun  sort (args,i) -> ((Id.genid (string_of_int i)),sort)::args,i+1)
+               arg_sort
+               ([],0)
+  in
+  (args, genUnkownP s)
+      
+(* let genUnknownPreAbst i ((arg_s,s):pa_shape) = *)
+(*   let args = List.map (fun s ->(Id.genid "ar"),s) arg_s in *)
+(*   let unknownP = genUnkownP i in *)
+(*   Abs (args,unknownP) *)
 
 
 let rec substitution (sita:subst) (t:t) =
@@ -165,14 +191,73 @@ let rec substitution (sita:subst) (t:t) =
   |Not t1 -> Not (substitution sita t1)
   |t ->t
 
-let pa_substitution (sita:subst) ((args,t):pa) =
+let rec pa_substitution (pa_sita:pa M.t) (t:t) =
   (* 引数と変数名がかぶるものは置換しない *)
-  let sita' = M.filter
-                (fun i  _ -> not (List.mem (i, BoolS) args ) )
-                sita
-  in
-  let t' = substitution sita' t in
-  (args, t')
+  match t with
+  |UF (s, i, ts) when M.mem i pa_sita ->
+    let ts' = List.map (pa_substitution pa_sita) ts in
+    let (args,body) = M.find i pa_sita in
+    let sita = M.add_list2 (List.map fst args) ts' M.empty in
+    substitution sita body
+  |UF (s, i, ts) ->
+    let ts' = List.map (pa_substitution pa_sita) ts in
+    UF (s, i, ts')
+  (* 残りは再起 *)
+  |Set (s, ts) ->
+    let ts' = List.map (pa_substitution pa_sita) ts in
+    Set (s, ts')
+  |Cons (s, i, ts) ->
+    let ts' = List.map (pa_substitution pa_sita) ts in
+    Cons(s, i, ts')    
+  |All (is, t') -> All (is, (pa_substitution pa_sita t'))
+  |Exist (is, t') -> Exist (is, pa_substitution pa_sita t')
+  |If (t1, t2, t3) ->If((pa_substitution pa_sita t1),
+                        (pa_substitution pa_sita t2),
+                        (pa_substitution pa_sita t3))
+  |Times (t1,t2) ->Times ((pa_substitution pa_sita t1),
+                          (pa_substitution pa_sita t2))
+  |Plus (t1, t2) -> Plus ((pa_substitution pa_sita t1),
+                          (pa_substitution pa_sita t2))
+  |Minus (t1, t2) -> Minus ((pa_substitution pa_sita t1),
+                            (pa_substitution pa_sita t2))
+  |Eq (t1, t2) -> Eq ((pa_substitution pa_sita t1),
+                      (pa_substitution pa_sita t2))
+  |Neq (t1, t2) -> Neq ((pa_substitution pa_sita t1),
+                        (pa_substitution pa_sita t2))
+  |Lt (t1, t2) -> Lt ((pa_substitution pa_sita t1),
+                      (pa_substitution pa_sita t2))
+  |Le (t1, t2) -> Le ((pa_substitution pa_sita t1),
+                      (pa_substitution pa_sita t2))
+  |Gt (t1, t2) -> Gt ((pa_substitution pa_sita t1),
+                      (pa_substitution pa_sita t2))
+  |Ge (t1, t2) -> Ge ((pa_substitution pa_sita t1),
+                      (pa_substitution pa_sita t2))
+  |And (t1, t2) -> And ((pa_substitution pa_sita t1),
+                        (pa_substitution pa_sita t2))
+  |Or (t1, t2) -> Or ((pa_substitution pa_sita t1),
+                      (pa_substitution pa_sita t2))
+  |Implies (t1, t2) -> Implies ((pa_substitution pa_sita t1),
+                                (pa_substitution pa_sita t2))
+  |Iff (t1, t2) -> Iff ((pa_substitution pa_sita t1),
+                        (pa_substitution pa_sita t2))
+  |Union (t1, t2) -> Union ((pa_substitution pa_sita t1),
+                            (pa_substitution pa_sita t2))
+  |Intersect (t1, t2) -> Intersect ((pa_substitution pa_sita t1),
+                                    (pa_substitution pa_sita t2))
+  |Diff (t1, t2) -> Diff ((pa_substitution pa_sita t1),
+                          (pa_substitution pa_sita t2))
+  |Member (t1, t2) -> Member ((pa_substitution pa_sita t1),
+                              (pa_substitution pa_sita t2))
+  |Subset (t1, t2) -> Subset ((pa_substitution pa_sita t1),
+                              (pa_substitution pa_sita t2))
+  |Neg t1 -> Neg (pa_substitution pa_sita t1)
+  |Not t1 -> Not (pa_substitution pa_sita t1)
+  |t' ->t'
+
+
+                 
+    
+    
 
 (* 単縦に変数の置換 *)
 let rec replace (x:Id.t) (y:Id.t) (t:t) =

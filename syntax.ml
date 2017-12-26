@@ -15,3 +15,15 @@ type t = PE of e | PI of b | PF of f | PHole
    |PFix of Id.t * f
 
  and case = {constructor : Id.t ; argNames : Id.t list ; body : t} 
+
+let rec auxi_exist (e:e) =
+  match e with
+  |PSymbol _ -> false
+  |PAuxi _ -> true
+  |PAppFo (e1,e2) ->(auxi_exist e1)||(auxi_exist e2)
+
+let rec auxi_name (e:e) =
+  match e with
+  |PSymbol _ -> raise (Invalid_argument "auxi_function not found")
+  |PAuxi i -> Some i
+  |PAppFo (e1,e2) -> auxi_name e1

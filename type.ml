@@ -10,9 +10,10 @@ type t =
    |TData of  Id.t * (t list) * ( Formula.pa list)  (* Di T <p> *)
    |TVar of Id.t
 
-type schema =  (Id.t list) * (Id.t list) * t
+          
+type schema =  (Id.t list) * ((Id.t * Formula.pa_shape) list) * t
 (* type polymorphic predicate polymorphic *)
-
+let mk_mono_schmea t :schema = ([],[],t)
 (* contextual type *)
 
 
@@ -29,7 +30,8 @@ let env_empty:env = ([],[])
 
 let env_add ((l, p):env) ((x,t):Id.t * t) =
   ((x,([],[],t) )::l), p
-  
+
+let env_add_F ((l, ps):env)  (p:Formula.t) = (l, p::ps)
 
 let env_find env v =
   match env with
@@ -37,7 +39,6 @@ let env_find env v =
 
 let env_append ((its1, p1):env) ((its2, p2):env):env =
   (its1@its2, p1@p2)
-
 
     
 (* freshな型変数で、 {a True} を返す *)
@@ -79,7 +80,7 @@ let rec substitute_F (sita:Formula.subst) (t:t) =
   match t with
   |TScalar( TData( i, ts, ps), p ) ->
     let ts' = List.map (substitute_F sita ) ts in
-    let ps' = List.map (Formula.pa_substitution sita) ps in
+    let ps' = List.map (fun (args,t) ->(args,Formula.substitution sita t)) ps in
     let p' =  Formula.substitution sita p in
     TScalar( TData (i, ts', ps'), p')
   |TScalar (b, p) ->
@@ -90,6 +91,42 @@ let rec substitute_F (sita:Formula.subst) (t:t) =
     let t2' = substitute_F sita t2 in
     TFun ((x,t1'),t2')
   | _ -> t
+
+let rec substitute_pa (pa_sita:Formula.pa M.t) (t:t) =
+  match t with
+  |TScalar (TData( i, ts, ps), p ) ->
+    let ts' = List.map (substitute_pa pa_sita) ts in
+    let ps' = List.map
+                (* \x\y.r x y　の形のものを置き換える時に無駄がないように、、  *)
+                (fun (arg,t) -> match Formula.eta_shape (arg,t) with
+                           |Some r when M.mem r pa_sita -> M.find r pa_sita
+                           |Some r -> (arg,t)
+                           |None -> (arg,
+                                     Formula.pa_substitution pa_sita t))
+                ps
+    in
+    let p' = Formula.pa_substitution pa_sita p in
+    TScalar (TData( i, ts',ps'),p')
+  |TScalar (b, p) ->
+    let p' = Formula.pa_substitution pa_sita p in
+    TScalar (b,p')
+  |TFun ((x,t1),t2) ->
+    let t1' = substitute_pa pa_sita t1 in
+    let t2' = substitute_pa pa_sita t2 in
+    TFun ((x,t1'),t2')
+  | _ -> t 
+    
+                    
+
+
+let rec env_substitute_F (sita:Formula.subst) ((ts,ps):env) :env=
+  let ts':(Id.t * schema) list =
+    List.map (fun (x,(arg1,arg2,t)) -> (x, (arg1,arg2,substitute_F sita t))) ts
+  in
+  let ps' = List.map (Formula.substitution sita) ps in
+  (ts',ps')
+  
+                         
 
 (* 述語変数の置換 *)
 let rec replace_F x y t =
@@ -115,12 +152,28 @@ let instantiate ((ts,ps,t):schema) =
                  M.empty
                  ts
   in
-  let sita_f = List.fold_left
-                 (fun sita i -> M.add i (Formula.genUnkownP "p") sita)
+  let sita_pa = List.fold_left
+                 (fun sita (i,shape) ->M.add i (Formula.genUnknownPa_shape shape "p") sita)
                  M.empty
                  ps
 in
-(substitute_F sita_f ( substitute_T sita_t t) )
+(substitute_pa sita_pa ( substitute_T sita_t t) )
+
+let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
+  let sita_t = List.fold_left2
+                 (fun sita i t' ->M.add i t' sita)
+                 M.empty
+                 ts
+                 ts'
+  in
+  let sita_pa = List.fold_left2
+                  (fun sita (i,shape) pa' ->M.add i pa' sita)
+                  M.empty
+                  ps
+                  ps'
+  in
+(substitute_pa sita_pa ( substitute_T sita_t t) )  
+  
 
 (* fに関係するenvの条件を抜き出す。 *)
 let rec env2formula' (tenv:((Id.t*schema) list)) vset =
@@ -173,23 +226,22 @@ let rec gen_constrain env e t :contextual * (subtype_constrain list) * (env *t) 
 
 
 let mk_constrain_pa env (args1, p1) (args2, p2) =
+  (* まず、p2の引数をp1に合わせる。 *)
   let rec mk_subst args1 args2 =
     List.fold_left2
-      (fun (sita1,sita2) (i1,s1) (i2,s2) ->
+      (fun sita2 (i1,s1) (i2,s2) ->
         assert (s1 = s2);
         let input = Formula.Var (s1, i1) in
-        let sita1' = M.add i1 input sita1 in
         let sita2' = M.add i2 input sita2 in
-        (sita1', sita2'))
-      (M.empty, M.empty)
+         sita2')
+      M.empty
       args1
       args2
   in
-  let sita1,sita2 =mk_subst args1 args2  in
-  let p1' = Formula.substitution sita1 p1 in
+  let sita2 =mk_subst args1 args2  in
   let p2' = Formula.substitution sita2 p2 in
-  let env_f = env2formula env (Formula.And (p1',p2')) in
-  (env_f, p1', p2')
+  let env_f = env2formula env (Formula.And (p1 ,p2')) in
+  (env_f, p1, p2')
 
     
 let rec split (cs:subtype_constrain list) (tsubst:subst) =
@@ -303,18 +355,40 @@ let rec expand_tvar (tvar_map:subst) (t:t) =
 
   |TFun ((x,t1), t2) ->
     TFun ((x, expand_tvar tvar_map t1), expand_tvar tvar_map t2)
-  |_ -> t  
+  |_ -> t
+
+let rec env_expand_tvar tvar_map ((ts,ps):env) :env=
+  let ts' = List.map (fun (x,(ar1,ar2,t)) ->x,(ar1,ar2,expand_tvar tvar_map t)) ts in
+  (ts',ps)
+
+let rec contextual_expand_tvar tvar_map ((TLet (env,t)):contextual) =
+  TLet ( (env_expand_tvar tvar_map env), expand_tvar tvar_map t)
+                                        
+  
   
   
 
-let checkETerm env e t  =
+let checkETerm env e t  z3_env =
   let contex_t,cs,g_t_op = gen_constrain env e t in
   match g_t_op with
   |None -> None
   |Some (g_env, g_t) ->
     let cs,tvar_map = split cs (M.empty) in
-    let z3_env = UseZ3.mk_z3_env () in
     let punknown_map = Find_unknownP.f cs z3_env in
     let g_t =  expand_tvar tvar_map g_t in
-    Some (substitute_F punknown_map g_t)
+    let g_t' = substitute_F punknown_map g_t in
+    let g_env' = env_substitute_F punknown_map g_env in
+    Some (g_env', g_t')
+
+let inferETerm env e z3_env = 
+  let contex_t,cs,g_t_op = gen_constrain env e TBot in
+  (assert (g_t_op = None));
+   let cs,tvar_map = split cs (M.empty) in
+   let punknown_map = Find_unknownP.f cs z3_env in
+    let TLet (cenv, t) =  contextual_expand_tvar tvar_map contex_t in
+    let t' = substitute_F punknown_map t in
+    let cenv' = env_substitute_F punknown_map cenv in
+    TLet(cenv', t')
+
+  
     
