@@ -25,5 +25,5 @@ let rec auxi_exist (e:e) =
 let rec auxi_name (e:e) =
   match e with
   |PSymbol _ -> raise (Invalid_argument "auxi_function not found")
-  |PAuxi i -> Some i
+  |PAuxi i ->  i
   |PAppFo (e1,e2) -> auxi_name e1

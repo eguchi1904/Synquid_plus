@@ -1,3 +1,4 @@
+
 type t =
   |TScalar of basetype * Formula.t
   |TFun of (Id.t * t) * t
@@ -10,6 +11,20 @@ type t =
    |TData of  Id.t * (t list) * ( Formula.pa list)  (* Di T <p> *)
    |TVar of Id.t
 
+
+let rec t2string = function
+  |TScalar (b,p) ->Printf.sprintf "{%s | %s}" (b2string b) (Formula.p2string p)
+  |TFun ((x,t1),t2) -> Printf.sprintf "%s:%s ->\n %s" x (t2string t1) (t2string t2)
+  |TAny a ->Printf.sprintf "%s" a
+  |TBot -> "Bot"
+
+and b2string = function
+  |TBool ->"Bool"|TInt -> "Int"
+  |TData (i,ts,ps) ->
+    let ts_string = List.map t2string ts in
+    Printf.sprintf "D%s %s" i (String.concat " " ts_string)
+  |TVar x -> Printf.sprintf "Var(%s)" x
+  
           
 type schema =  (Id.t list) * ((Id.t * Formula.pa_shape) list) * t
 (* type polymorphic predicate polymorphic *)
@@ -21,6 +36,28 @@ type subst = t M.t   (* 型変数の代入 *)
 
   
 type env = (Id.t * schema) list * (Formula.t list)
+
+let rec env2string ((xts,ps):env) =
+  let rec xts2string = function
+    |(x,(_,_,t1))::( y, (_,_,t2) )::xts' ->
+      Printf.sprintf "%s:%s; %s:%s\n%s" x (t2string t1) y (t2string t2) (xts2string xts')
+    |[(x,(_,_,t))] ->
+      Printf.sprintf "%s:%s\n" x (t2string t)
+    |[] ->""
+  in
+  let rec ps2string = function
+    |p::ps' ->
+      Printf.sprintf "%s\n%s" (Formula.p2string p) (ps2string ps')
+    |[] -> ""
+  in
+  Printf.sprintf
+  "------------------------------------------------------------\
+   \n%s\
+
+   \n%s\
+   \n============================================================\n"
+  (xts2string xts)
+  (ps2string ps)
 
 type contextual = TLet of env * t
                         
@@ -47,7 +84,6 @@ let genTvar s = TScalar (TVar (Id.genid s), (Formula.Bool true) )
 (* Id.t型に対する、　{a true}を返す *)
 let id2Tvar s =  TScalar (TVar  s, (Formula.Bool true) )
 
-                           
 
 exception InferErr of string
 exception SubstErr of string
@@ -204,10 +240,13 @@ let env2formula ((tenv,ps):env) (f:Formula.t) =
 let rec gen_constrain env e t :contextual * (subtype_constrain list) * (env *t) option=
   match e with
   |Syntax.PSymbol i ->
+    (try
     let (ts,ps,ti) = env_find env i in
     let ti' = instantiate (ts,ps,ti) in
     let constrain = (env, ti', t) in
     TLet (env_empty, ti'),[constrain], None
+     with
+       _ ->assert false)
   |Syntax.PAuxi _ ->
     TLet (env_empty, t),[], Some (env, t)
 
@@ -336,9 +375,14 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
    
   |(env, TAny i1, TAny i2) :: left when i1 = i2 ->  split left tsubst
 
-  |(env, TBot, _) :: left -> split left tsubst
+  |(env,_, TBot) :: left -> split left tsubst
 
-  |  _      :: left   -> raise (InferErr "type shape miss match")
+  | (env,t1,t2)      :: left   ->
+     let mes = Printf.sprintf
+                 "type shape miss match\nt1\n%s\n\nt2\n%s\n" (t2string t1) (t2string t2)
+     in
+
+     raise (InferErr mes)
                        
   |[] -> [], tsubst
 

@@ -1,5 +1,5 @@
 (* UFLIA *)
-type sort = BoolS | IntS | DataS of Id.t * (sort list) | SetS of sort | AnyS
+type sort = BoolS | IntS | DataS of Id.t * (sort list) | SetS of sort | AnyS of Id.t
 
 (* type unop = Neg | Not *)
                                                                       
@@ -62,6 +62,63 @@ let eta_shape ((arg,t):pa) =
       
 type pa_shape = (sort list) * sort
 
+let rec p2string = function
+  |Bool b -> string_of_bool b | Int i -> string_of_int i
+  |Set (_,ts) ->let ts_string = String.concat ", " (List.map p2string ts) in
+                Printf.sprintf "[%s]" ts_string
+  |Var (_,id) ->Printf.sprintf "%s " id
+  |Unknown (_,id)->Printf.sprintf "P[%s]" id
+  |Cons (_,id,ts)|UF (_,id,ts) ->
+    let ts_string = String.concat " " (List.map p2string ts) in
+    Printf.sprintf "(%s %s)" id ts_string
+  |All (args,t) ->
+    Printf.sprintf "All(somearg).\n%s" (p2string t)
+  |Exist (args,t) ->
+    Printf.sprintf "Exist(somearg).\n%s" (p2string t)
+  |If (t1,t2,t3) ->
+    Printf.sprintf "if(%s)then %s else %s" (p2string t1) (p2string t2) (p2string t3)
+  |Times (t1,t2) ->
+    Printf.sprintf "(%s)*(%s)" (p2string t1) (p2string t2)
+  |Plus (t1,t2) ->
+    Printf.sprintf "(%s)+(%s)" (p2string t1) (p2string t2)
+  |Minus (t1,t2) ->
+    Printf.sprintf "(%s)-(%s)" (p2string t1) (p2string t2)
+  |Eq (t1,t2) ->
+    Printf.sprintf "(%s)==(%s)" (p2string t1) (p2string t2)
+  |Neq (t1,t2) ->
+    Printf.sprintf "(%s)!=(%s)" (p2string t1) (p2string t2)
+  |Lt (t1,t2) ->
+    Printf.sprintf "(%s)<(%s)" (p2string t1) (p2string t2)
+  |Le (t1,t2) ->
+    Printf.sprintf "(%s)<=(%s)" (p2string t1) (p2string t2)
+  |Gt (t1,t2) ->
+    Printf.sprintf "(%s)>(%s)" (p2string t1) (p2string t2)
+  |Ge (t1,t2) ->
+    Printf.sprintf "(%s)>=(%s)" (p2string t1) (p2string t2)
+  |And (t1,t2) ->
+    Printf.sprintf "(%s)&&(%s)" (p2string t1) (p2string t2)
+  |Or (t1,t2) ->
+    Printf.sprintf "(%s)||(%s)" (p2string t1) (p2string t2)
+  |Implies (t1,t2) ->
+    Printf.sprintf "(%s)==>(%s)" (p2string t1) (p2string t2)
+  |Iff (t1,t2) ->
+    Printf.sprintf "(%s)<=>(%s)" (p2string t1) (p2string t2)
+  |Union (t1,t2) ->
+    Printf.sprintf "(%s)\/(%s)" (p2string t1) (p2string t2)
+  |Intersect (t1,t2) ->
+    Printf.sprintf "(%s)/\(%s)" (p2string t1) (p2string t2)
+  |Diff (t1,t2) ->
+    Printf.sprintf "(%s)/(%s)" (p2string t1) (p2string t2)
+  |Member (t1,t2) ->
+    Printf.sprintf "(%s)in %s" (p2string t1) (p2string t2)
+  |Subset (t1,t2) ->
+    Printf.sprintf "(%s)<= (%s)" (p2string t1) (p2string t2)
+  |Neg t ->
+    Printf.sprintf "-(%s)" (p2string t )
+  |Not t ->
+    Printf.sprintf "!(%s)" (p2string t )   
+   
+              
 let rec fv = function               (* 自由変数、 *)
   |Var (_,i) when i = Id.valueVar_id -> S.empty (* _v は自由変数でない *)
   |Var (_,i) -> S.singleton i
