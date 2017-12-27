@@ -8,7 +8,7 @@ let rec_fun f x e =  PF
 
 let pmatch e cases = PI (PMatch (e,cases))
 
-let a_t = TAny "a"
+let a_t = TScalar (TAny "a",Bool true)
 let r_pa:pa = [("_0",AnyS "a");("_1",AnyS "a")],
            UF (BoolS,"r",[Var (AnyS "a", "_0");Var (AnyS "a","_1")])
 

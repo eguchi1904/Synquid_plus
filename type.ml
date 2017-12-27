@@ -2,20 +2,20 @@
 type t =
   |TScalar of basetype * Formula.t
   |TFun of (Id.t * t) * t
-  |TAny of Id.t                 (* a,b... トップレベルの型パラメタ、具体化しない*)
   |TBot                         (* ボトム型、型検査で補助的に利用 *)
 
  and basetype  =
    |TBool
    |TInt
    |TData of  Id.t * (t list) * ( Formula.pa list)  (* Di T <p> *)
-   |TVar of Id.t
+   |TVar of (Formula.subst) * Id.t                  (* with pending substitution *)
+   |TAny of Id.t                 (* a,b... トップレベルの型パラメタ、具体化しない*)
+          
 
 
 let rec t2string = function
   |TScalar (b,p) ->Printf.sprintf "{%s | %s}" (b2string b) (Formula.p2string p)
   |TFun ((x,t1),t2) -> Printf.sprintf "%s:%s ->\n %s" x (t2string t1) (t2string t2)
-  |TAny a ->Printf.sprintf "%s" a
   |TBot -> "Bot"
 
 and b2string = function
@@ -23,7 +23,33 @@ and b2string = function
   |TData (i,ts,ps) ->
     let ts_string = List.map t2string ts in
     Printf.sprintf "D%s %s" i (String.concat " " ts_string)
-  |TVar x -> Printf.sprintf "Var(%s)" x
+  |TVar (_,x) -> Printf.sprintf "Var(%s)" x
+  |TAny a ->Printf.sprintf "%s" a
+
+let rec b2sort  = function
+  |TBool -> Some Formula.BoolS
+  |TInt-> Some Formula.IntS
+  |TData (i, ts,pas) ->
+    let ts_sort_op  = List.map type2sort ts in
+    if List.mem None ts_sort_op then
+      None
+    else
+      let ts_sort = List.fold_right
+                      (fun op acc ->match op with
+                                    |None -> acc
+                                    |Some s ->s::acc
+                      )
+                      ts_sort_op
+                      []
+      in
+    Some (Formula.DataS (i,ts_sort))
+  |TVar _ -> None
+  |TAny a -> Some (Formula.AnyS a)
+and type2sort = function
+  |TScalar (b,p) -> b2sort b
+  |_ -> None
+  
+           
   
           
 type schema =  (Id.t list) * ((Id.t * Formula.pa_shape) list) * t
@@ -39,10 +65,10 @@ type env = (Id.t * schema) list * (Formula.t list)
 
 let rec env2string ((xts,ps):env) =
   let rec xts2string = function
-    |(x,(_,_,t1))::( y, (_,_,t2) )::xts' ->
-      Printf.sprintf "%s:%s; %s:%s\n%s" x (t2string t1) y (t2string t2) (xts2string xts')
-    |[(x,(_,_,t))] ->
-      Printf.sprintf "%s:%s\n" x (t2string t)
+    (* |(x,(_,_,t1))::( y, (_,_,t2) )::xts' -> *)
+    (*   Printf.sprintf "%s:%s; %s:%s\n%s" x (t2string t1) y (t2string t2) (xts2string xts') *)
+    |(x,(_,_,t))::xts' ->
+      Printf.sprintf "%s::%s\n%s" x (t2string t) (xts2string xts')
     |[] ->""
   in
   let rec ps2string = function
@@ -79,20 +105,44 @@ let env_append ((its1, p1):env) ((its2, p2):env):env =
 
     
 (* freshな型変数で、 {a True} を返す *)
-let genTvar s = TScalar (TVar (Id.genid s), (Formula.Bool true) )
+let genTvar s = TScalar (TVar (M.empty,(Id.genid s)), (Formula.Bool true) )
 
 (* Id.t型に対する、　{a true}を返す *)
-let id2Tvar s =  TScalar (TVar  s, (Formula.Bool true) )
+let id2Tvar s =  TScalar (TVar (M.empty,s), (Formula.Bool true) )
 
 
 exception InferErr of string
 exception SubstErr of string
 
+
+
+(* 述語変数への代入 *)
+let rec substitute_F (sita:Formula.subst) (t:t) =
+  match t with
+  |TScalar( TVar(psubst,v), p) -> (* pending substitutionを合成 *)
+    let psubst' = Formula.subst_compose sita psubst in
+    let p' = Formula.substitution sita p in
+    TScalar ( TVar(psubst',v), p')
+  |TScalar( TData( i, ts, ps), p ) ->
+    let ts' = List.map (substitute_F sita ) ts in
+    let ps' = List.map (fun (args,t) ->(args,Formula.substitution sita t)) ps in
+    let p' =  Formula.substitution sita p in
+    TScalar( TData (i, ts', ps'), p')
+  |TScalar (b, p) ->
+    let p' =  Formula.substitution sita p in
+    TScalar (b, p')
+  |TFun ((x,t1),t2) ->
+    let t1' = substitute_F sita t1 in
+    let t2' = substitute_F sita t2 in
+    TFun ((x,t1'),t2')
+  | _ -> t
+
 (* 型変数への代入 *)
 let rec substitute_T (sita:subst) (t:t) =
   match t with
-  |TScalar( TVar(v) , p  ) when M.mem v sita ->
-    (match M.find v sita with
+  |TScalar( TVar(psubst,v) , p  ) when M.mem v sita ->
+    let t' = substitute_F psubst (M.find v sita) in
+    (match t' with
      |TScalar( b , p') ->
        if p' = Formula.Bool true then
          TScalar( b, p)
@@ -110,24 +160,7 @@ let rec substitute_T (sita:subst) (t:t) =
     let t2' = substitute_T sita t2 in
     TFun ((x,t1'),t2')
   | _ -> t
-
-(* 述語変数への代入 *)
-let rec substitute_F (sita:Formula.subst) (t:t) =
-  match t with
-  |TScalar( TData( i, ts, ps), p ) ->
-    let ts' = List.map (substitute_F sita ) ts in
-    let ps' = List.map (fun (args,t) ->(args,Formula.substitution sita t)) ps in
-    let p' =  Formula.substitution sita p in
-    TScalar( TData (i, ts', ps'), p')
-  |TScalar (b, p) ->
-    let p' =  Formula.substitution sita p in
-    TScalar (b, p')
-  |TFun ((x,t1),t2) ->
-    let t1' = substitute_F sita t1 in
-    let t2' = substitute_F sita t2 in
-    TFun ((x,t1'),t2')
-  | _ -> t
-
+       
 let rec substitute_pa (pa_sita:Formula.pa M.t) (t:t) =
   match t with
   |TScalar (TData( i, ts, ps), p ) ->
@@ -258,8 +291,7 @@ let rec gen_constrain env e t :contextual * (subtype_constrain list) * (env *t) 
     (match t1 with
      |TFun ((x, t1_in),t1_out) ->
        let env12 = env_append env1 env2 in
-       let env' = env_append env env12 in
-       let env' = env_add  env' (x, t2) in
+       let env' = env_add  env12 (x, t2) in
        TLet (env', t1_out), (c1@c2), gc
      |_ -> raise (InferErr "not function type"))
 
@@ -288,15 +320,17 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
   |(env, (TScalar (b1,p1) as t1), (TScalar (b2,p2) as t2))  :: left ->
     
     (match b1,b2 with
-     |TVar a, _    when  M.mem a tsubst    ->
-       let cs' = (env, M.find a tsubst, t2)::left in
+     |TVar (psubst,a), _    when  M.mem a tsubst    ->
+       let t1' = substitute_F psubst (M.find a tsubst) in (* pending subst を展開 *)
+       let cs' = (env, t1', t2)::left in
        split cs' tsubst 
        
-     |_ , TVar a   when M.mem a tsubst ->
-       let cs' = (env, t1, M.find a tsubst)::left in
+     |_ , TVar (psubst, a)   when M.mem a tsubst ->
+       let t2' = substitute_F psubst (M.find a tsubst) in (* pending subst を展開 *)
+       let cs' = (env, t1, t2')::left in
        split cs' tsubst
 
-     |TVar a, TVar b ->
+     |TVar (psubst_a,a), TVar (psubst_b,b) ->
        assert (p1 = Formula.Bool true);
        assert (p2 = Formula.Bool true);
        if a = b then
@@ -305,48 +339,70 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
          let tsubst' = M.add a (id2Tvar b) tsubst in (* a=bという情報を加える,とりあえず近似 *)
          split left tsubst'
        
-     |TVar a, TData (i2, ts2, ps2) ->
+     |TVar (psubst,a), TData (i2, ts2, ps2) ->
        let ts1 = List.map (fun _ -> genTvar a) ts2 in (* 新たな型変数 *)
        let ps1 = List.map (fun pa -> Formula.genUnknownPa pa a) ps2 in
        let refine = TScalar (TData (i2, ts1, ps1), Formula.Bool true) in
-       let tsubst' = M.add a refine tsubst in
-       let cs' = (env, refine,t2)::left in
+       let tsubst' = M.add a refine tsubst in 
+       let refine' = substitute_F psubst refine in 
+       let cs' = (env, refine',t2)::left in (* 制約にはpending substを展開したものを *)
        split cs' tsubst'
 
-     |TData (i1, ts1, ps1), TVar a ->
+     |TData (i1, ts1, ps1), TVar (psubst,a) ->
        let ts2 = List.map (fun _ -> genTvar a) ts1 in (* 新たな型変数 *)
        let ps2 = List.map (fun pa -> Formula.genUnknownPa pa a) ps1 in
        let refine = TScalar (TData (i1, ts2, ps2), Formula.Bool true) in
        let tsubst' = M.add a refine tsubst in
-       let cs' = (env, t1, refine)::left in
+       let refine' = substitute_F psubst refine in
+       let cs' = (env, t1, refine')::left in
        split cs' tsubst'
 
-     |TVar a, TBool ->
+     |TVar (psubst,a), TBool ->
        let p_a = Formula.genUnkownP a in
        let refine = TScalar (TBool, p_a) in
        let tsubst' = M.add a refine tsubst in
-       let cs' = (env, refine, t2) ::left in
+       let refine' = substitute_F psubst refine in
+       let cs' = (env, refine', t2) ::left in
        split cs' tsubst'
 
-     |TBool, TVar a ->
+     |TBool, TVar (psubst,a) ->
        let p_a = Formula.genUnkownP a in
        let refine = TScalar (TBool, p_a) in
        let tsubst' = M.add a refine tsubst in
-       let cs' = (env, t1, refine) ::left in
+       let refine' = substitute_F psubst refine in
+       let cs' = (env, t1, refine') ::left in
        split cs' tsubst'
 
-     |TVar a, TInt ->
+     |TVar (psubst,a), TInt ->
        let p_a = Formula.genUnkownP a in
        let refine = TScalar (TInt, p_a) in
        let tsubst' = M.add a refine tsubst in
-       let cs' = (env, refine, t2) ::left in
+       let refine' = substitute_F psubst refine in
+       let cs' = (env, refine', t2) ::left in
        split cs' tsubst'
 
-     |TInt, TVar a ->           (* 結果的に、env,p1 => p_a が出る。 *)
+     |TInt, TVar (psubst,a) ->           (* 結果的に、env,p1 => p_a が出る。 *)
        let p_a = Formula.genUnkownP a in
        let refine = TScalar (TInt, p_a) in
        let tsubst' = M.add a refine tsubst in
-       let cs' = (env, t1, refine) ::left in
+       let refine' = substitute_F psubst refine in
+       let cs' = (env, t1, refine') ::left in
+       split cs' tsubst'
+
+     |TVar (psubst,a), TAny i ->
+       let p_a = Formula.genUnkownP a in
+       let refine = TScalar (TAny i, p_a) in
+       let tsubst' = M.add a refine tsubst in
+       let refine' = substitute_F psubst refine in
+       let cs' = (env, refine', t2) ::left in
+       split cs' tsubst'
+
+     |TAny i, TVar (psubst,a) ->
+       let p_a = Formula.genUnkownP a in
+       let refine = TScalar (TAny i, p_a) in
+       let tsubst' = M.add a refine tsubst in
+       let refine' = substitute_F psubst refine in
+       let cs' = (env, t1, refine') ::left in
        split cs' tsubst'       
                
      |TData (i1, ts1, ps1), TData (i2, ts2, ps2)  when i1 = i2->
@@ -362,6 +418,11 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
        let env_p = env2formula env (Formula.Implies (p1, p2)) in
        ((env_p, p1, p2)::cs_res), sub_res
 
+     |TAny i1, TAny i2 when i1 == i2 ->
+       let cs_res, sub_res = split left tsubst in
+       let env_p = env2formula env (Formula.Implies (p1, p2)) in
+       ((env_p, p1, p2)::cs_res), sub_res
+
      |_ -> raise (InferErr "basetipe miss match")
     )
 
@@ -373,8 +434,6 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
               ::((env, t1', t2')::left) in
     split cs' tsubst
    
-  |(env, TAny i1, TAny i2) :: left when i1 = i2 ->  split left tsubst
-
   |(env,_, TBot) :: left -> split left tsubst
 
   | (env,t1,t2)      :: left   ->
@@ -389,9 +448,10 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
        
 let rec expand_tvar (tvar_map:subst) (t:t) =
   match t with
-  |TScalar ((TVar i),p) when M.mem i tvar_map ->
+  |TScalar ((TVar (psubst,i),p)) when M.mem i tvar_map ->
     (assert (p = Formula.Bool true)); (* 型変数は、制約付きで現れない（わかりにくな） *)
-    expand_tvar tvar_map (M.find i tvar_map)
+    let t' = substitute_F psubst (M.find i tvar_map) in
+    expand_tvar tvar_map t'
   |TScalar ((TData (i, ts, ps)), p) ->
     let ts' = List.map (expand_tvar tvar_map) ts in
     TScalar ((TData (i, ts', ps)),p)

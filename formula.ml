@@ -182,8 +182,9 @@ let rec substitution (sita:subst) (t:t) =
 (* substitueは、Var i に対して、Any iではなく *)
   match t with
   |Var (s,i) when (* s = BoolS && *) M.mem i sita ->
-    
-    M.find i sita           (* 代入 *)
+    (match M.find i sita with
+     |Var (_,i') -> Var (s,i')  (* 代入先のsortを参照する。 *)
+     | p -> p)
 
   |Unknown (sita1, i) when M.mem i sita ->
     let p = M.find i sita in
@@ -312,69 +313,10 @@ let rec pa_substitution (pa_sita:pa M.t) (t:t) =
   |t' ->t'
 
 
-                 
-    
-    
-
 (* 単縦に変数の置換 *)
 let rec replace (x:Id.t) (y:Id.t) (t:t) =
-  match t with
-  |Var (s,i) when i = x ->
-    Var (s,y)
-  (* 残りはただの再起 *)
-  |Set (s, ts) ->
-    let ts' = List.map (replace x y) ts in
-    Set(s, ts')
-  |Cons (s, i, ts) ->
-    let ts' = List.map (replace x y) ts in
-    Cons(s, i, ts')
-  |UF (s, i, ts) ->
-    let ts' = List.map (replace x y) ts in
-    UF(s, i, ts')
-  |All (is, t') ->All (is, (replace x y t'))
-  |Exist (is, t') ->Exist (is, (replace x y t'))
-  |If (t1, t2, t3) ->If ((replace x y t1),
-                         (replace x y t2),
-                         (replace x y t3))
-  |Times (t1, t2) -> Times ((replace x y t1),
-                            (replace x y t2))
-  |Plus (t1, t2) -> Plus ((replace x y t1),
-                          (replace x y t2))
-  |Minus (t1, t2) -> Minus ((replace x y t1),
-                            (replace x y t2))
-  |Eq (t1, t2) -> Eq ((replace x y t1),
-                      (replace x y t2))
-  |Neq (t1, t2) -> Neq ((replace x y t1),
-                        (replace x y t2))
-  |Lt (t1, t2) -> Lt ((replace x y t1),
-                      (replace x y t2))
-  |Le (t1, t2) -> Le ((replace x y t1),
-                      (replace x y t2))
-  |Gt (t1, t2) -> Gt ((replace x y t1),
-                      (replace x y t2))
-  |Ge (t1, t2) -> Ge ((replace x y t1),
-                      (replace x y t2))
-  |And (t1, t2) -> And ((replace x y t1),
-                        (replace x y t2))
-  |Or (t1, t2) -> Or ((replace x y t1),
-                      (replace x y t2))
-  |Implies (t1, t2) -> Implies ((replace x y t1),
-                                (replace x y t2))
-  |Iff (t1, t2) -> Iff ((replace x y t1),
-                        (replace x y t2))
-  |Union (t1, t2) -> Union ((replace x y t1),
-                            (replace x y t2))
-  |Intersect (t1, t2) -> Intersect ((replace x y t1),
-                                    (replace x y t2))
-  |Diff (t1, t2) -> Diff ((replace x y t1),
-                          (replace x y t2))
-  |Member (t1, t2) -> Member ((replace x y t1),
-                              (replace x y t2))
-  |Subset (t1, t2) -> Subset ((replace x y t1),
-                              (replace x y t2))
-  |Neg t1 -> Neg (replace x y t1)
-  |Not t1 -> Not (replace x y t1)           
-  |t ->t
+  let y_v = Var (BoolS,y) in    (* BoolSはダミー *)
+  substitution (M.singleton x y_v) t
 
 
 let pa_replace x y ((args,t):pa) =

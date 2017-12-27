@@ -5,3 +5,6 @@
 *.d
 *.merlin
 *test/*
+\#*
+step2_test
+syn_plus
