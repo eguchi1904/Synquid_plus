@@ -98,6 +98,19 @@ let constrain2string ((env,t1,t2):subtype_constrain) =
                  (env2string env)
                  (t2string t1)
                  (t2string t2)
+
+let constrain2string_F (p1,p2,p3) =
+  Printf.sprintf
+  "------------------------------------------------------------\
+   \n%s\
+   \n============================================================\
+   \n%s\n==>\n%s\
+   \n------------------------------------------------------------\n"
+  (Formula.p2string p1)
+  (Formula.p2string p2)
+  (Formula.p2string p3)  
+
+  
                        
 let env_empty:env = ([],[])
 
@@ -443,7 +456,7 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
        let env_p = env2formula env (Formula.Implies (p1, p2)) in
        ((env_p, p1, p2)::cs_res), sub_res
 
-     |TAny i1, TAny i2 when i1 == i2 ->
+     |TAny i1, TAny i2 when i1 = i2 ->
        let cs_res, sub_res = split left tsubst in
        let env_p = env2formula env (Formula.Implies (p1, p2)) in
        ((env_p, p1, p2)::cs_res), sub_res
@@ -456,7 +469,7 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
     let env2 = env_add env (x',t1') in (* env;x':t1' *)
     let t2_rpl = replace_F x x' t2 in
     let cs' = (env2, t2_rpl, t2')      (* env; x':t1' |- [x'/x]t2 <: t2' *)
-              ::((env, t1', t2')::left) in
+              ::((env, t1', t1)::left) in
     split cs' tsubst
    
   |(env,_, TBot) :: left -> split left tsubst
@@ -502,6 +515,11 @@ let checkETerm env e t  z3_env =
   |None -> None
   |Some (g_env, g_t) ->
     let cs,tvar_map = split cs (M.empty) in
+    
+    let cs_string = List.map constrain2string_F cs in
+    (print_string "\n\nconstrain after split\n\n");
+    (List.iter (fun s -> Printf.printf "%s\n" s) cs_string);
+    
     let punknown_map = Find_unknownP.f cs z3_env in
     let g_t =  expand_tvar tvar_map g_t in
     let g_t' = substitute_F punknown_map g_t in
