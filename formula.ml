@@ -141,6 +141,7 @@ let rec fv = function               (* 自由変数、 *)
 let rec and_list (es:t list) =
   match es with
   |[] -> Bool true
+  |[e] -> e
   |(Bool true)::es' -> and_list es'
   |e::es' -> And (e, and_list es')
 

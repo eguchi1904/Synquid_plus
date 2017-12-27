@@ -234,10 +234,10 @@ let rec replace_F x y t =
   |TScalar (b, p) ->
     let p' =  Formula.replace x y p in
     TScalar (b, p')
-  |TFun ((x,t1),t2) ->
+  |TFun ((x',t1),t2) ->
     let t1' = replace_F x y t1 in
     let t2' = replace_F x y t2 in
-    TFun ((x,t1'),t2')
+    TFun ((x',t1'),t2')
   | _ -> t
               
 
