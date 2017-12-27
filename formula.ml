@@ -80,11 +80,11 @@ let rec p2string = function
   |Times (t1,t2) ->
     Printf.sprintf "(%s)*(%s)" (p2string t1) (p2string t2)
   |Plus (t1,t2) ->
-    Printf.sprintf "(%s)+(%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "%s + %s" (p2string t1) (p2string t2)
   |Minus (t1,t2) ->
     Printf.sprintf "(%s)-(%s)" (p2string t1) (p2string t2)
   |Eq (t1,t2) ->
-    Printf.sprintf "(%s)==(%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "%s == %s" (p2string t1) (p2string t2)
   |Neq (t1,t2) ->
     Printf.sprintf "(%s)!=(%s)" (p2string t1) (p2string t2)
   |Lt (t1,t2) ->
@@ -116,7 +116,9 @@ let rec p2string = function
   |Neg t ->
     Printf.sprintf "-(%s)" (p2string t )
   |Not t ->
-    Printf.sprintf "!(%s)" (p2string t )   
+    Printf.sprintf "!(%s)" (p2string t )
+
+
    
               
 let rec fv = function               (* 自由変数、 *)
@@ -158,7 +160,12 @@ let subst_compose (sita1:subst) (sita2:subst) = (* sita t = sita1(sita2 t) *)
 
 let genFvar s i = Var (s, (Id.genid i))
 
-                
+let id2pa_shape i ((arg_sorts,rets):pa_shape) :pa =
+  let args = List.mapi (fun n s -> (Id.genid (string_of_int n) , s)) arg_sorts in
+  let uf_args = List.map (fun (x,s) ->Var(s,x)) args in
+  let body = UF (rets, i, uf_args) in
+  (args,body)
+  
 
 let genUnkownP i = Unknown (M.empty, (Id.genid i))
                  
@@ -250,7 +257,7 @@ let rec substitution (sita:subst) (t:t) =
   |t ->t
 
 let rec pa_substitution (pa_sita:pa M.t) (t:t) =
-  (* 引数と変数名がかぶるものは置換しない *)
+  (* predicate abstraction の代入。代入先はuniterpreted function *)
   match t with
   |UF (s, i, ts) when M.mem i pa_sita ->
     let ts' = List.map (pa_substitution pa_sita) ts in
@@ -326,4 +333,14 @@ let pa_replace x y ((args,t):pa) =
   else
     let t' = replace x y t in
     (args, t')
+
+let pa2string ((arg,p):pa) =
+  let sita,_ = List.fold_left
+               (fun (sita,i) (x,s) ->let i_v = Var(s,(Printf.sprintf "_%d" i)) in
+                                     (M.add x i_v sita , i+1))
+               (M.empty, 0)
+               arg
+  in
+  let p' = substitution sita p in
+  p2string p'
        

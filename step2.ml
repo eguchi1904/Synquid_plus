@@ -25,8 +25,6 @@ let mk_constructor_arg_env (c_t:Type.t) {constructor = c_id;argNames = xs;body=_
   let arg_env = List.map (fun (x,t) ->(x,mk_mono_schmea t)) args in
   (arg_env,[]),ret
 
-
-  
 let rec f' (env:Type.env) (prg:Syntax.t) (t:Type.t) z3_env=
   match prg  with
   |PE e when auxi_exist e ->
@@ -49,6 +47,7 @@ let rec f' (env:Type.env) (prg:Syntax.t) (t:Type.t) z3_env=
   |PI (PMatch (e, cases) ) ->
     (match Type.inferETerm env e z3_env with
      |TLet(cenv, TScalar( TData (i, ts, ps),p )) ->
+       print_string "go inside";
        let env_list =           (* 各ケースに対する環境を用意する。 *)
          List.map
            (fun case ->
@@ -66,7 +65,6 @@ let rec f' (env:Type.env) (prg:Syntax.t) (t:Type.t) z3_env=
        in
        List.fold_left2
          (fun acc env_i case ->
-           (Printf.printf "%s\n" (t2string t));
            let g_list = f' env_i case.body t z3_env in
            g_list@acc
          )
@@ -88,10 +86,31 @@ and g_fun env f_e t z3_env =
        let env' = env_add env (x,t1) in
        f' env' e t2' z3_env
      |_ ->assert false)
-   |PFix (x,f_name) ->
+   |PFix (x,f_body) ->
      let env' = env_add env (x,t) in
-     g_fun env' f_name t z3_env
+     g_fun env' f_body t z3_env
 
 let rec f (env:Type.env) (prg:Syntax.t) ((ts,ps,t):Type.schema) z3_env=
-  f' env prg t z3_env
+  
+  let ts_inst = List.map (fun i -> TScalar(TAny i,Formula.Bool true)) ts in
+  let ps_inst = List.map (fun (r,shape) -> Formula.id2pa_shape r shape) ps in (* id *)
+  let toplev_t = Type.instantiate_implicit (ts,ps,t) ts_inst ps_inst in
+
+  match prg with
+  |PF (PFix (f_name, PFun(x,e))) -> (* 再帰関数 *)
+    let ts',ts_inst =List.split
+                       (List.map (fun i -> i, TScalar(TVar (M.empty,i),Formula.Bool true) )
+                                 (List.map Id.genid ts) )
+    in
+    let ps',ps_inst =List.split
+                       (List.map (fun (r',shape) -> (r',shape), Formula.id2pa_shape r' shape)
+                                 (List.map (fun (r,shape) ->(Id.genid r,shape)) ps))
+    in
+    let t' = Type.instantiate_implicit (ts,ps,t) ts_inst ps_inst in
+    let f_schema = (ts',ps',t') in
+    let env' = env_add_schema env (f_name, f_schema ) in (* 再帰関数登録 *)
+    f' env' (PF (PFun(x,e))) toplev_t z3_env
+  |PF (PFix (_, PFix _)) -> assert false
+  |_ -> f' env prg toplev_t z3_env
+
   

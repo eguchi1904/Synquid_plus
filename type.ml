@@ -22,7 +22,11 @@ and b2string = function
   |TBool ->"Bool"|TInt -> "Int"
   |TData (i,ts,ps) ->
     let ts_string = List.map t2string ts in
-    Printf.sprintf "D%s %s" i (String.concat " " ts_string)
+    let ps_string_list = List.map Formula.pa2string ps in
+    Printf.sprintf "D%s %s <%s> "
+                   i
+                   (String.concat " " ts_string)
+                   (String.concat " " ps_string_list)
   |TVar (_,x) -> Printf.sprintf "Var(%s)" x
   |TAny a ->Printf.sprintf "%s" a
 
@@ -68,7 +72,7 @@ let rec env2string ((xts,ps):env) =
     (* |(x,(_,_,t1))::( y, (_,_,t2) )::xts' -> *)
     (*   Printf.sprintf "%s:%s; %s:%s\n%s" x (t2string t1) y (t2string t2) (xts2string xts') *)
     |(x,(_,_,t))::xts' ->
-      Printf.sprintf "%s::%s\n%s" x (t2string t) (xts2string xts')
+      Printf.sprintf "%s :: %s\n%s" x (t2string t) (xts2string xts')
     |[] ->""
   in
   let rec ps2string = function
@@ -89,10 +93,19 @@ type contextual = TLet of env * t
                         
 type subtype_constrain = env * t * t (* env|= t1 <: t2 *)
 
+let constrain2string ((env,t1,t2):subtype_constrain) =
+  Printf.sprintf "%s%s\n<:\n%s\n"
+                 (env2string env)
+                 (t2string t1)
+                 (t2string t2)
+                       
 let env_empty:env = ([],[])
 
 let env_add ((l, p):env) ((x,t):Id.t * t) =
   ((x,([],[],t) )::l), p
+
+let env_add_schema ((l,p):env) (x,s) =
+  ((x,s)::l, p)
 
 let env_add_F ((l, ps):env)  (p:Formula.t) = (l, p::ps)
 
@@ -274,10 +287,21 @@ let rec gen_constrain env e t :contextual * (subtype_constrain list) * (env *t) 
   match e with
   |Syntax.PSymbol i ->
     (try
-    let (ts,ps,ti) = env_find env i in
-    let ti' = instantiate (ts,ps,ti) in
-    let constrain = (env, ti', t) in
-    TLet (env_empty, ti'),[constrain], None
+       (match env_find env i with
+        |([],[],TScalar(b,_) ) ->
+          (match b2sort b with
+           |Some sort ->
+             let ti' = TScalar(b,Formula.Eq (Formula.Var(sort,Id.valueVar_id),
+                                             Formula.Var(sort,i)))
+             in
+             TLet(env_empty,ti'),
+             [(env, ti', t)],                (* constrain *)
+             None
+           |None -> assert false)
+        |(ts,ps,ti) ->
+          let ti' = instantiate (ts,ps,ti) in
+          let constrain = (env, ti', t) in
+          TLet (env_empty, ti'),[constrain], None)
      with
        _ ->assert false)
   |Syntax.PAuxi _ ->
@@ -292,7 +316,8 @@ let rec gen_constrain env e t :contextual * (subtype_constrain list) * (env *t) 
      |TFun ((x, t1_in),t1_out) ->
        let env12 = env_append env1 env2 in
        let env' = env_add  env12 (x, t2) in
-       TLet (env', t1_out), (c1@c2), gc
+       let constrain = (env_append env' env, t1_out, t) in
+       TLet (env', t1_out), (constrain::c1@c2), gc
      |_ -> raise (InferErr "not function type"))
 
 
@@ -467,13 +492,12 @@ let rec env_expand_tvar tvar_map ((ts,ps):env) :env=
 
 let rec contextual_expand_tvar tvar_map ((TLet (env,t)):contextual) =
   TLet ( (env_expand_tvar tvar_map env), expand_tvar tvar_map t)
-                                        
-  
-  
-  
 
+  
 let checkETerm env e t  z3_env =
   let contex_t,cs,g_t_op = gen_constrain env e t in
+  let cs_string = List.map constrain2string cs in
+  (List.iter (fun s -> Printf.printf "%s\n" s) cs_string);
   match g_t_op with
   |None -> None
   |Some (g_env, g_t) ->
