@@ -80,11 +80,11 @@ let rec p2string = function
   |Times (t1,t2) ->
     Printf.sprintf "(%s)*(%s)" (p2string t1) (p2string t2)
   |Plus (t1,t2) ->
-    Printf.sprintf "(%s)+(%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "%s + %s" (p2string t1) (p2string t2)
   |Minus (t1,t2) ->
     Printf.sprintf "(%s)-(%s)" (p2string t1) (p2string t2)
   |Eq (t1,t2) ->
-    Printf.sprintf "(%s)==(%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "%s == %s" (p2string t1) (p2string t2)
   |Neq (t1,t2) ->
     Printf.sprintf "(%s)!=(%s)" (p2string t1) (p2string t2)
   |Lt (t1,t2) ->
@@ -116,7 +116,9 @@ let rec p2string = function
   |Neg t ->
     Printf.sprintf "-(%s)" (p2string t )
   |Not t ->
-    Printf.sprintf "!(%s)" (p2string t )   
+    Printf.sprintf "!(%s)" (p2string t )
+
+
    
               
 let rec fv = function               (* 自由変数、 *)
@@ -158,7 +160,12 @@ let subst_compose (sita1:subst) (sita2:subst) = (* sita t = sita1(sita2 t) *)
 
 let genFvar s i = Var (s, (Id.genid i))
 
-                
+let id2pa_shape i ((arg_sorts,rets):pa_shape) :pa =
+  let args = List.mapi (fun n s -> (Id.genid (string_of_int n) , s)) arg_sorts in
+  let uf_args = List.map (fun (x,s) ->Var(s,x)) args in
+  let body = UF (rets, i, uf_args) in
+  (args,body)
+  
 
 let genUnkownP i = Unknown (M.empty, (Id.genid i))
                  
@@ -182,8 +189,9 @@ let rec substitution (sita:subst) (t:t) =
 (* substitueは、Var i に対して、Any iではなく *)
   match t with
   |Var (s,i) when (* s = BoolS && *) M.mem i sita ->
-    
-    M.find i sita           (* 代入 *)
+    (match M.find i sita with
+     |Var (_,i') -> Var (s,i')  (* 代入先のsortを参照する。 *)
+     | p -> p)
 
   |Unknown (sita1, i) when M.mem i sita ->
     let p = M.find i sita in
@@ -249,7 +257,7 @@ let rec substitution (sita:subst) (t:t) =
   |t ->t
 
 let rec pa_substitution (pa_sita:pa M.t) (t:t) =
-  (* 引数と変数名がかぶるものは置換しない *)
+  (* predicate abstraction の代入。代入先はuniterpreted function *)
   match t with
   |UF (s, i, ts) when M.mem i pa_sita ->
     let ts' = List.map (pa_substitution pa_sita) ts in
@@ -312,69 +320,10 @@ let rec pa_substitution (pa_sita:pa M.t) (t:t) =
   |t' ->t'
 
 
-                 
-    
-    
-
 (* 単縦に変数の置換 *)
 let rec replace (x:Id.t) (y:Id.t) (t:t) =
-  match t with
-  |Var (s,i) when i = x ->
-    Var (s,y)
-  (* 残りはただの再起 *)
-  |Set (s, ts) ->
-    let ts' = List.map (replace x y) ts in
-    Set(s, ts')
-  |Cons (s, i, ts) ->
-    let ts' = List.map (replace x y) ts in
-    Cons(s, i, ts')
-  |UF (s, i, ts) ->
-    let ts' = List.map (replace x y) ts in
-    UF(s, i, ts')
-  |All (is, t') ->All (is, (replace x y t'))
-  |Exist (is, t') ->Exist (is, (replace x y t'))
-  |If (t1, t2, t3) ->If ((replace x y t1),
-                         (replace x y t2),
-                         (replace x y t3))
-  |Times (t1, t2) -> Times ((replace x y t1),
-                            (replace x y t2))
-  |Plus (t1, t2) -> Plus ((replace x y t1),
-                          (replace x y t2))
-  |Minus (t1, t2) -> Minus ((replace x y t1),
-                            (replace x y t2))
-  |Eq (t1, t2) -> Eq ((replace x y t1),
-                      (replace x y t2))
-  |Neq (t1, t2) -> Neq ((replace x y t1),
-                        (replace x y t2))
-  |Lt (t1, t2) -> Lt ((replace x y t1),
-                      (replace x y t2))
-  |Le (t1, t2) -> Le ((replace x y t1),
-                      (replace x y t2))
-  |Gt (t1, t2) -> Gt ((replace x y t1),
-                      (replace x y t2))
-  |Ge (t1, t2) -> Ge ((replace x y t1),
-                      (replace x y t2))
-  |And (t1, t2) -> And ((replace x y t1),
-                        (replace x y t2))
-  |Or (t1, t2) -> Or ((replace x y t1),
-                      (replace x y t2))
-  |Implies (t1, t2) -> Implies ((replace x y t1),
-                                (replace x y t2))
-  |Iff (t1, t2) -> Iff ((replace x y t1),
-                        (replace x y t2))
-  |Union (t1, t2) -> Union ((replace x y t1),
-                            (replace x y t2))
-  |Intersect (t1, t2) -> Intersect ((replace x y t1),
-                                    (replace x y t2))
-  |Diff (t1, t2) -> Diff ((replace x y t1),
-                          (replace x y t2))
-  |Member (t1, t2) -> Member ((replace x y t1),
-                              (replace x y t2))
-  |Subset (t1, t2) -> Subset ((replace x y t1),
-                              (replace x y t2))
-  |Neg t1 -> Neg (replace x y t1)
-  |Not t1 -> Not (replace x y t1)           
-  |t ->t
+  let y_v = Var (BoolS,y) in    (* BoolSはダミー *)
+  substitution (M.singleton x y_v) t
 
 
 let pa_replace x y ((args,t):pa) =
@@ -384,4 +333,14 @@ let pa_replace x y ((args,t):pa) =
   else
     let t' = replace x y t in
     (args, t')
+
+let pa2string ((arg,p):pa) =
+  let sita,_ = List.fold_left
+               (fun (sita,i) (x,s) ->let i_v = Var(s,(Printf.sprintf "_%d" i)) in
+                                     (M.add x i_v sita , i+1))
+               (M.empty, 0)
+               arg
+  in
+  let p' = substitution sita p in
+  p2string p'
        

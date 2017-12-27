@@ -5,4 +5,7 @@
 *.d
 *.merlin
 *test/*
-#type.ml#
+\#*
+step2_test
+syn_plus
+

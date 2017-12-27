@@ -6,19 +6,38 @@ exception PredicateNotExist of string
 let add_pcandi pcandi p_i e =
   try
     let candi = M.find p_i pcandi in
-    M.add p_i (e::candi) pcandi
+    if e = Bool true then
+      pcandi
+    else
+      M.add p_i (e::candi) pcandi
   with
     Not_found ->
-    M.add p_i [e] pcandi
-   
+    if e = Bool true then
+      M.add p_i [] pcandi
+    else
+      M.add p_i [e] pcandi
+
+let subst_inv (sita:subst) :subst =
+  M.fold
+    (fun x p inv_sita ->
+      match p with
+      |Var (s,y) -> M.add y (Var (s,x)) inv_sita
+      |_ -> inv_sita)
+    sita
+  M.empty
+    
 let rec guess_candidate' cs (pcandi:(t list) M.t) =
   match cs with
   |(env, Unknown _, Unknown _) :: cs' -> (* とりあえず *)
     raise (Invalid_argument "predicateunknown vs predicateunknown")
   |(env, Unknown (sita, i), e) :: cs' ->
-    guess_candidate' cs' (add_pcandi pcandi i e)
+    let sita_inv = subst_inv sita in
+    let e' = substitution sita_inv e in
+    guess_candidate' cs' (add_pcandi pcandi i e')
   |(env, e, Unknown (sita, i)) :: cs'->
-    guess_candidate' cs' (add_pcandi pcandi i e)
+    let sita_inv = subst_inv sita in
+    let e' = substitution sita_inv e in    
+    guess_candidate' cs' (add_pcandi pcandi i e')
   |_ :: cs' -> guess_candidate' cs' pcandi
   |[] ->
     pcandi

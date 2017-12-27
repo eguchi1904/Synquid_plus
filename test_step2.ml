@@ -8,7 +8,14 @@ let rec_fun f x e =  PF
 
 let pmatch e cases = PI (PMatch (e,cases))
 
-let a_t = TAny "a"
+let a_t = TScalar (TVar (M.empty,"a"),Bool true)
+let a_t_rx = TScalar
+               (TVar (M.empty, "a"),
+                UF(BoolS,"r",[Var(AnyS "a","x"); Var(AnyS "a",Id.valueVar_id)] )
+               )
+
+
+                                 
 let r_pa:pa = [("_0",AnyS "a");("_1",AnyS "a")],
            UF (BoolS,"r",[Var (AnyS "a", "_0");Var (AnyS "a","_1")])
 
@@ -17,13 +24,12 @@ let r_rev_pa:pa =  [("_0",AnyS "a");("_1",AnyS "a")],
   
          
 let list a r p :Type.t = TScalar (TData ("list", [a], [r]),p )
-let len l :Formula.t= UF ((DataS ("list",[AnyS "a"])),
-                          "len",[l])
+let len l :Formula.t= UF (IntS, "len",[l])
 
 let v = Var  (DataS ("list",[AnyS "a"]),(Id.valueVar_id ))
 let cons_t = (["a"],[("r",([AnyS "a";AnyS "a"],BoolS))], (* パラメタ *)
               TFun(("x",a_t),
-                   TFun(("xs",(list a_t r_pa (Bool true))),
+                   TFun(("xs",(list a_t_rx r_pa (Bool true))),
                         list
                           a_t
                           r_pa
@@ -72,10 +78,11 @@ let _ =
   let g_list = Step2.f env tmp t z3_env in
   List.iter
     (fun (g_i, env, g_t) ->
-      (print_string (env2string env));
+      (Printf.printf "auxi:%s\n" g_i);
+        (print_string (env2string env));
       print_string (t2string g_t);
       Printf.printf "\n\n\n")
-  g_list
-     
+    g_list
+  
 
 
