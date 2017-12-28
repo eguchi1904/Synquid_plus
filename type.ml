@@ -271,19 +271,34 @@ let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
   
 
 (* fに関係するenvの条件を抜き出す。 *)
+(* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
+(*   match tenv with *)
+(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (\* schemaは無視して良いの? *\) *)
+(*     if S.mem x vset then *)
+(*       (Formula.And ((Formula.replace (Id.valueVar_id) x p), (\* [x/_v]p *\) *)
+(*                     (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p) )) *)
+(*       )) *)
+(*     else *)
+(*       env2formula' tenv' vset *)
+
+(*   |_ :: tenv' -> env2formula' tenv' vset *)
+
+(*   |[] -> Formula.Bool true *)
+
+(* 環境全ての条件を抜き出すver *)
 let rec env2formula' (tenv:((Id.t*schema) list)) vset =
   match tenv with
+  |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (* schemaは無視して良いの? *)
+    env2formula' tenv' S.empty  
+        
   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (* schemaは無視して良いの? *)
-    if S.mem x vset then
       (Formula.And ((Formula.replace (Id.valueVar_id) x p), (* [x/_v]p *)
-                    (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p) ))
-      ))
-    else
-      env2formula' tenv' vset
+                    (env2formula' tenv' S.empty  )
+                   ))
 
   |_ :: tenv' -> env2formula' tenv' vset
 
-  |[] -> Formula.Bool true
+  |[] -> Formula.Bool true       
     
 
 let env2formula ((tenv,ps):env) (f:Formula.t) =
@@ -509,16 +524,18 @@ let rec contextual_expand_tvar tvar_map ((TLet (env,t)):contextual) =
   
 let checkETerm env e t  z3_env =
   let contex_t,cs,g_t_op = gen_constrain env e t in
-  let cs_string = List.map constrain2string cs in
-  (List.iter (fun s -> Printf.printf "%s\n" s) cs_string);
+  
+  (* let cs_string = List.map constrain2string cs in *)
+  (* (List.iter (fun s -> Printf.printf "%s\n" s) cs_string); *)
+  
   match g_t_op with
   |None -> None
   |Some (g_env, g_t) ->
     let cs,tvar_map = split cs (M.empty) in
     
-    let cs_string = List.map constrain2string_F cs in
-    (print_string "\n\nconstrain after split\n\n");
-    (List.iter (fun s -> Printf.printf "%s\n" s) cs_string);
+    (* let cs_string = List.map constrain2string_F cs in *)
+    (* (print_string "\n\nconstrain after split\n\n"); *)
+    (* (List.iter (fun s -> Printf.printf "%s\n" s) cs_string); *)
     
     let punknown_map = Find_unknownP.f cs z3_env in
     let g_t =  expand_tvar tvar_map g_t in
