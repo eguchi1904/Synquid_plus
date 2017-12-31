@@ -2,6 +2,7 @@
 *cmi
 *cmo
 *cmt
+*cmti
 *.d
 *.merlin
 *test/*

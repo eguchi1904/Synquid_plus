@@ -64,7 +64,7 @@ let eta_shape ((arg,t):pa) =
     else
       None
   |_ -> None
-      
+
 type pa_shape = (sort list) * sort
 
 let rec p2string = function
@@ -109,9 +109,9 @@ let rec p2string = function
   |Iff (t1,t2) ->
     Printf.sprintf "(%s)<=>(%s)" (p2string t1) (p2string t2)
   |Union (t1,t2) ->
-    Printf.sprintf "(%s)\/(%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s)+(%s)" (p2string t1) (p2string t2)
   |Intersect (t1,t2) ->
-    Printf.sprintf "(%s)/\(%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s)+(%s)" (p2string t1) (p2string t2)
   |Diff (t1,t2) ->
     Printf.sprintf "(%s)/(%s)" (p2string t1) (p2string t2)
   |Member (t1,t2) ->

@@ -13,6 +13,20 @@ type t =
           
 
 
+let rec free_tvar' = function
+  |TScalar (b,_) -> free_tvar_base b
+  |TFun((x,t1), t2) -> (free_tvar' t1)@(free_tvar' t2)
+  |TBot -> []
+
+and free_tvar_base = function
+  |TVar (_, i) -> [i]
+  |TData (_, ts, ps) ->
+    List.concat (List.map free_tvar' ts)
+  |_ -> []
+
+let free_tvar t = Formula.list_uniq (free_tvar' t)
+
+
 let rec t2string = function
   |TScalar (b,p) ->Printf.sprintf "{%s | %s}" (b2string b) (Formula.p2string p)
   |TFun ((x,t1),t2) -> Printf.sprintf "%s:%s ->\n %s" x (t2string t1) (t2string t2)
@@ -23,7 +37,7 @@ and b2string = function
   |TData (i,ts,ps) ->
     let ts_string = List.map t2string ts in
     let ps_string_list = List.map Formula.pa2string ps in
-    Printf.sprintf "D%s %s <%s> "
+    Printf.sprintf "%s %s <%s> "
                    i
                    (String.concat " " ts_string)
                    (String.concat " " ps_string_list)
