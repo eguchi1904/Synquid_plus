@@ -137,9 +137,10 @@ let rec fillsort senv senv_param senv_var = function
     let rets' = sort_subst sita rets in
     UF (rets', i, es'), rets'
 
-  |UF (_, i, es) when List.mem_assoc i senv_param -> (* abstract refinmet *)
+  |UF (sort, i, es) when List.mem_assoc i senv_param -> (* abstract refinmet *)
     let es', sorts = List.split (List.map (fillsort senv senv_param senv_var) es) in
     let (argsort, rets) = List.assoc i senv_param in
+    (Printf.printf "%s" (Formula.p2string (UF (sort, i, es))));
     (assert (sorts = argsort) );
     UF (rets, i, es'), rets
 
@@ -182,64 +183,64 @@ let rec fillsort senv senv_param senv_var = function
     let e1',s1 = fillsort senv senv_param senv_var e1 in
     let e2',s2 = fillsort senv senv_param senv_var e2 in
     assert (s1 = s2);
-    Eq (e1', e2'), s1
+    Eq (e1', e2'), BoolS
 
   |Neq (e1, e2) ->
     let e1',s1 = fillsort senv senv_param senv_var e1 in
     let e2',s2 = fillsort senv senv_param senv_var e2 in
     assert (s1 = s2);
-    Neq (e1', e2'), s1
+    Neq (e1', e2'), BoolS
 
   |Lt (e1, e2) ->
     let e1',s1 = fillsort senv senv_param senv_var e1 in
     let e2',s2 = fillsort senv senv_param senv_var e2 in
     assert (s1 = s2);
-    Lt (e1', e2'), s1
+    Lt (e1', e2'), BoolS
 
   |Le (e1, e2) ->
     let e1',s1 = fillsort senv senv_param senv_var e1 in
     let e2',s2 = fillsort senv senv_param senv_var e2 in
     assert (s1 = s2);
     (match s1 with
-     |IntS -> Le (e1',e2'), IntS
-     |SetS s -> Subset (e1',e2'), SetS s
+     |IntS -> Le (e1',e2'), BoolS
+     |SetS s -> Subset (e1',e2'), BoolS
      |_ -> assert false)
 
   |Gt (e1, e2) ->
     let e1',s1 = fillsort senv senv_param senv_var e1 in
     let e2',s2 = fillsort senv senv_param senv_var e2 in
     assert (s1 = s2);
-    Gt (e1', e2'), s1
+    Gt (e1', e2'), BoolS
 
   |Ge (e1, e2) ->
     let e1',s1 = fillsort senv senv_param senv_var e1 in
     let e2',s2 = fillsort senv senv_param senv_var e2 in
     assert (s1 = s2);
-    Ge (e1', e2'), s1
+    Ge (e1', e2'), BoolS
 
   |And (e1, e2) ->
     let e1',s1 = fillsort senv senv_param senv_var e1 in
     let e2',s2 = fillsort senv senv_param senv_var e2 in
     assert (s1 = s2);
-    And (e1', e2'), s1
+    And (e1', e2'), BoolS
 
   |Or (e1, e2) ->
     let e1',s1 = fillsort senv senv_param senv_var e1 in
     let e2',s2 = fillsort senv senv_param senv_var e2 in
     assert (s1 = s2);
-    Or (e1', e2'), s1
+    Or (e1', e2'), BoolS
 
   |Implies (e1, e2) ->
     let e1',s1 = fillsort senv senv_param senv_var e1 in
     let e2',s2 = fillsort senv senv_param senv_var e2 in
     assert (s1 = s2);
-    Implies (e1', e2'), s1
+    Implies (e1', e2'), BoolS
 
   |Iff (e1, e2) ->
     let e1',s1 = fillsort senv senv_param senv_var e1 in
     let e2',s2 = fillsort senv senv_param senv_var e2 in
     assert (s1 = s2);
-    Iff (e1', e2'), s1
+    Iff (e1', e2'), BoolS
 
   |Member (e1, e2) ->
     let e1',s1 = fillsort senv senv_param senv_var e1 in
@@ -259,7 +260,8 @@ let rec fillsort senv senv_param senv_var = function
   |Union _ | Intersect _ | Diff _ |Subset _ -> (* 構文解析時には、int演算に変換される *)
     assert false
 
-  |_ -> assert false
+  |e ->(Printf.printf "%s\n" (Formula.p2string e) );
+       assert false
 
 let fillsort2pa senv senv_param senv_var (pa:pa) =
   match pa with
@@ -273,7 +275,9 @@ let fillsort2pa senv senv_param senv_var (pa:pa) =
     
 let rec fillsort2type  senv senv_param senv_var =function
   |TScalar (b,p) ->
-    let p',_ = fillsort senv senv_param senv_var p in
+    let vs = base2pashape b in
+    let senv_var' = (Id.valueVar_id, vs) :: senv_var in
+    let p',_ = fillsort senv senv_param senv_var' p in
     let b' = fillsort2basetype senv senv_param senv_var b in
     TScalar (b', p')
   |TFun ((x,t1),t2) ->
@@ -300,8 +304,60 @@ let rec fillsort2schema  senv ((ts,ps,t):schema) :schema=
 
 let rec fillsort2env senv (env:(Id.t * schema) list) =
   List.map (fun (x,schm) ->(x, fillsort2schema senv schm) ) env
+
+
+
+let rec fill_pa_args ((arg_sort,rets):(Formula.pa_shape)) senv_param (pa:pa) =
+  match pa with
+  |([(r,_)],_) when List.mem_assoc r senv_param ->
+    let r_shape = List.assoc r senv_param in
+    id2pa_shape r r_shape
+  |(args,p) ->
+    let args' = List.map2 (fun (i,_) s ->(i,s)) args arg_sort in
+    (args', p)
   
 
+let rec fill_pa_args2type (data_pas:(Id.t * (Formula.pa_shape list)) list) senv_param t =
+  match t with
+  |TScalar (TData (i, ts, ps), p) when List.mem_assoc i data_pas ->
+    let shapes :(Formula.pa_shape list) = List.assoc i data_pas in
+    let ps' = List.map2 (fun  shape pa -> fill_pa_args shape senv_param pa) shapes ps in
+    let ts' = List.map (fill_pa_args2type data_pas senv_param) ts in
+    TScalar (TData (i, ts', ps'), p)
+
+  |TScalar (TData (i, ts, ps), p) ->  assert false
+
+  |TFun ((x,t1), t2) ->
+    let t1' = fill_pa_args2type data_pas senv_param t1 in
+    let t2' = fill_pa_args2type data_pas senv_param t2 in
+    TFun ((x,t1'), t2')
+
+  |t -> t
+
+let rec fill_pa_args2schema data_pas ((ts,ps,t):schema) =
+  let t' = fill_pa_args2type data_pas ps t in
+  (ts,ps,t')
+
+let rec fill_pa_args2env data_pas (env:(Id.t * schema) list) =
+  List.map (fun (x,schm) ->(x, fill_pa_args2schema data_pas schm)) env
+
+let rec which_data_cons = function
+  |TScalar (TData(i, _,_), _) ->i
+  |TFun ((x,t1), t2) -> which_data_cons t2
+  |_ -> assert false
+  
+let rec mk_data_pas (env:(Id.t * schema) list) =
+  List.fold_left
+    (fun data_pas (i, (ts,ps,t)) ->
+      let data_id = which_data_cons t in
+      if List.mem_assoc data_id data_pas then
+        data_pas
+      else
+        let shape_list = List.map snd ps in
+        (data_id, shape_list) :: data_pas
+    )
+    []
+    env
         
 (* まず、envにはコンストラクタが入っている。 *)
 let f env minfos fundecs =
@@ -309,9 +365,14 @@ let f env minfos fundecs =
   let senv_mes = List.map (fun (mes, (shape,_)) -> (mes, shape)) minfos in
   let senv = senv_cons@senv_mes in
   let env = minfos2env env minfos in (*  measrureの情報を追加 *)
-  let env' = fillsort2env senv env in
-  let fundecs = fillsort2env senv fundecs in
-  (env', fundecs)
+
+  let data_pas = mk_data_pas env in
+  let env' = fill_pa_args2env data_pas env in
+  let fundecs' = fill_pa_args2env data_pas fundecs in
+  
+  let env' = fillsort2env senv env' in
+  let fundecs' = fillsort2env senv fundecs' in
+  (env', fundecs')
   
   
   

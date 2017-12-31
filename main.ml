@@ -50,5 +50,10 @@ let _ =
   let  (env, minfos, fundecs, l)  = Parser.toplevel Lexer.main lexbuf in
   let env,fundecs = Preprocess.f env minfos fundecs in
   let g_listlist = List.map (g' env fundecs tmp) l in
-  g_listlist
+  List.iter
+    (fun (g_name,g_t) ->
+      (Printf.printf "auxi:%s\n" g_name);
+      print_string (Type.t2string g_t);
+      Printf.printf "\n\n\n")
+    (List.concat g_listlist)
 

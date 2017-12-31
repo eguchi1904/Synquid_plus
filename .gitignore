@@ -9,3 +9,7 @@
 \#*
 step2_test
 syn_plus
+1
+parser.ml
+parser.mli
+lexer.ml

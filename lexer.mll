@@ -102,7 +102,7 @@ rule main = parse
  { INT (int_of_string n) }
 |eof
  { EOF }
-| lower (digit|lower|upper|'_')* as id
+| (lower|'_') (digit|lower|upper|'_')* as id
  { ID id }
 | upper (digit|lower|upper|'_')* as id
  { CAPID id }
