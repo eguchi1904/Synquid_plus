@@ -22,16 +22,16 @@ let match_body = PE (PAppFo
         
 
 (* テスト用 *)
-let pmatch e cases = PI (PMatch (e,cases))
-let rec_fun f x e =  PF
-                       (PFix
-                          (f,
-                           (PFun (x,e))))                   
+(* let pmatch e cases = PI (PMatch (e,cases)) *)
+(* let rec_fun f x e =  PF *)
+(*                        (PFix *)
+(*                           (f, *)
+(*                            (PFun (x,e))))                    *)
 
-let tmp = rec_fun "f" "l"
-                  (pmatch (PSymbol "l")
-                  [{constructor="Nil";argNames=[];body = PHole};
-                   {constructor="Cons";argNames=["x'";"xs'"];body =match_body }])
+(* let tmp = rec_fun "f" "l" *)
+(*                   (pmatch (PSymbol "l") *)
+(*                   [{constructor="Nil";argNames=[];body = PHole}; *)
+(*                    {constructor="Cons";argNames=["x'";"xs'"];body =match_body }]) *)
 
 let rec until_assoc x l =
   match l with
@@ -39,7 +39,9 @@ let rec until_assoc x l =
   |yp :: left -> yp::(until_assoc x left)
   |[] -> []
 
-let g' env fundecs tmp f_name =
+let g' env fundecs (f_name, tmp) =
+  (print_string (Syntax.syn2string tmp));
+  
   let fundecs'  = until_assoc f_name fundecs in
   let env :Type.env = (fundecs'@env , []) in
   let t = List.assoc f_name fundecs in
@@ -47,9 +49,9 @@ let g' env fundecs tmp f_name =
        
 let _ =
   let lexbuf = Lexing.from_channel stdin in
-  let  (env, minfos, fundecs, l)  = Parser.toplevel Lexer.main lexbuf in
+  let  (env, minfos, fundecs, goals)  = Parser.toplevel Lexer.main lexbuf in
   let env,fundecs = Preprocess.f env minfos fundecs in
-  let g_listlist = List.map (g' env fundecs tmp) l in
+  let g_listlist = List.map (g' env fundecs) goals in
   List.iter
     (fun (g_name,g_t) ->
       (Printf.printf "auxi:%s\n" g_name);

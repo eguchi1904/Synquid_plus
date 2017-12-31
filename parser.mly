@@ -2,6 +2,7 @@
 
 open Type
 open Formula
+open Syntax
 open PreSyntax
 
 
@@ -42,6 +43,8 @@ let rec pop_lst = function
 %token IF
 %token THEN
 %token ELSE
+%token MATCH
+%token WITH
 %token SET
 %token ALLOW
 %token COLON
@@ -53,20 +56,23 @@ let rec pop_lst = function
 %token LCURBRAC
 %token RCURBRAC
 %token PIPE
+%token BACKSLASH
 %token DOT
 %token COMMA
 %token VALVAR
 %token TRUE
 %token FALSE
 %token <int> INT
+%token <Id.t> AUXI
 %token <Id.t> ID
 %token <Id.t> IDCOLONCOLON
 %token <Id.t> CAPID
 %token EOF
 %token NEWLINE
 
+%left prec_app
 
-%type < PreSyntax.id_schemas * PreSyntax.measureInfo list * PreSyntax.id_schemas * (Id.t list) > toplevel
+%type < PreSyntax.id_schemas * PreSyntax.measureInfo list * PreSyntax.id_schemas * ((Id.t * Syntax.t) list) > toplevel
 %type <PreSyntax.id_schemas> m1 /*m1によってコンストラクタの型の環境を作成*/
 %type <Id.t list> t_paras
 %type <(Id.t * Formula.pa_shape) list> p_paras
@@ -169,7 +175,45 @@ cargs:
 
 
 m3:/* query */
-| ID EQUAL QUESTION nl{$1}
+| ID EQUAL prg nl
+{ match $3 with
+  |PF f -> ($1, PF (PFix ($1, f) ) )
+  | _ ->($1, $3)
+
+}
+
+
+prg:
+| prg_e { PE $1 }
+| prg_b { PI $1 }
+| prg_f { PF $1 }
+| QUESTION { PHole }
+
+prg_e:
+|prg_eatom { $1 }
+| prg_e prg_eatom  %prec prec_app
+  { PAppFo( $1, $2 ) }
+  
+prg_eatom:
+| LPAREN prg_e RPAREN { $2 }
+| ID { PSymbol $1 }
+| CAPID { PSymbol $1 }
+| AUXI { PAuxi $1 }
+
+prg_b:
+| LPAREN prg_b RPAREN { $2 }
+| IF prg_e  THEN nl prg ELSE prg { PIf ($2, $5, $7) }
+| MATCH prg_e WITH nl prg_cases  { PMatch ($2, $5) }
+
+prg_cases:
+| prg_case prg_cases { $1 :: $2 }
+| prg_case { [$1] }
+
+prg_case:
+| CAPID cargs ALLOW prg nl { Syntax.mk_case $1 $2 $4 }
+
+prg_f:
+| BACKSLASH ID DOT nl  prg { PFun ($2, $5) } 
 
 
 
@@ -268,6 +312,7 @@ fexp:
 setliteral:
 | LSQBRAC fcommas RSQBRAC { Set (sdummy, $2) }
 fcommas:
+| { [] }
 | fexp  { [$1] }
 | fexp COMMA fcommas { $1 :: $3 }
 

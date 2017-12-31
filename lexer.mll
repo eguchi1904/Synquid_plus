@@ -60,7 +60,10 @@ rule main = parse
  { THEN }
 | "else"
  { ELSE }
-    
+| "match"
+ { MATCH }
+| "with"
+ { WITH }
 | "Int"
  { INTSYMBOL }
 | "Bool"
@@ -87,6 +90,8 @@ rule main = parse
  { RCURBRAC }
 | "|"
  { PIPE }
+| '\\'
+ { BACKSLASH }
 | '.'
  { DOT }
 | ','
@@ -102,9 +107,11 @@ rule main = parse
  { INT (int_of_string n) }
 |eof
  { EOF }
-| (lower|'_') (digit|lower|upper|'_')* as id
+| "g_" (digit|lower|upper)* as id
+ { AUXI id }
+| (lower|'_') (digit|lower|upper|'_'|'\'')* as id
  { ID id }
-| upper (digit|lower|upper|'_')* as id
+| upper (digit|lower|upper|'_'|'\'')* as id
  { CAPID id }
 | _
     { failwith

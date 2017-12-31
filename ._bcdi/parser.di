@@ -1,1 +1,1 @@
-parser.cmi : preSyntax.cmo id.cmo
+parser.cmi : syntax.cmo preSyntax.cmo id.cmo
