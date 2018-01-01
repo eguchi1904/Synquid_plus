@@ -14,13 +14,7 @@ let g env tmp t =
 let match_body = PE (PAppFo
                        (PAppFo (PAuxi "snoc",PSymbol "x'"),
                         PAppFo (PSymbol "f", PSymbol "xs'")))
-                    
-
                
-                             
-
-        
-
 (* テスト用 *)
 (* let pmatch e cases = PI (PMatch (e,cases)) *)
 (* let rec_fun f x e =  PF *)
@@ -45,6 +39,8 @@ let g' env fundecs (f_name, tmp) =
   let fundecs'  = until_assoc f_name fundecs in
   let env :Type.env = (fundecs'@env , []) in
   let t = List.assoc f_name fundecs in
+  let (_,_,t') = t in
+  (print_string (Type.t2string_sort t'));
   g env tmp t
        
 let _ =

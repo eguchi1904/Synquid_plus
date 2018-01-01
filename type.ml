@@ -44,6 +44,28 @@ and b2string = function
   |TVar (_,x) -> Printf.sprintf "Var(%s)" x
   |TAny a ->Printf.sprintf "%s" a
 
+let rec t2string_sort = function
+  |TScalar (b,p) ->Printf.sprintf "{%s | %s}"
+                                  (b2string_sort b)
+                                  (Formula.p2string_with_sort p)
+                 
+  |TFun ((x,t1),t2) -> Printf.sprintf "%s:%s ->\n %s" x
+                                      (t2string_sort t1)
+                                      (t2string_sort t2)
+  |TBot -> "Bot"
+
+and b2string_sort = function
+  |TBool ->"Bool"|TInt -> "Int"
+  |TData (i,ts,ps) ->
+    let ts_string = List.map t2string_sort ts in
+    let ps_string_list = List.map Formula.pa2string ps in
+    Printf.sprintf "%s %s <%s> "
+                   i
+                   (String.concat " " ts_string)
+                   (String.concat " " ps_string_list)
+  |TVar (_,x) -> Printf.sprintf "Var(%s)" x
+  |TAny a ->Printf.sprintf "%s" a          
+
 let rec b2sort  = function
   |TBool -> Some Formula.BoolS
   |TInt-> Some Formula.IntS

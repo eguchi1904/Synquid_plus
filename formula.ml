@@ -123,6 +123,73 @@ let rec p2string = function
   |Not t ->
     Printf.sprintf "!(%s)" (p2string t )
 
+let rec sort2string = function
+  |BoolS -> "Bool"
+  |IntS -> "Int"
+  |DataS (i,sorts) ->
+    Printf.sprintf "%s %s" i (String.concat " " (List.map sort2string sorts))
+  |SetS s -> Printf.sprintf "Set %s" (sort2string s)
+  |AnyS i -> i
+   
+
+      
+let rec p2string_with_sort = function
+  |Bool b -> string_of_bool b | Int i -> string_of_int i
+  |Set (s,ts) ->let ts_string = String.concat ", " (List.map p2string_with_sort ts) in
+                Printf.sprintf "[%s]:%s" ts_string (sort2string s)
+  |Var (s,id) ->Printf.sprintf "%s:%s " id (sort2string s)
+  |Unknown (_,id)->Printf.sprintf "P[%s]" id
+  |Cons (s,id,ts)|UF (s,id,ts) ->
+    let ts_string = String.concat " " (List.map p2string_with_sort ts) in
+    Printf.sprintf "(%s %s):%s" id ts_string (sort2string s)
+  |All (args,t) ->
+    Printf.sprintf "All(somearg).\n%s" (p2string_with_sort t)
+  |Exist (args,t) ->
+    Printf.sprintf "Exist(somearg).\n%s" (p2string_with_sort t)
+  |If (t1,t2,t3) ->
+    Printf.sprintf "if(%s)then %s else %s" (p2string_with_sort t1) (p2string_with_sort t2) (p2string_with_sort t3)
+  |Times (t1,t2) ->
+    Printf.sprintf "(%s)*(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Plus (t1,t2) ->
+    Printf.sprintf "%s + %s" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Minus (t1,t2) ->
+    Printf.sprintf "(%s)-(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Eq (t1,t2) ->
+    Printf.sprintf "%s == %s" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Neq (t1,t2) ->
+    Printf.sprintf "(%s)!=(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Lt (t1,t2) ->
+    Printf.sprintf "(%s)<(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Le (t1,t2) ->
+    Printf.sprintf "(%s)<=(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Gt (t1,t2) ->
+    Printf.sprintf "(%s)>(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Ge (t1,t2) ->
+    Printf.sprintf "(%s)>=(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |And (t1,t2) ->
+    Printf.sprintf "(%s)&&(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Or (t1,t2) ->
+    Printf.sprintf "(%s)||(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Implies (t1,t2) ->
+    Printf.sprintf "(%s)==>(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Iff (t1,t2) ->
+    Printf.sprintf "(%s)<=>(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Union (t1,t2) ->
+    Printf.sprintf "(%s)+(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Intersect (t1,t2) ->
+    Printf.sprintf "(%s)+(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Diff (t1,t2) ->
+    Printf.sprintf "(%s)/(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Member (t1,t2) ->
+    Printf.sprintf "(%s)in %s" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Subset (t1,t2) ->
+    Printf.sprintf "(%s)<= (%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Neg t ->
+    Printf.sprintf "-(%s)" (p2string_with_sort t )
+  |Not t ->
+    Printf.sprintf "!(%s)" (p2string_with_sort t )
+   
+
 
    
               
