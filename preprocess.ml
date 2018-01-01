@@ -323,7 +323,7 @@ let rec fillsort' senv senv_param senv_var = function
   |Lt (e1, e2) ->
     let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
     let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
-    let consrain' = (s1,s2)::(s1,IntS)::(c1@c2) in
+    let consrain' = (s1,s2)::(c1@c2) in
     Lt (e1', e2'), (BoolS, consrain')
 
   |Le (e1, e2) ->
@@ -331,20 +331,20 @@ let rec fillsort' senv senv_param senv_var = function
     let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
     let consrain' = (s1,s2)::(c1@c2) in
     (match s1 with
-     |IntS -> Le (e1',e2'), (BoolS,consrain')
      |SetS s -> Subset (e1',e2'), (BoolS, consrain')
-     |_ -> assert false)
+     |_ -> Le (e1',e2'), (BoolS,consrain')
+    )
 
   |Gt (e1, e2) ->
     let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
     let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
-    let consrain' = (s1,s2)::(s1,IntS)::(c1@c2) in
+    let consrain' = (s1,s2)::(c1@c2) in
     Gt (e1', e2'), (BoolS, consrain')
 
   |Ge (e1, e2) ->
     let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
     let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
-    let consrain' = (s1,s2)::(s1,IntS)::(c1@c2) in
+    let consrain' = (s1,s2)::(c1@c2) in
     Ge (e1', e2'), (BoolS, consrain')
 
   |And (e1, e2) ->
@@ -447,8 +447,8 @@ let rec fill_pa_args ((arg_sort,rets):(Formula.pa_shape)) senv_param (pa:pa) =
   |([(r,_)],_) when List.mem_assoc r senv_param ->
     let r_shape = List.assoc r senv_param in
     id2pa_shape r r_shape
-  |(args,p) ->
-    let args' = List.map2 (fun (i,_) s ->(i,s)) args arg_sort in
+  |(_,p) ->                  (* pの中で、_0,_1が引数 *)
+    let args' = List.mapi (fun i s ->(Printf.sprintf "_%d" i),s) arg_sort in
     (args', p)
   
 

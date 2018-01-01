@@ -38,11 +38,12 @@ let rec sort2z3 (ctx:context) (smap:sort_map) (s:Formula.sort) =
     let z_s1 = sort2z3 ctx smap s1 in
     Z3.Set.mk_sort ctx z_s1
   |Formula.AnyS i as s->
-    (try Hashtbl.find smap s  with
-       Not_found ->
-       let new_z3_sort = Sort.mk_uninterpreted_s ctx (gen_string i) in
-       (Hashtbl.add smap s new_z3_sort);
-       new_z3_sort)    
+    Integer.mk_sort ctx
+    (* (try Hashtbl.find smap s  with *)
+    (*    Not_found -> *)
+    (*    let new_z3_sort = Sort.mk_uninterpreted_s ctx (gen_string i) in *)
+    (*    (Hashtbl.add smap s new_z3_sort); *)
+    (*    new_z3_sort)     *)
 
 (* 副作用：　適宜smap,emap,fmapを更新 *)
 let rec formula2z3 (ctx:context) (smap:sort_map) (emap:id_expr_map) (fmap:id_fun_map) (e:Formula.t) 
@@ -146,25 +147,25 @@ let rec formula2z3 (ctx:context) (smap:sort_map) (emap:id_expr_map) (fmap:id_fun
   |Formula.Lt (e1,e2) ->
     let z_e1, z_s1 = formula2z3 ctx smap emap fmap e1 in
     let z_e2, z_s2 = formula2z3 ctx smap emap fmap e2 in
-    (assert (z_s1 = z_s2 && z_s1 = (Integer.mk_sort ctx)));
+    (assert (z_s1 = z_s2 ));
      (mk_lt ctx z_e1 z_e2), (Boolean.mk_sort ctx)
 
   |Formula.Le (e1,e2) ->
     let z_e1, z_s1 = formula2z3 ctx smap emap fmap e1 in
     let z_e2, z_s2 = formula2z3 ctx smap emap fmap e2 in
-    (assert (z_s1 = z_s2 && z_s1 = (Integer.mk_sort ctx)));
+    (assert (z_s1 = z_s2  ));
      (mk_le ctx z_e1 z_e2), (Boolean.mk_sort ctx)     
      
   |Formula.Gt (e1,e2) ->
     let z_e1, z_s1 = formula2z3 ctx smap emap fmap e1 in
     let z_e2, z_s2 = formula2z3 ctx smap emap fmap e2 in
-    (assert (z_s1 = z_s2 && z_s1 = (Integer.mk_sort ctx)));
+    (assert (z_s1 = z_s2 ));
     (mk_gt ctx z_e1 z_e2), (Boolean.mk_sort ctx)
 
   |Formula.Ge (e1,e2) ->
     let z_e1, z_s1 = formula2z3 ctx smap emap fmap e1 in
     let z_e2, z_s2 = formula2z3 ctx smap emap fmap e2 in
-    (assert (z_s1 = z_s2 && z_s1 = (Integer.mk_sort ctx)));
+    (assert (z_s1 = z_s2 ));
     (mk_ge ctx z_e1 z_e2), (Boolean.mk_sort ctx)
 
   |Formula.And (e1,e2) ->

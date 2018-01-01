@@ -44,7 +44,15 @@ let g' env fundecs (f_name, tmp) =
   g env tmp t
        
 let _ =
-  let lexbuf = Lexing.from_channel stdin in
+  let file = ref "" in
+  (Arg.parse
+    []
+    (fun s -> file := s)
+    "synquid+");
+  let lexbuf = if !file = "" then  Lexing.from_channel stdin
+               else let inchan = open_in (!file) in
+                    Lexing.from_channel inchan
+  in
   let  (env, minfos, fundecs, goals)  = Parser.toplevel Lexer.main lexbuf in
   let env,fundecs = Preprocess.f env minfos fundecs in
   let g_listlist = List.map (g' env fundecs) goals in
