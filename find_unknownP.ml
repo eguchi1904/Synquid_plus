@@ -29,7 +29,8 @@ let subst_inv (sita:subst) :subst =
 let rec guess_candidate' cs (pcandi:(t list) M.t) =
   match cs with
   |(env, Unknown _, Unknown _) :: cs' -> (* とりあえず *)
-    raise (Invalid_argument "predicateunknown vs predicateunknown")
+  (* raise (Invalid_argument "predicateunknown vs predicateunknown") *)
+    guess_candidate' cs' pcandi
   |(env, Unknown (sita, i), e) :: cs' ->
     let sita_inv = subst_inv sita in
     let e' = substitution sita_inv e in

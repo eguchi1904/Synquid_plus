@@ -13,6 +13,20 @@ type t =
           
 
 
+let rec free_tvar' = function
+  |TScalar (b,_) -> free_tvar_base b
+  |TFun((x,t1), t2) -> (free_tvar' t1)@(free_tvar' t2)
+  |TBot -> []
+
+and free_tvar_base = function
+  |TVar (_, i) -> [i]
+  |TData (_, ts, ps) ->
+    List.concat (List.map free_tvar' ts)
+  |_ -> []
+
+let free_tvar t = Formula.list_uniq (free_tvar' t)
+
+
 let rec t2string = function
   |TScalar (b,p) ->Printf.sprintf "{%s | %s}" (b2string b) (Formula.p2string p)
   |TFun ((x,t1),t2) -> Printf.sprintf "%s:%s ->\n %s" x (t2string t1) (t2string t2)
@@ -23,12 +37,34 @@ and b2string = function
   |TData (i,ts,ps) ->
     let ts_string = List.map t2string ts in
     let ps_string_list = List.map Formula.pa2string ps in
-    Printf.sprintf "D%s %s <%s> "
+    Printf.sprintf "%s %s <%s> "
                    i
                    (String.concat " " ts_string)
                    (String.concat " " ps_string_list)
   |TVar (_,x) -> Printf.sprintf "Var(%s)" x
   |TAny a ->Printf.sprintf "%s" a
+
+let rec t2string_sort = function
+  |TScalar (b,p) ->Printf.sprintf "{%s | %s}"
+                                  (b2string_sort b)
+                                  (Formula.p2string_with_sort p)
+                 
+  |TFun ((x,t1),t2) -> Printf.sprintf "%s:%s ->\n %s" x
+                                      (t2string_sort t1)
+                                      (t2string_sort t2)
+  |TBot -> "Bot"
+
+and b2string_sort = function
+  |TBool ->"Bool"|TInt -> "Int"
+  |TData (i,ts,ps) ->
+    let ts_string = List.map t2string_sort ts in
+    let ps_string_list = List.map Formula.pa2string ps in
+    Printf.sprintf "%s %s <%s> "
+                   i
+                   (String.concat " " ts_string)
+                   (String.concat " " ps_string_list)
+  |TVar (_,x) -> Printf.sprintf "Var(%s)" x
+  |TAny a ->Printf.sprintf "%s" a          
 
 let rec b2sort  = function
   |TBool -> Some Formula.BoolS
@@ -98,6 +134,19 @@ let constrain2string ((env,t1,t2):subtype_constrain) =
                  (env2string env)
                  (t2string t1)
                  (t2string t2)
+
+let constrain2string_F (p1,p2,p3) =
+  Printf.sprintf
+  "------------------------------------------------------------\
+   \n%s\
+   \n============================================================\
+   \n%s\n==>\n%s\
+   \n------------------------------------------------------------\n"
+  (Formula.p2string p1)
+  (Formula.p2string p2)
+  (Formula.p2string p3)  
+
+  
                        
 let env_empty:env = ([],[])
 
@@ -221,10 +270,10 @@ let rec replace_F x y t =
   |TScalar (b, p) ->
     let p' =  Formula.replace x y p in
     TScalar (b, p')
-  |TFun ((x,t1),t2) ->
+  |TFun ((x',t1),t2) ->
     let t1' = replace_F x y t1 in
     let t2' = replace_F x y t2 in
-    TFun ((x,t1'),t2')
+    TFun ((x',t1'),t2')
   | _ -> t
               
 
@@ -258,19 +307,34 @@ let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
   
 
 (* fに関係するenvの条件を抜き出す。 *)
+(* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
+(*   match tenv with *)
+(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (\* schemaは無視して良いの? *\) *)
+(*     if S.mem x vset then *)
+(*       (Formula.And ((Formula.replace (Id.valueVar_id) x p), (\* [x/_v]p *\) *)
+(*                     (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p) )) *)
+(*       )) *)
+(*     else *)
+(*       env2formula' tenv' vset *)
+
+(*   |_ :: tenv' -> env2formula' tenv' vset *)
+
+(*   |[] -> Formula.Bool true *)
+
+(* 環境全ての条件を抜き出すver *)
 let rec env2formula' (tenv:((Id.t*schema) list)) vset =
   match tenv with
+  |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (* schemaは無視して良いの? *)
+    env2formula' tenv' S.empty  
+        
   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (* schemaは無視して良いの? *)
-    if S.mem x vset then
       (Formula.And ((Formula.replace (Id.valueVar_id) x p), (* [x/_v]p *)
-                    (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p) ))
-      ))
-    else
-      env2formula' tenv' vset
+                    (env2formula' tenv' S.empty  )
+                   ))
 
   |_ :: tenv' -> env2formula' tenv' vset
 
-  |[] -> Formula.Bool true
+  |[] -> Formula.Bool true       
     
 
 let env2formula ((tenv,ps):env) (f:Formula.t) =
@@ -443,7 +507,7 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
        let env_p = env2formula env (Formula.Implies (p1, p2)) in
        ((env_p, p1, p2)::cs_res), sub_res
 
-     |TAny i1, TAny i2 when i1 == i2 ->
+     |TAny i1, TAny i2 when i1 = i2 ->
        let cs_res, sub_res = split left tsubst in
        let env_p = env2formula env (Formula.Implies (p1, p2)) in
        ((env_p, p1, p2)::cs_res), sub_res
@@ -456,7 +520,7 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
     let env2 = env_add env (x',t1') in (* env;x':t1' *)
     let t2_rpl = replace_F x x' t2 in
     let cs' = (env2, t2_rpl, t2')      (* env; x':t1' |- [x'/x]t2 <: t2' *)
-              ::((env, t1', t2')::left) in
+              ::((env, t1', t1)::left) in
     split cs' tsubst
    
   |(env,_, TBot) :: left -> split left tsubst
@@ -496,12 +560,19 @@ let rec contextual_expand_tvar tvar_map ((TLet (env,t)):contextual) =
   
 let checkETerm env e t  z3_env =
   let contex_t,cs,g_t_op = gen_constrain env e t in
-  let cs_string = List.map constrain2string cs in
-  (List.iter (fun s -> Printf.printf "%s\n" s) cs_string);
+  
+  (* let cs_string = List.map constrain2string cs in *)
+  (* (List.iter (fun s -> Printf.printf "%s\n" s) cs_string); *)
+  
   match g_t_op with
   |None -> None
   |Some (g_env, g_t) ->
     let cs,tvar_map = split cs (M.empty) in
+    
+    (* let cs_string = List.map constrain2string_F cs in *)
+    (* (print_string "\n\nconstrain after split\n\n"); *)
+    (* (List.iter (fun s -> Printf.printf "%s\n" s) cs_string); *)
+    
     let punknown_map = Find_unknownP.f cs z3_env in
     let g_t =  expand_tvar tvar_map g_t in
     let g_t' = substitute_F punknown_map g_t in

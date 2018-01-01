@@ -20,8 +20,8 @@ type t =
   |Unknown of subst * Id.t        (* predicate unknown with pending substitution *)
   |Cons of sort * Id.t * (t list) (* datatype constructor *)
   |UF of sort * Id.t * (t list)   (* uninterpreted function *)
-  |All of (Id.t * sort) list * t
-  |Exist of (Id.t * sort) list * t
+  |All of (Id.t * sort) list * t  (* 使わない *)
+  |Exist of (Id.t * sort) list * t (* 使わない *)
           
   (* 以下、解釈付きの演算 *)
   |If of t * t * t
@@ -47,7 +47,12 @@ type t =
   |Not of t 
 and subst = t M.t (* 術後変数の代入 *)
 
-
+type qformula =
+  (* foall args.{ [p1&&p2&&...] => p } *)
+  |QAll of (Id.t* sort) list * t list * t
+  (* exist args.{ [p1&&p2&&...] && p } *)
+  |QExist of (Id.t* sort) list * t list
+           
 type pa = (Id.t * sort) list * t
 
 (* \x.y.r x y の形だった場合、rを返す。 *)
@@ -59,7 +64,7 @@ let eta_shape ((arg,t):pa) =
     else
       None
   |_ -> None
-      
+
 type pa_shape = (sort list) * sort
 
 let rec p2string = function
@@ -104,9 +109,9 @@ let rec p2string = function
   |Iff (t1,t2) ->
     Printf.sprintf "(%s)<=>(%s)" (p2string t1) (p2string t2)
   |Union (t1,t2) ->
-    Printf.sprintf "(%s)\/(%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s)+(%s)" (p2string t1) (p2string t2)
   |Intersect (t1,t2) ->
-    Printf.sprintf "(%s)/\(%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s)+(%s)" (p2string t1) (p2string t2)
   |Diff (t1,t2) ->
     Printf.sprintf "(%s)/(%s)" (p2string t1) (p2string t2)
   |Member (t1,t2) ->
@@ -117,6 +122,73 @@ let rec p2string = function
     Printf.sprintf "-(%s)" (p2string t )
   |Not t ->
     Printf.sprintf "!(%s)" (p2string t )
+
+let rec sort2string = function
+  |BoolS -> "Bool"
+  |IntS -> "Int"
+  |DataS (i,sorts) ->
+    Printf.sprintf "%s %s" i (String.concat " " (List.map sort2string sorts))
+  |SetS s -> Printf.sprintf "Set %s" (sort2string s)
+  |AnyS i -> i
+   
+
+      
+let rec p2string_with_sort = function
+  |Bool b -> string_of_bool b | Int i -> string_of_int i
+  |Set (s,ts) ->let ts_string = String.concat ", " (List.map p2string_with_sort ts) in
+                Printf.sprintf "[%s]:%s" ts_string (sort2string s)
+  |Var (s,id) ->Printf.sprintf "%s:%s " id (sort2string s)
+  |Unknown (_,id)->Printf.sprintf "P[%s]" id
+  |Cons (s,id,ts)|UF (s,id,ts) ->
+    let ts_string = String.concat " " (List.map p2string_with_sort ts) in
+    Printf.sprintf "(%s %s):%s" id ts_string (sort2string s)
+  |All (args,t) ->
+    Printf.sprintf "All(somearg).\n%s" (p2string_with_sort t)
+  |Exist (args,t) ->
+    Printf.sprintf "Exist(somearg).\n%s" (p2string_with_sort t)
+  |If (t1,t2,t3) ->
+    Printf.sprintf "if(%s)then %s else %s" (p2string_with_sort t1) (p2string_with_sort t2) (p2string_with_sort t3)
+  |Times (t1,t2) ->
+    Printf.sprintf "(%s)*(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Plus (t1,t2) ->
+    Printf.sprintf "%s + %s" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Minus (t1,t2) ->
+    Printf.sprintf "(%s)-(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Eq (t1,t2) ->
+    Printf.sprintf "%s == %s" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Neq (t1,t2) ->
+    Printf.sprintf "(%s)!=(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Lt (t1,t2) ->
+    Printf.sprintf "(%s)<(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Le (t1,t2) ->
+    Printf.sprintf "(%s)<=(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Gt (t1,t2) ->
+    Printf.sprintf "(%s)>(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Ge (t1,t2) ->
+    Printf.sprintf "(%s)>=(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |And (t1,t2) ->
+    Printf.sprintf "(%s)&&(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Or (t1,t2) ->
+    Printf.sprintf "(%s)||(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Implies (t1,t2) ->
+    Printf.sprintf "(%s)==>(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Iff (t1,t2) ->
+    Printf.sprintf "(%s)<=>(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Union (t1,t2) ->
+    Printf.sprintf "(%s)+(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Intersect (t1,t2) ->
+    Printf.sprintf "(%s)+(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Diff (t1,t2) ->
+    Printf.sprintf "(%s)/(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Member (t1,t2) ->
+    Printf.sprintf "(%s)in %s" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Subset (t1,t2) ->
+    Printf.sprintf "(%s)<= (%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+  |Neg t ->
+    Printf.sprintf "-(%s)" (p2string_with_sort t )
+  |Not t ->
+    Printf.sprintf "!(%s)" (p2string_with_sort t )
+   
 
 
    
@@ -136,13 +208,40 @@ let rec fv = function               (* 自由変数、 *)
   |All (args,t1) |Exist (args,t1) ->
     S.diff (fv t1) (S.of_list (List.map fst args))
 
+let rec fv_sort' = function               (* 自由変数、sortの情報付き。 *)
+  |Var (_,i) when i = Id.valueVar_id -> [] (* _v は自由変数でない *)
+  |Var (s,i) -> [(i,s)]
+  |Bool _ | Int _ |Unknown _ -> []
+  |Set (_, ts) |Cons (_,_, ts) |UF (_,_,ts) ->
+    List.fold_left (fun acc t -> acc@(fv_sort' t)) [] ts
+  |If (t1,t2,t3) ->(fv_sort' t1)@(fv_sort' t2)@(fv_sort' t3)
+  |Times(t1,t2) |Plus(t1,t2) |Minus (t1,t2) |Eq(t1,t2) | Neq(t1,t2)|Lt(t1,t2)
+   |Le(t1,t2)|Gt(t1,t2)|Ge(t1,t2)|And(t1,t2)|Or(t1,t2)|Implies(t1,t2)|Iff(t1,t2)
+   |Union(t1,t2) |Intersect(t1,t2) |Diff(t1,t2) |Member(t1,t2) |Subset(t1,t2)
+   ->(fv_sort' t1)@(fv_sort' t2)
+  |Neg t1 |Not t1 ->fv_sort' t1
+  |All (args,t1) |Exist (args,t1) ->
+    List.filter (fun (x,_) -> List.mem x (List.map fst args))  (fv_sort' t1) 
 
+let rec list_uniq = function
+  |[] -> []
+  |x::xs -> if List.mem x xs then list_uniq xs else x::(list_uniq xs)
+
+let fv_sort e = list_uniq (fv_sort' e)
 
 let rec and_list (es:t list) =
   match es with
   |[] -> Bool true
+  |[e] -> e
   |(Bool true)::es' -> and_list es'
   |e::es' -> And (e, and_list es')
+
+let rec list_and (es:t) =
+  match es with
+  |And (Bool true, e2) -> list_and e2
+  |And (e1, Bool true) -> list_and e1
+  |And (e1,e2) -> (list_and e1)@(list_and e2)
+  |e -> [e]
 
   
 
@@ -333,6 +432,10 @@ let pa_replace x y ((args,t):pa) =
   else
     let t' = replace x y t in
     (args, t')
+
+
+  
+  
 
 let pa2string ((arg,p):pa) =
   let sita,_ = List.fold_left

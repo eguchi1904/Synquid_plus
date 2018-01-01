@@ -21,6 +21,7 @@ let rec constructor_shape c_t =
       
 let mk_constructor_arg_env (c_t:Type.t) {constructor = c_id;argNames = xs;body=_} =
   let c_t' = t_alpha_convert c_t xs in
+  (* (Printf.printf "c_t:%s\nc_t':%s\n\n" (t2string c_t) (t2string c_t')); *)
   let args,ret = constructor_shape c_t' in
   let arg_env = List.map (fun (x,t) ->(x,mk_mono_schmea t)) args in
   (arg_env,[]),ret

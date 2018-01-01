@@ -76,44 +76,6 @@ let match_body = PE (PAppFo
                              
 
         
-        
-(* test1. t_alpha_convert Test *)
-(*-----------------------------------------input-------------------------------------- *)
-
-let test1_cons_t =   TFun(("x",a_t_cons),
-                          TFun(("xs",(list a_t_rx_cons r_pa (Bool true))),
-                               list
-                                 a_t_cons
-                                 r_pa
-                                 (Eq (len v, Plus
-                                               (len (Var (DataS ("list",[AnyS "a"]),"xs")),
-                                                Int 1)
-                                      ))))
-
-let test1_xs = ["hou";"xs!"]
-(*-----------------------------------------output-------------------------------------- *)
-
-let out1_a_t_rx_cons = TScalar
-                          (TVar (M.empty, "b"),
-                           UF(BoolS,"r",[Var(AnyS "a","hou"); Var(AnyS "a",Id.valueVar_id)] ))
-
-let a_t_rx_cons = TScalar
-               (TVar (M.empty, "b"),
-                UF(BoolS,"r",[Var(AnyS "a","x"); Var(AnyS "a",Id.valueVar_id)] )
-               )
-
-let test1_output =   TFun(("hou",a_t_cons),
-                          TFun(("xs!",(list out1_a_t_rx_cons r_pa (Bool true))),
-                               list
-                                 a_t_cons
-                                 r_pa
-                                 (Eq (len v, Plus
-                                               (len (Var (DataS ("list",[AnyS "a"]),"xs!")),
-                                                Int 1)
-                         ))));;
-
-
-
 
 
 
@@ -141,18 +103,27 @@ let env:env = ([("Nil",nil_t);("Cons",cons_t)],[])
          
 let z3_env = UseZ3.mk_z3_env ()  
 let _ =
-  (* (print_string (t2string (Step2.t_alpha_convert test1_cons_t test1_xs))); *)
-  (assert (test1_output = Step2.t_alpha_convert test1_cons_t test1_xs));
-  
-  (Printexc.record_backtrace true);
   let g_list = Step2.f env tmp t z3_env in
-  List.iter
+    (List.iter
     (fun (g_i, env, g_t) ->
       (Printf.printf "auxi:%s\n" g_i);
         (print_string (env2string env));
       print_string (t2string g_t);
       Printf.printf "\n\n\n")
     g_list
+  );
+  let g_list = List.map
+                 (fun (g_name,g_env,g_t) ->
+                   (g_name, Step3.f g_name g_env g_t))
+                 g_list
+  in
+
+  List.iter
+    (fun (g_name,g_t) ->
+      (Printf.printf "auxi:%s\n" g_name);
+      print_string (t2string g_t);
+      Printf.printf "\n\n\n")
+  g_list
   
 
 
