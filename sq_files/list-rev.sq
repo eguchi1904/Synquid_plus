@@ -1,0 +1,18 @@
+data List a <r :: a -> a -> Bool> where
+ Nil :: List a <r>
+ Cons :: x: a -> xs: List {a | r x _v} <r> -> List a <r>
+
+termination measure len :: List a  -> {Int | _v >= 1} where
+ Nil -> 1
+ Cons x xs -> 1 + len xs  
+
+measure elems :: List a -> Set a where
+ Nil -> []
+ Cons x xs -> [x] + (elems xs)
+
+
+reverse :: <r :: a -> a -> Bool> . xs: List a <{r _0 _1}> -> {List a <{r _1 _0}> | (len _v == len xs ) && (elems _v == elems xs)}
+reverse = \l.
+       match l with
+        Nil -> Nil
+        Cons x xs -> g_1 x (reverse xs)

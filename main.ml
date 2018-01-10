@@ -56,6 +56,7 @@ let _ =
   let  (env, minfos, fundecs, goals)  = Parser.toplevel Lexer.main lexbuf in
   let env,fundecs = Preprocess.f env minfos fundecs in
   let g_listlist = List.map (g' env fundecs) goals in
+  (Printf.printf "\n\n");
   List.iter
     (fun (g_name,g_t) ->
       (Printf.printf "auxi:%s\n" g_name);

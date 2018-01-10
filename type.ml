@@ -28,7 +28,11 @@ let free_tvar t = Formula.list_uniq (free_tvar' t)
 
 
 let rec t2string = function
-  |TScalar (b,p) ->Printf.sprintf "{%s | %s}" (b2string b) (Formula.p2string p)
+  |TScalar (b,p) ->
+    if p = Formula.Bool true then
+      b2string b
+    else
+      Printf.sprintf "{%s | %s}" (b2string b) (Formula.p2string p)
   |TFun ((x,t1),t2) -> Printf.sprintf "%s:%s ->\n %s" x (t2string t1) (t2string t2)
   |TBot -> "Bot"
 
@@ -37,15 +41,24 @@ and b2string = function
   |TData (i,ts,ps) ->
     let ts_string = List.map t2string ts in
     let ps_string_list = List.map Formula.pa2string ps in
-    Printf.sprintf "%s %s <%s> "
-                   i
-                   (String.concat " " ts_string)
-                   (String.concat " " ps_string_list)
+    if ps = [] then
+      Printf.sprintf "%s %s"
+                     i
+                     (String.concat " " ts_string)
+    else
+      Printf.sprintf "%s %s <{%s}> "
+                     i
+                     (String.concat " " ts_string)
+                     (String.concat " " ps_string_list)
   |TVar (_,x) -> Printf.sprintf "Var(%s)" x
   |TAny a ->Printf.sprintf "%s" a
 
+
+          
 let rec t2string_sort = function
-  |TScalar (b,p) ->Printf.sprintf "{%s | %s}"
+  |TScalar (b,p) ->
+
+    Printf.sprintf "{%s | %s}"
                                   (b2string_sort b)
                                   (Formula.p2string_with_sort p)
                  
@@ -259,7 +272,7 @@ let rec env_substitute_F (sita:Formula.subst) ((ts,ps):env) :env=
   
                          
 
-(* 述語変数の置換 *)
+(* 述語変数の置換 [x/y]t *)
 let rec replace_F x y t =
   match t with
   |TScalar( TData( i, ts, ps), p ) ->
@@ -378,10 +391,14 @@ let rec gen_constrain env e t :contextual * (subtype_constrain list) * (env *t) 
     let (TLet(env1,t1), c1, gc) = gen_constrain (env_append env2 env) e1 t1_req in
     (match t1 with
      |TFun ((x, t1_in),t1_out) ->
+       (* 引数をフレッシュ *)
+       let x' = Id.genid x in
+       let t1_out' = replace_F x x' t1_out in (* [x'/x]t1_out *)
+       
        let env12 = env_append env1 env2 in
-       let env' = env_add  env12 (x, t2) in
-       let constrain = (env_append env' env, t1_out, t) in
-       TLet (env', t1_out), (constrain::c1@c2), gc
+       let env' = env_add  env12 (x', t2) in
+       let constrain = (env_append env' env, t1_out', t) in
+       TLet (env', t1_out'), (constrain::c1@c2), gc
      |_ -> raise (InferErr "not function type"))
 
 
