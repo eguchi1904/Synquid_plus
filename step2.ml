@@ -96,7 +96,7 @@ let rec f (env:Type.env) (prg:Syntax.t) ((ts,ps,t):Type.schema) z3_env=
   let ts_inst = List.map (fun i -> TScalar(TAny i,Formula.Bool true)) ts in
   let ps_inst = List.map (fun (r,shape) -> Formula.id2pa_shape r shape) ps in (* id *)
   let toplev_t = Type.instantiate_implicit (ts,ps,t) ts_inst ps_inst in
-
+  (Printf.printf "\nafter instantiate:\n%s\n\n" (Type.t2string_sort toplev_t));
   match prg with
   |PF (PFix (f_name, PFun(x,e))) -> (* 再帰関数 *)
     let ts',ts_inst =List.split

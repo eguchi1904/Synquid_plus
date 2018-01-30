@@ -24,6 +24,7 @@ measure elems :: RList a -> Set a where
 split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }	
 
 
+
 mergeSort :: xs: RList a <{True}>-> {RList a <{_0 <= _1}> | (len _v == len xs) && (elems _v == elems xs) }
 
 mergeSort = \l.

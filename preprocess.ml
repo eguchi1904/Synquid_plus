@@ -440,9 +440,9 @@ let print_sort_subst sita =
   
 let fillsort senv senv_param senv_var e =
   let (e',(_,constrain)) = fillsort' senv senv_param senv_var e in
-  (print_sort_constrain constrain );
+  (* (print_sort_constrain constrain ); *)
   let sita = unify_sort constrain M.empty in (* unifyは適切か *)
-  (print_sort_subst sita);
+  (* (print_sort_subst sita); *)
   sort_subst2formula sita e'                 (* 代入は適切か *)
 
 let fillsort2pa senv senv_param senv_var (pa:pa) =

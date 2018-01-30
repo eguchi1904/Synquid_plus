@@ -32,7 +32,8 @@ let suff_pa argv env ((arg,p):pa) =
   |_ -> assert false
 
 let rec necess_type (argv:S.t) env t =
-  (Printf.printf "\nnecess_args\n%s\n%s" (env2string env) (t2string t));
+  let argv_str = String.concat "," (S.elements argv) in
+  (Printf.printf "\nnecess_args:arg=[%s]\n%s %s\n\n\n" argv_str (env2string env) (t2string t));
   match t with
   |TScalar( TData (i, ts, pas), p) ->
     let ts',p_map1s = List.split (List.map (necess_type argv env) ts) in
