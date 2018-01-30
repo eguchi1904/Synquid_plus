@@ -188,18 +188,11 @@ and type2pashape = function
      | _ -> assert false)
   |TBot -> assert false
 
-let compose_sort_subst (sita1:sort M.t) (sita2:sort M.t) = (* sita t = sita1(sita2 t) *)
-  let sita2' = M.mapi
-                 (fun i t ->
-                   match t with
-                   |AnyS i' when (M.mem i' sita1) ->
-                     M.find i' sita1
-                   |_ -> t)
-                 sita2         
-  in
-  M.union (fun i t1 t2 -> Some t2) sita1 sita2'
+         
+
 
 (* 単一化で、使う。ソート中のunknown な変数を他のソートで代入する。 *)
+(* sort_substがあるのでいらない気がしてきた(追記） *)
 let rec subst_unknown_sort s1 s2 target_sort=
   match target_sort with
   |BoolS |IntS -> target_sort
@@ -207,8 +200,15 @@ let rec subst_unknown_sort s1 s2 target_sort=
   |SetS s' -> subst_unknown_sort s1 s2 s'
   |UnknownS id when id = s1 -> s2
   |s -> s
-           
-  
+
+let compose_sort_subst (sita1:sort M.t) (sita2:sort M.t) = (* sita t = sita1(sita2 t) *)
+  let sita2' = M.mapi
+                 (fun i t ->
+                   sort_subst sita1 t)
+                 sita2         
+  in
+  M.union (fun i t1 t2 -> Some t2) sita1 sita2'      
+(* unknown ソートに関する代入を作成する。 *)
 let rec unify_sort constrain sita =
   match constrain with
 
@@ -291,6 +291,7 @@ let rec fillsort' senv senv_param senv_var = function
     let es_sorts, constrainlist = List.split sort_constrain in
     let constrain = List.concat constrainlist in
     let (argsort, rets) = any2unknownsort_pa (List.assoc i senv) in
+    (Printf.printf "\n\ninstans measure:%s as %s\n\n" i (pashape2string (argsort, rets)));
     let new_c = List.map2 (fun a b ->(a,b)) es_sorts argsort in
     UF (rets, i, es'), (rets, new_c@constrain)
 
@@ -423,9 +424,25 @@ let rec fillsort' senv senv_param senv_var = function
 
 (* fillsort' によって、 Unknown sort が含まれる式e'とconstrainが返される
  constrainを解き、e'中のUnknown sortを適切に置き換える  *)
+let print_sort_constrain cs =
+  let cs_str =
+    String.concat
+      "; "
+      (List.map (fun (c1,c2) -> Printf.sprintf "(%s,%s)"
+                                              (Formula.sort2string c1)
+                                              (Formula.sort2string c2))
+                cs)
+  in
+  Printf.printf "\n\nwe will solve ...\n%s\n\n" cs_str
+
+let print_sort_subst sita =
+  M.iter (fun i sort -> Printf.printf "%s -> %s\n" i (Formula.sort2string sort)) sita
+  
 let fillsort senv senv_param senv_var e =
   let (e',(_,constrain)) = fillsort' senv senv_param senv_var e in
+  (print_sort_constrain constrain );
   let sita = unify_sort constrain M.empty in (* unifyは適切か *)
+  (print_sort_subst sita);
   sort_subst2formula sita e'                 (* 代入は適切か *)
 
 let fillsort2pa senv senv_param senv_var (pa:pa) =

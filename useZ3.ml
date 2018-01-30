@@ -42,6 +42,7 @@ let rec sort2z3 (ctx:context) (smap:sort_map) (s:Formula.sort) =
     Integer.mk_sort ctx
   |Formula.UnknownS i ->
     (Printf.fprintf stderr "there is Unknown sort:%s\n\n" i);
+    (assert false);
     Integer.mk_sort ctx
     (* (try Hashtbl.find smap s  with *)
     (*    Not_found -> *)
