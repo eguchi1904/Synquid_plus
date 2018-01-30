@@ -48,16 +48,16 @@ and syn2string_b = function
                    (syn2string t1)
                    (syn2string t2)
   |PMatch (e, cases) ->
-    Printf.sprintf "match %s with \n %s "
+    Printf.sprintf "\nmatch %s with \n%s "
                   (syn2string_e e)
                   (String.concat "\n" (List.map syn2string_case cases))
 
 and syn2string_f = function
   |PFun (x,t) ->
-    Printf.sprintf "\\%s.\n%s" x (syn2string t)
+    Printf.sprintf "\\%s.%s" x (syn2string t)
   |PFix (x,f) -> syn2string_f f
 
 and syn2string_case {constructor = cons; argNames = xs; body = t} =
-  Printf.sprintf "%s %s ->%s" cons (String.concat " " xs) (syn2string t)
+  Printf.sprintf " %s %s -> %s" cons (String.concat " " xs) (syn2string t)
    
     

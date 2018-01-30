@@ -19,5 +19,6 @@ let formula2pa  p =
 let mk_measureCase x y z =   
 {constructor= x; args = y; body = z }
 
-
+let minfo2string ((measure, (shape, _)):measureInfo) =
+  Printf.sprintf "%s::%s" measure (Formula.pashape2string shape)
   

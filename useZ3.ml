@@ -31,13 +31,17 @@ let rec sort2z3 (ctx:context) (smap:sort_map) (s:Formula.sort) =
   |Formula.DataS (i, ss) as s->
     (try Hashtbl.find smap s  with
        Not_found ->
+       (Printf.printf "let's make z3 sort! %s\n" (Formula.sort2string s));
        let new_z3_sort = Sort.mk_uninterpreted_s ctx (gen_string i) in
        (Hashtbl.add smap s new_z3_sort);
        new_z3_sort)
   |Formula.SetS s1 ->
     let z_s1 = sort2z3 ctx smap s1 in
     Z3.Set.mk_sort ctx z_s1
-  |Formula.AnyS i as s->
+  |Formula.AnyS i ->
+    Integer.mk_sort ctx
+  |Formula.UnknownS i ->
+    (Printf.fprintf stderr "there is Unknown sort:%s\n\n" i);
     Integer.mk_sort ctx
     (* (try Hashtbl.find smap s  with *)
     (*    Not_found -> *)

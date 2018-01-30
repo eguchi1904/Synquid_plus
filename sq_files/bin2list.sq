@@ -28,9 +28,9 @@ measure elems :: List a -> Set a where
 leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
 neq :: x: a -> y: a -> {Bool | _v == (x != y)}
 
-append :: l1:List a -> l2:List a ->{List a | elems _v == elems l1 + elems l2}	
 
 bin2list :: t:BST a -> {List a | elems _v == keys t}
+
 bin2list = \t12.match t12 with
  Empty -> ??
  Node v' l' r' -> ((g_1 v') (bin2list l')) (bin2list r')

@@ -1,5 +1,6 @@
 (* UFLIA *)
 type sort = BoolS | IntS | DataS of Id.t * (sort list) | SetS of sort | AnyS of Id.t
+            |UnknownS of Id.t
 
 (* type unop = Neg | Not *)
                                                                       
@@ -67,8 +68,11 @@ let eta_shape ((arg,t):pa) =
 
 type pa_shape = (sort list) * sort
 
+
+
 let rec p2string = function
-  |Bool b -> string_of_bool b | Int i -> string_of_int i
+  |Bool b -> if b = true then "True" else "False"
+  | Int i -> string_of_int i
   |Set (_,ts) ->let ts_string = String.concat ", " (List.map p2string ts) in
                 Printf.sprintf "[%s]" ts_string
   |Var (_,id) ->Printf.sprintf "%s " id
@@ -130,18 +134,24 @@ let rec sort2string = function
     Printf.sprintf "%s %s" i (String.concat " " (List.map sort2string sorts))
   |SetS s -> Printf.sprintf "Set %s" (sort2string s)
   |AnyS i -> i
+  |UnknownS i -> Printf.sprintf "unknown_%s" i
    
-
+let rec pashape2string ((args,rets):pa_shape) =
+  match args with
+  |s::left -> Printf.sprintf "%s -> %s"
+             (sort2string s)
+             (pashape2string (left,rets))
+  |[] -> sort2string rets
       
 let rec p2string_with_sort = function
   |Bool b -> string_of_bool b | Int i -> string_of_int i
   |Set (s,ts) ->let ts_string = String.concat ", " (List.map p2string_with_sort ts) in
-                Printf.sprintf "[%s]:%s" ts_string (sort2string s)
-  |Var (s,id) ->Printf.sprintf "%s:%s " id (sort2string s)
+                Printf.sprintf "([%s]:%s)" ts_string (sort2string s)
+  |Var (s,id) ->Printf.sprintf "(%s:%s) " id (sort2string s)
   |Unknown (_,id)->Printf.sprintf "P[%s]" id
   |Cons (s,id,ts)|UF (s,id,ts) ->
     let ts_string = String.concat " " (List.map p2string_with_sort ts) in
-    Printf.sprintf "(%s %s):%s" id ts_string (sort2string s)
+    Printf.sprintf "((%s %s):%s)" id ts_string (sort2string s)
   |All (args,t) ->
     Printf.sprintf "All(somearg).\n%s" (p2string_with_sort t)
   |Exist (args,t) ->

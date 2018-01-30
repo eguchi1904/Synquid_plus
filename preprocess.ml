@@ -5,15 +5,22 @@ let sdummy = Formula.IntS
 
 let rec sort_subst sita = function
   |AnyS i when M.mem i sita -> M.find i sita
+  |UnknownS i when M.mem i sita -> M.find i sita
   |DataS (i, sortlist) ->DataS(i, List.map (sort_subst sita) sortlist )
   |SetS s -> SetS (sort_subst sita s)
   | s -> s
 
 let rec sort_subst2formula sita = function
-  |Set (s, ts) ->Set (sort_subst sita s, ts)
+  |Set (s, ts) ->
+    let ts' = List.map (sort_subst2formula sita) ts in
+    Set (sort_subst sita s, ts')
   |Var (s,i) ->Var (sort_subst sita s, i)
-  |Cons (s, i, ts) ->Cons (sort_subst sita s, i, ts)
-  |UF (s, i, ts) -> UF (sort_subst sita s, i, ts)
+  |Cons (s, i, ts) ->
+    let ts' = List.map (sort_subst2formula sita) ts in
+    Cons (sort_subst sita s, i, ts')
+  |UF (s, i, ts) ->
+    let ts' = List.map (sort_subst2formula sita) ts in
+    UF (sort_subst sita s, i, ts')
                   
   (* 残りはただの再起 *)
   |All (is, t') ->All (is, (sort_subst2formula sita t'))
@@ -59,18 +66,18 @@ let rec sort_subst2formula sita = function
                               (sort_subst2formula sita t2))
   |Neg t1 -> Neg (sort_subst2formula sita t1)
   |Not t1 -> Not (sort_subst2formula sita t1)
-  | t -> t
+  |t ->t 
 
-let mk_unknown_sort i = AnyS (Printf.sprintf "unknown_%s" (Id.genid i))
+(* let mk_unknown_sort i = AnyS (Printf.sprintf "unknown_%s" (Id.genid i)) *)
                       
-let is_unknown_sort s =
-  match s with
-  |AnyS i ->
-    if String.length i >7 then
-      (String.sub i 0 7) = "unknown"
-    else
-      false
-  |_ -> false
+(* let is_unknown_sort s = *)
+(*   match s with *)
+(*   |AnyS i -> *)
+(*     if String.length i >7 then *)
+(*       (String.sub i 0 7) = "unknown" *)
+(*     else *)
+(*       false *)
+(*   |_ -> false *)
 
 
 let rec sort_anyids = function
@@ -80,11 +87,14 @@ let rec sort_anyids = function
     List.fold_left (fun acc ids -> S.union acc ids) S.empty anyids_list
   |SetS s -> sort_anyids s
   |BoolS|IntS -> S.empty
+  |UnknownS _ -> assert false
 
+(* Any a と Unkown a' で　a != a' *)
+(* ソートs中のAny a を　Unknown a' に変換する *)
 let rec any2unknownsort s =
   let any_ids = sort_anyids s in
   let sita = S.fold
-               (fun any_id sita -> M.add any_id (mk_unknown_sort any_id) sita)
+               (fun any_id sita -> M.add any_id (UnknownS (Id.genid any_id)) sita)
                any_ids
                M.empty
   in
@@ -99,7 +109,7 @@ let rec any2unknownsort_pa (args,rets) =
   in
   let any_ids = S.union any_args (sort_anyids rets) in
   let sita = S.fold
-               (fun any_id sita -> M.add any_id (mk_unknown_sort any_id) sita)
+               (fun any_id sita -> M.add any_id (UnknownS (Id.genid any_id)) sita)
                any_ids
                M.empty
   in
@@ -188,26 +198,37 @@ let compose_sort_subst (sita1:sort M.t) (sita2:sort M.t) = (* sita t = sita1(sit
                  sita2         
   in
   M.union (fun i t1 t2 -> Some t2) sita1 sita2'
+
+(* 単一化で、使う。ソート中のunknown な変数を他のソートで代入する。 *)
+let rec subst_unknown_sort s1 s2 target_sort=
+  match target_sort with
+  |BoolS |IntS -> target_sort
+  |DataS (id, slist) -> DataS (id, (List.map (subst_unknown_sort s1 s2) slist))
+  |SetS s' -> subst_unknown_sort s1 s2 s'
+  |UnknownS id when id = s1 -> s2
+  |s -> s
+           
   
 let rec unify_sort constrain sita =
   match constrain with
 
-  |((AnyS a), sort2) :: c  when M.mem a sita ->
-    let new_c = (M.find a sita, sort2) :: c in
-    unify_sort new_c sita
-
-  |(sort2, (AnyS a)) :: c when M.mem a sita ->
-    let new_c = (M.find a sita, sort2) :: c in
-    unify_sort new_c sita    
-    
-  |((AnyS a), sort2):: c  when is_unknown_sort (AnyS a) ->
+  |((UnknownS a), sort2):: c  ->
     let sita' = compose_sort_subst (M.singleton a sort2) sita in
-
-    unify_sort c sita'
+    let c' = List.map           (* 制約全体に代入[sort2/a]c *)
+               (fun (c1,c2)-> (subst_unknown_sort a sort2 c1,
+                               subst_unknown_sort a sort2 c2))
+               c
+    in
+    unify_sort c' sita'
     
-  |(sort2, (AnyS a)) :: c when is_unknown_sort (AnyS a) ->
+  |(sort2, (UnknownS a)) :: c ->
     let sita' = compose_sort_subst (M.singleton a sort2) sita in
-    unify_sort c sita'
+    let c' = List.map           (* 制約全体に代入[sort2/a]c *)
+               (fun (c1,c2)-> (subst_unknown_sort a sort2 c1,
+                               subst_unknown_sort a sort2 c2))
+               c
+    in
+    unify_sort c' sita'
                                                     
   |(DataS (i, sorts1), (DataS (i', sorts2))) :: c  when i = i' ->
     let new_c = (List.map2 (fun a b ->(a,b)) sorts1 sorts2)@c in
@@ -221,16 +242,23 @@ let rec unify_sort constrain sita =
 
   |[] -> sita
 
-  |_ -> assert false
+  |(s1,s2) :: c ->
+    (Printf.printf "%s vs %s" (sort2string s1) (sort2string s2));
+    assert false
 
 
 
 
-  
+(* 返還後の式と constrainを返す。
+空リストのソートとかを決定するためにconstrainが必要。
+また、measure等のソート
+len: List a -> Int 
+などの,各出現に対するaを具体化するためにもconstrainが必要。
+一旦、aをunknown_aに変換する。 *)
 let rec fillsort' senv senv_param senv_var = function
   |Bool b -> Bool b, (BoolS, [])
   |Int i-> Int i, (IntS, [])
-  |Set (_,[]) ->let unknown_s = mk_unknown_sort "emps" in
+  |Set (_,[]) ->let unknown_s = UnknownS (Id.genid "emps") in
                 Set (unknown_s,[]), (SetS ( unknown_s), [])
   |Set (_,es) ->
     let es', sort_constrain =
@@ -393,10 +421,12 @@ let rec fillsort' senv senv_param senv_var = function
   |e ->(Printf.printf "%s\n" (Formula.p2string e) );
        assert false
 
+(* fillsort' によって、 Unknown sort が含まれる式e'とconstrainが返される
+ constrainを解き、e'中のUnknown sortを適切に置き換える  *)
 let fillsort senv senv_param senv_var e =
   let (e',(_,constrain)) = fillsort' senv senv_param senv_var e in
-  let sita = unify_sort constrain M.empty in
-  sort_subst2formula sita e'
+  let sita = unify_sort constrain M.empty in (* unifyは適切か *)
+  sort_subst2formula sita e'                 (* 代入は適切か *)
 
 let fillsort2pa senv senv_param senv_var (pa:pa) =
   match pa with
@@ -510,6 +540,7 @@ let f env minfos fundecs =
   let fundecs' = fill_pa_args2env data_pas fundecs in
   
   let env' = fillsort2env senv env' in
+  (Printf.printf "env\n%s\n\n" (Type.env2string (env',[])));
   let fundecs' = fillsort2env senv fundecs' in
   (env', fundecs')
   

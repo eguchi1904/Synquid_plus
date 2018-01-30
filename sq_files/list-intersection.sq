@@ -15,8 +15,8 @@ true :: {Bool | _v}
 false :: {Bool | !_v}
   
 
-coincidence :: xs: List a -> ys: List a -> {List a | elems _v == elems xs * elems ys}
-coincidence = \l1.\l2.
+intersect :: xs: List a -> ys: List a -> {List a | elems _v == elems xs * elems ys}
+intersect = \l1.\l2.
  match l1 with
   Nil -> ??
-  Cons x' xs' -> g_add2uniq x' (coincidence xs' l2)
+  Cons x' xs' -> g_add2uniq x' (intersect xs' l2) l2

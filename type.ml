@@ -1,4 +1,3 @@
-
 type t =
   |TScalar of basetype * Formula.t
   |TFun of (Id.t * t) * t
@@ -50,7 +49,7 @@ and b2string = function
                      i
                      (String.concat " " ts_string)
                      (String.concat " " ps_string_list)
-  |TVar (_,x) -> Printf.sprintf "Var(%s)" x
+  |TVar (_,x) -> Printf.sprintf "%s" x
   |TAny a ->Printf.sprintf "%s" a
 
 
@@ -109,7 +108,13 @@ type schema =  (Id.t list) * ((Id.t * Formula.pa_shape) list) * t
 (* type polymorphic predicate polymorphic *)
 let mk_mono_schmea t :schema = ([],[],t)
 (* contextual type *)
-
+let rec schema2string ((ts,ps,t):schema) =
+  match ps with
+  |(r,shape) :: left -> Printf.sprintf "<%s::%s>.%s"
+                                       r
+                                       (Formula.pashape2string shape)
+                                       (schema2string (ts,left,t))
+  |[] -> t2string t
 
 type subst = t M.t   (* 型変数の代入 *)
 
@@ -436,7 +441,7 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
        let cs' = (env, t1, t2')::left in
        split cs' tsubst
 
-     |TVar (psubst_a,a), TVar (psubst_b,b) ->
+     |TVar (psubst_a,a), TVar (psubst_b,b) -> 
        assert (p1 = Formula.Bool true);
        assert (p2 = Formula.Bool true);
        if a = b then
