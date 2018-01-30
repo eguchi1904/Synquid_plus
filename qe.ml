@@ -4,7 +4,8 @@ let rec replace_UF (target:t) (replace:t) (t:t) = (* t1 = UF (i,[arg]) -> t2 *)
   if target = t then
     replace
   else
-    match t with
+    (* ((Printf.printf "\n%s is not %s !\n " (p2string_with_sort t) (p2string_with_sort target)); *)
+  match t with
   |Set (s, ts) ->
     let ts' = List.map (replace_UF target replace) ts in
     Set (s, ts')
@@ -58,7 +59,14 @@ let rec replace_UF (target:t) (replace:t) (t:t) = (* t1 = UF (i,[arg]) -> t2 *)
   |Neg t1 -> Neg (replace_UF target replace t1)
   |Not t1 -> Not (replace_UF target replace t1)
   |t ->t
-
+    
+let print_qformula bv pre_list  p =
+  let bv_str = String.concat "," (S.elements bv) in
+  (Printf.printf "\n\nbv=[%s]\n------------------------------\n" bv_str);
+  (List.iter (fun formula ->Printf.printf "%s\n" (p2string formula)) pre_list);
+  (print_string "------------------------------\n");
+  (Printf.printf "%s\n\n" (p2string p))
+  
 let rec pop_var_eq bv = function
   |Eq (Var(s,i), e) :: p_list when S.mem i bv ->
     Some ( (i,e),p_list )
@@ -71,8 +79,10 @@ let rec pop_var_eq bv = function
   |[] -> None
      
 let rec var_eq_propagate bv pre_list p =
+  (print_qformula bv pre_list p);
   match pop_var_eq bv pre_list with
   |Some ((i,e), pre_list') ->
+    (Printf.printf "\npop:(%s,%s)\n" i (p2string e));
     let pre_list'' = List.map (substitution (M.singleton i e)) pre_list' in
     let p' = substitution (M.singleton i e) p in
     var_eq_propagate bv pre_list'' p'
@@ -80,11 +90,13 @@ let rec var_eq_propagate bv pre_list p =
 
 let all_bv_var bv es =
   List.for_all
+    (* (fun e' ->S.subset (Formula.fv e') bv) *)
          (fun e' ->(match e' with
                     |Var (_,i') -> S.mem i' bv
                     |_ -> false))
          es
 
+  
 let rec pop_UF_eq bv = function (* uninterpreted function *)
   |Eq (UF(s,i,es), e) :: p_list when all_bv_var bv es ->
       Some ( (UF(s,i,es) ,e),p_list )
@@ -98,27 +110,58 @@ let rec pop_UF_eq bv = function (* uninterpreted function *)
   |[] -> None
      
 let rec var_UF_propagate bv pre_list p = (* uninterpreted function *)
+  (print_qformula bv pre_list p);  
   match pop_UF_eq bv pre_list with
   |Some ((uf_app,e), pre_list') ->
+    (Printf.printf "\npop: %s, %s\n" (p2string uf_app) (p2string e));
     let pre_list'' = List.map (replace_UF uf_app e) pre_list' in
     let p' = replace_UF uf_app e p in
     var_UF_propagate bv pre_list'' p'
-  |None -> pre_list,p         
+  |None -> pre_list,p
+
+
+let rec pop_UFUF_eq bv = function (* uninterpreted function *)
+  |Eq ((UF(s,i,es) as uf), e) :: p_list when S.subset (fv uf) bv ->
+      Some ( (UF(s,i,es) ,e),p_list )
+  |Eq (e, (UF(s,i,es) as uf)) :: p_list when  S.subset (fv uf) bv ->
+      Some ( (UF(s,i,es) ,e),p_list )
+
+  |p :: p_list ->
+    (match pop_UFUF_eq bv p_list with
+     |Some (uf_e, p_list') -> Some (uf_e, p::p_list')
+     |None ->None)
+  |[] -> None
+     
+let rec var_UFUF_propagate bv pre_list p = (* uninterpreted function *)
+  (print_qformula bv pre_list p);  
+  match pop_UFUF_eq bv pre_list with
+  |Some ((uf_app,e), pre_list') ->
+    (Printf.printf "\npop: %s, %s\n" (p2string uf_app) (p2string e));
+    let pre_list'' = List.map (replace_UF uf_app e) pre_list' in
+    let p' = replace_UF uf_app e p in
+    var_UFUF_propagate bv pre_list'' p'
+  |None -> pre_list,p                  
 
 exception DONT_KNOW of string
-         
+
+
+(*  var_eq_propagate ->
+ var_UF_propagate ->
+var_UFUF_propagate
+の順に、置換する対象が複雑になる。
+順次足していったので汚い。
+この順番に置換してくことは本質*)
 let f = function
   |QAll (args,pre_list, p) ->
     let bv = S.of_list (List.map fst args) in
     let pre_list', p' = var_eq_propagate bv pre_list p in
     let pre_list', p' = var_UF_propagate bv pre_list' p' in
+    let pre_list', p' = var_UFUF_propagate bv pre_list' p' in
     if S.is_empty (S.inter bv (fv p') ) then
       p'
     else
-      ((List.iter (fun p -> Printf.printf "%s\n" (p2string p) ) pre_list');
-       print_newline ();
-      ((print_string (p2string p'));
-       raise (DONT_KNOW "qe")))
+      ((print_qformula bv pre_list' p');
+       raise (DONT_KNOW "qe"))
 
   |QExist (args, p_list) ->
     let bv = S.of_list (List.map fst args) in

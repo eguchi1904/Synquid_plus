@@ -293,8 +293,28 @@ let rec replace_F x y t =
     let t2' = replace_F x y t2 in
     TFun ((x',t1'),t2')
   | _ -> t
-       
 
+
+(* sort の変数に代入するもの。preprocessのものの拡張 *)
+(* 同じような関数を作っていて、汚い、 *)
+let rec sort_subst2type sita (t:t) =
+  match t with
+  |TScalar( TData( i, ts, ps), p ) ->
+    let ts' = List.map (sort_subst2type sita ) ts in
+    let ps' = List.map (fun (args,t) ->(args,Formula.sort_subst2formula sita t)) ps in
+    let p' = Formula.sort_subst2formula sita p in
+    TScalar( TData (i, ts', ps'), p')
+    
+  |TScalar (b, p) ->
+    let p' =  Formula.sort_subst2formula sita p in
+    TScalar (b, p')    
+
+  |TFun ((x,t1),t2) ->
+    let t1' = sort_subst2type sita t1 in
+    let t2' = sort_subst2type sita t2 in
+    TFun ((x,t1'),t2')
+  | _ -> t
+       
 let instantiate ((ts,ps,t):schema) =
   let sita_t = List.fold_left
                  (fun sita i ->M.add i (genTvar "a") sita )
@@ -321,7 +341,20 @@ let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
                   ps
                   ps'
   in
-  (substitute_pa sita_pa ( substitute_T sita_t t) )  
+  let sita_sort = List.fold_left2
+                    (fun sita i t' ->
+                      match type2sort t' with
+                      |Some sort' ->M.add i sort' sita
+                      |None ->
+                        (Printf.printf "instant to %s" (t2string t'));
+                        sita)
+                    M.empty
+                    ts
+                    ts'
+  in
+  ( sort_subst2type sita_sort
+                    (substitute_pa sita_pa
+                                   ( substitute_T sita_t t)))  
   
 
 (* fに関係するenvの条件を抜き出す。 *)

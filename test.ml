@@ -4,7 +4,8 @@ let sq_files = ["./sq_files/fold-sort.sq";
                 "./sq_files/uniq_list.sq" ;
                 "./sq_files/concat.sq";
                 "./sq_files/bin2list.sq";
-                "./sq_files/partition.sq"
+                "./sq_files/partition.sq";
+                "./sq_files/merge_sort.sq"
                ]
 
 let print_result (g_listlist, fundecs, goals) =

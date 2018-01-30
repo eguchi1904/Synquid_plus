@@ -3,70 +3,7 @@ open Type
 open PreSyntax
 let sdummy = Formula.IntS
 
-let rec sort_subst sita = function
-  |AnyS i when M.mem i sita -> M.find i sita
-  |UnknownS i when M.mem i sita -> M.find i sita
-  |DataS (i, sortlist) ->DataS(i, List.map (sort_subst sita) sortlist )
-  |SetS s -> SetS (sort_subst sita s)
-  | s -> s
 
-let rec sort_subst2formula sita = function
-  |Set (s, ts) ->
-    let ts' = List.map (sort_subst2formula sita) ts in
-    Set (sort_subst sita s, ts')
-  |Var (s,i) ->Var (sort_subst sita s, i)
-  |Cons (s, i, ts) ->
-    let ts' = List.map (sort_subst2formula sita) ts in
-    Cons (sort_subst sita s, i, ts')
-  |UF (s, i, ts) ->
-    let ts' = List.map (sort_subst2formula sita) ts in
-    UF (sort_subst sita s, i, ts')
-                  
-  (* 残りはただの再起 *)
-  |All (is, t') ->All (is, (sort_subst2formula sita t'))
-  |Exist (is, t') ->Exist (is, (sort_subst2formula sita t'))
-  |If (t1, t2, t3) ->If ((sort_subst2formula sita t1),
-                         (sort_subst2formula sita t2),
-                         (sort_subst2formula sita t3))
-  |Times (t1, t2) -> Times ((sort_subst2formula sita t1),
-                            (sort_subst2formula sita t2))
-  |Plus (t1, t2) -> Plus ((sort_subst2formula sita t1),
-                          (sort_subst2formula sita t2))
-  |Minus (t1, t2) -> Minus ((sort_subst2formula sita t1),
-                            (sort_subst2formula sita t2))
-  |Eq (t1, t2) -> Eq ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |Neq (t1, t2) -> Neq ((sort_subst2formula sita t1),
-                        (sort_subst2formula sita t2))
-  |Lt (t1, t2) -> Lt ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |Le (t1, t2) -> Le ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |Gt (t1, t2) -> Gt ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |Ge (t1, t2) -> Ge ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |And (t1, t2) -> And ((sort_subst2formula sita t1),
-                        (sort_subst2formula sita t2))
-  |Or (t1, t2) -> Or ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |Implies (t1, t2) -> Implies ((sort_subst2formula sita t1),
-                                (sort_subst2formula sita t2))
-  |Iff (t1, t2) -> Iff ((sort_subst2formula sita t1),
-                        (sort_subst2formula sita t2))
-  |Union (t1, t2) -> Union ((sort_subst2formula sita t1),
-                            (sort_subst2formula sita t2))
-  |Intersect (t1, t2) -> Intersect ((sort_subst2formula sita t1),
-                                    (sort_subst2formula sita t2))
-  |Diff (t1, t2) -> Diff ((sort_subst2formula sita t1),
-                          (sort_subst2formula sita t2))
-  |Member (t1, t2) -> Member ((sort_subst2formula sita t1),
-                              (sort_subst2formula sita t2))
-  |Subset (t1, t2) -> Subset ((sort_subst2formula sita t1),
-                              (sort_subst2formula sita t2))
-  |Neg t1 -> Neg (sort_subst2formula sita t1)
-  |Not t1 -> Not (sort_subst2formula sita t1)
-  |t ->t 
 
 (* let mk_unknown_sort i = AnyS (Printf.sprintf "unknown_%s" (Id.genid i)) *)
                       
