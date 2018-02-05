@@ -18,11 +18,10 @@ measure sumLen :: ListOfLists a -> {Int | _v >= 0} where
   Nil2 -> 0
   Cons2 x xs -> sumLen xs + len x
 
-append :: xs: List a -> ys: List a -> { List a | len _v == len xs + len ys }
 
 concat :: xss: ListOfLists a -> { List a | len _v == sumLen xss }
 
 concat = \l.
  match l with
   Nil2 -> ??
-  Cons2 x' xs' -> g_append x' (concat xs')
+  Cons2 x' xs' -> g_1 x' (concat xs')

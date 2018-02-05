@@ -29,7 +29,7 @@ leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
 neq :: x: a -> y: a -> {Bool | _v == (x != y)}
 
 
-bin2list :: t:BST a -> {List a | elems _v == keys t}
+bin2list :: t:BST a -> {List a | (elems _v == keys t) && (len _v == size t)}
 
 bin2list = \t12.match t12 with
  Empty -> ??

@@ -1,0 +1,26 @@
+data BitVec where
+  Bit :: x: Bool -> BitVec
+  Cons :: x: Bool -> xs: BitVec -> BitVec
+  
+termination measure len :: BitVec -> {Int | _v > 0} where
+  Bit x -> 1
+  Cons x xs -> 1 + len xs   
+  
+measure value :: BitVec -> {Int | _v >= 0} where
+  Bit x -> if x then 1 else 0
+  Cons x xs -> (if x then 1 else 0) + 2 * (value xs)
+    
+true :: {Bool | _v}
+false :: {Bool | !_v}
+  
+
+plus :: x: BitVec -> y: {BitVec | len _v == len x} -> {BitVec | value _v == value x + value y}
+plus = \x.\y.
+  match x with
+   Bit x' -> ??
+   Cons x' xs' -> match y with
+                  Bit y' -> ??
+		  Cons y' ys' -> g_1 x' y' (plus xs' ys')
+
+  
+
