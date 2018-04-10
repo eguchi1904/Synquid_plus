@@ -22,7 +22,7 @@ PACKS = Z3
 #  SOURCES = m.ml s.ml id.ml syntax.ml formula.ml useZ3.ml find_unknownP.ml  type.ml step2.ml test_type.ml
 
 
-SOURCES = m.ml s.ml id.ml syntax.ml formula.ml l useZ3.ml find_unknownP.ml \
+SOURCES = m.ml s.ml id.ml syntax.ml formula.ml deformation.ml useZ3.ml find_unknownP.ml \
 type.ml preSyntax.ml parser.mly lexer.mll preprocess.ml step2.ml\
 qe.ml step3.ml main.ml test.ml
 RESULT = experiment_test

@@ -117,7 +117,7 @@ let rec p2string = function
   |Intersect (t1,t2) ->
     Printf.sprintf "%s * %s" (p2string t1) (p2string t2)
   |Diff (t1,t2) ->
-    Printf.sprintf "%s /%s" (p2string t1) (p2string t2)
+    Printf.sprintf "%s -%s" (p2string t1) (p2string t2)
   |Member (t1,t2) ->
     Printf.sprintf "%s in %s" (p2string t1) (p2string t2)
   |Subset (t1,t2) ->

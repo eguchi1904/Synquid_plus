@@ -140,7 +140,28 @@ let rec var_UFUF_propagate bv pre_list p = (* uninterpreted function *)
     let pre_list'' = List.map (replace_UF uf_app e) pre_list' in
     let p' = replace_UF uf_app e p in
     var_UFUF_propagate bv pre_list'' p'
-  |None -> pre_list,p                  
+  |None -> pre_list,p
+
+let rec pop_left_eq bv = function (* uninterpreted function *)
+  |Eq (e1, e2) :: p_list when S.is_cross (fv e1) bv ->
+      Some (( e1 ,e2),p_list )
+  |Eq (e1, e2) :: p_list when S.is_cross (fv e2) bv ->
+      Some ( (e2 ,e1),p_list )
+  |p :: p_list ->
+    (match pop_left_eq bv p_list with
+     |Some (e1_e2, p_list') -> Some (e1_e2, p::p_list')
+     |None ->None)
+  |[] -> None
+     
+let rec var_left_propagate bv pre_list p = (* uninterpreted function *)
+  (print_qformula bv pre_list p);  
+  match pop_left_eq bv pre_list with
+  |Some ((e1,e2), pre_list') ->
+    (Printf.printf "\npop: %s, %s\n" (p2string e1) (p2string e2));
+    let pre_list'' = List.map (replace_UF e1 e2) pre_list' in
+    let p' = replace_UF e1 e2 p in
+    var_UFUF_propagate bv pre_list'' p'
+  |None -> pre_list,p                           
 
 exception DONT_KNOW of string
 
@@ -149,7 +170,7 @@ exception DONT_KNOW of string
  var_UF_propagate ->
 var_UFUF_propagate
 の順に、置換する対象が複雑になる。
-順次足していったので汚い。
+順次足していったのでコードが汚い。
 この順番に置換してくことは本質*)
 let f = function
   |QAll (args,pre_list, p) ->
@@ -157,6 +178,8 @@ let f = function
     let pre_list', p' = var_eq_propagate bv pre_list p in
     let pre_list', p' = var_UF_propagate bv pre_list' p' in
     let pre_list', p' = var_UFUF_propagate bv pre_list' p' in
+    let p' = Deformation.expand p' in
+    let pre_list', p' = var_left_propagate bv pre_list' p' in    
     if S.is_empty (S.inter bv (fv p') ) then
       p'
     else
@@ -169,6 +192,8 @@ let f = function
     (* 等号伝播 *)
     let p_list',_ = var_eq_propagate bv p_list dummy_p in
     let p_list',_ = var_UF_propagate bv p_list' dummy_p in
+    let p_list' = List.map Deformation.expand p_list' in
+    let p_list', _ = var_left_propagate bv p_list' dummy_p in        
     (* 束縛変数が残っている式を削除。（==>方向） *)
     let p_list' = List.filter (fun e -> S.is_empty (S.inter bv (fv e))) p_list' in
     Formula.and_list p_list'

@@ -1,10 +1,12 @@
 open Main
-let sq_files = ["./sq_files/fold-sort.sq";
+let sq_files = ["./sq_files/list-intersection.sq";
+                "./sq_files/list-sub.sq";
+                "./sq_files/list2bin.sq";
+                "./sq_files/fold-sort.sq";
                 "./sq_files/list-rev.sq";
                 "./sq_files/uniq_list.sq" ;
                 "./sq_files/concat.sq";
                 "./sq_files/bin2list.sq";
-                "./sq_files/partition.sq";
                 "./sq_files/merge_sort.sq";
                 "./sq_files/quick_sort.sq"
                ]
