@@ -31,6 +31,7 @@ neq :: x: a -> y: a -> {Bool | _v == (x != y)}
 
 list2bin :: l:List a -> {BST a| (keys _v == elems l) }
 
-list2bin = \l.match l with
- Nil -> ??
- Cons x xs -> g_1 x (list2bin xs)
+list2bin = \l.
+ match l with
+  Nil -> ??
+  Cons x xs -> g_1 x (list2bin xs)

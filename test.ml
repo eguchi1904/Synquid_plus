@@ -51,6 +51,7 @@ let _ =
     (for i=0 to 40 do print_newline () done );  
     (List.iter
        (fun (filename, time, result) ->
+         (output2file filename result);
          (Printf.printf "RESULT:%s\nTime:%f\n" filename time);
          (print_result result);
          Printf.printf "\n\n\n\n\n"))

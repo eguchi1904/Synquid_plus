@@ -44,6 +44,42 @@ let g' env fundecs (f_name, tmp) =
   g env tmp t
        
 
+(* synquidに渡せる形式のファイルを出力する 
+ input_file :input of synquid_plus*)
+
+let stringof_g_listlist g_listlist =
+  (String.concat ""
+    (List.map
+     (fun (g_name,g_t) ->
+       Printf.sprintf
+         "%s :: %s\n\n%s = ?? \n\n"
+         g_name
+         (Type.t2string g_t)
+         g_name )
+     (List.concat g_listlist)
+    )
+  )
+  
+let rec infile_name_to_outfile_name:string -> string =
+  (fun file_with_extension ->
+    let i = String.rindex file_with_extension '.' in
+    let file = String.sub file_with_extension 0 i in
+    String.concat "" [file; "_2sq.sq"])
+
+
+(* mainが推論した結果を、inputファイルに付け足した、ファイルを作成 *)
+let output2file input_file (g_listlist,_,_) =
+  let output_file = infile_name_to_outfile_name input_file in
+  let inchan = open_in input_file in
+  let outchan = open_out  output_file in
+  (Printf.printf "Open %s!\n" output_file);
+  (Printf.fprintf outchan "%s" (stringof_g_listlist g_listlist) ); (* 補助関数情報書き込み *)
+  (* 以下で、入力ファイルを書き込み *)
+  (try while true do
+         (Printf.fprintf outchan "%s\n" (input_line inchan))
+       done
+   with End_of_file -> close_in inchan);
+  close_out outchan
   
 let main file =
   let lexbuf = if file = "" then  Lexing.from_channel stdin
@@ -55,6 +91,9 @@ let main file =
   let env,fundecs = Preprocess.f env minfos fundecs in
   let g_listlist = List.map (g' env fundecs) goals in
   (g_listlist, fundecs, goals)
+
+
+  
   (* (for i=0 to 40 do print_newline () done ); *)
   (* (Printf.printf "RESULT:\n\n"); *)
   (* (List.iter *)

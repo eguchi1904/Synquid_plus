@@ -1,5 +1,5 @@
 data Pair a b where
-	Pair :: x: a -> y: b -> Pair a b
+ Pair :: x: a -> y: b -> Pair a b
   
 measure fst :: Pair a b -> a where
   Pair x y -> x
@@ -26,9 +26,9 @@ quickSort :: xs: RList a <{True}> -> {RList a <{_0 <= _1}> | (len _v == len xs) 
 
 quickSort = \l.
  match l with
- Nil -> ??
- Cons x xs -> match partition x xs with
-             Pair l1 l2 -> g_1 x (quickSort l1) (quickSort l2)
+  Nil -> ??
+  Cons x xs -> match partition x xs with
+                 Pair l1 l2 -> g_1 x (quickSort l1) (quickSort l2)
 	     
 
 	

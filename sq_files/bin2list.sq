@@ -31,6 +31,7 @@ neq :: x: a -> y: a -> {Bool | _v == (x != y)}
 
 bin2list :: t:BST a -> {List a | (elems _v == keys t) && (len _v == size t)}
 
-bin2list = \t12.match t12 with
- Empty -> ??
- Node v' l' r' -> ((g_1 v') (bin2list l')) (bin2list r')
+bin2list = \t12.
+ match t12 with
+  Empty -> ??
+  Node v' l' r' -> ((g_1 v') (bin2list l')) (bin2list r')

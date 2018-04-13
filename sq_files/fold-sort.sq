@@ -20,5 +20,5 @@ sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}> | (elems _v == elems l) && 
 
 sort = \l.
   match l with
-   Nil ->??
+   Nil -> ??
    Cons x' xs' -> g_insert x' (sort xs')
