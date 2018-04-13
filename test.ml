@@ -15,7 +15,7 @@ let print_result (g_listlist, fundecs, goals) =
   (List.iter
      (fun (g_name,g_t) ->
        (Printf.printf "%s :: " g_name);
-       print_string (Type.t2string g_t);
+       print_string (Type.schema2string g_t);
        Printf.printf "\n\n%s = ?? \n\n" g_name)
      (List.concat g_listlist));
   (List.iter

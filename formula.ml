@@ -269,6 +269,8 @@ let subst_compose (sita1:subst) (sita2:subst) = (* sita t = sita1(sita2 t) *)
 
 let genFvar s i = Var (s, (Id.genid i))
 
+(* input: r::a->a->Bool
+   output:  \x.\y.r x y *)
 let id2pa_shape i ((arg_sorts,rets):pa_shape) :pa =
   let args = List.mapi (fun n s -> (Id.genid (string_of_int n) , s)) arg_sorts in
   let uf_args = List.map (fun (x,s) ->Var(s,x)) args in

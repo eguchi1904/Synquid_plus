@@ -24,8 +24,8 @@ PACKS = Z3
 
 SOURCES = m.ml s.ml id.ml syntax.ml formula.ml deformation.ml useZ3.ml find_unknownP.ml \
 type.ml preSyntax.ml parser.mly lexer.mll preprocess.ml step2.ml\
-qe.ml step3.ml main.ml test.ml
-RESULT = experiment_test
+qe.ml step3.ml main.ml 
+RESULT = our_method
 
 
 

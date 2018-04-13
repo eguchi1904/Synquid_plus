@@ -11,10 +11,11 @@ type t =
    |TAny of Id.t                 (* a,b... トップレベルの型パラメタ、具体化しない*)
           
 
-
+type schema =  (Id.t list) * ((Id.t * Formula.pa_shape) list) * t
+             
 let rec free_tvar' = function
   |TScalar (b,_) -> free_tvar_base b
-  |TFun((x,t1), t2) -> (free_tvar' t1)@(free_tvar' t2)
+  |TFun((x,t1), t2) -> (free_tvar' t1)@(free_tvar' t2) 
   |TBot -> []
 
 and free_tvar_base = function
@@ -23,6 +24,8 @@ and free_tvar_base = function
     List.concat (List.map free_tvar' ts)
   |_ -> []
 
+
+      
 let free_tvar t = Formula.list_uniq (free_tvar' t)
 
 
@@ -102,9 +105,9 @@ and type2sort = function
   |_ -> None
       
       
+
       
-      
-type schema =  (Id.t list) * ((Id.t * Formula.pa_shape) list) * t
+
 (* type polymorphic predicate polymorphic *)
 let mk_mono_schmea t :schema = ([],[],t)
 (* contextual type *)
@@ -314,7 +317,8 @@ let rec sort_subst2type sita (t:t) =
     let t2' = sort_subst2type sita t2 in
     TFun ((x,t1'),t2')
   | _ -> t
-       
+
+
 let instantiate ((ts,ps,t):schema) =
   let sita_t = List.fold_left
                  (fun sita i ->M.add i (genTvar "a") sita )
