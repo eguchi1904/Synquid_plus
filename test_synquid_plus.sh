@@ -1,7 +1,7 @@
 #!/bin/sh
-TEST_FILE_DIR="./sq_files/"
 
-
+SCRIPT_DIR=$(cd $(dirname $0); pwd)
+TEST_FILE_DIR="${SCRIPT_DIR}/sq_files/"
 
 TEST_FILE=(list-intersection
 	   list-sub
@@ -17,5 +17,5 @@ TEST_FILE=(list-intersection
 
 for file in ${TEST_FILE[@]}
 do
-    ./synquid_plus.sh $TEST_FILE_DIR$file
+    "${SCRIPT_DIR}/synquid_plus.sh" $TEST_FILE_DIR$file
 done
