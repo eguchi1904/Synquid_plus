@@ -12,4 +12,7 @@ measure elems :: RList a -> Set a where
 
 
 reverse :: <r :: a -> a -> Bool> . xs: RList a <{r _0 _1}> -> {RList a <{r _1 _0}> | (len _v == len xs ) && (elems _v == elems xs)}
-reverse = ??
+reverse = \l.
+       match l with
+        Nil -> ??
+        Cons x xs -> g_1 x (reverse xs)

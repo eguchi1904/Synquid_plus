@@ -21,4 +21,7 @@ measure sumLen :: ListOfLists a -> {Int | _v >= 0} where
 
 concat :: xss: ListOfLists a -> { List a | len _v == sumLen xss }
 
-concat = ??
+concat = \l.
+ match l with
+  Nil2 -> ??
+  Cons2 x' xs' -> g_1 x' (concat xs')

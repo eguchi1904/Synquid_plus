@@ -1,0 +1,38 @@
+data Pair a b where
+ Pair :: x: a -> y: b -> Pair a b
+  
+measure fst :: Pair a b -> a where
+  Pair x y -> x
+  
+measure snd :: Pair a b -> b where
+  Pair x y -> y
+
+data RList a <r :: a -> a -> Bool> where
+  Nil :: RList a <r>
+  Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+  
+termination measure len :: RList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+  
+
+
+split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }	
+
+
+
+mergeSort :: xs: RList a <{True}>-> {RList a <{_0 <= _1}> | (len _v == len xs) && (elems _v == elems xs) }
+
+mergeSort = \l.
+ match l with
+  Nil -> Nil
+  Cons x' xs'-> match xs' with
+                 Nil -> Cons x' Nil
+                 Cons y ys ->  match split l with
+                                   Pair l1 l2 -> g_1 (mergeSort l1) (mergeSort l2)
+
+

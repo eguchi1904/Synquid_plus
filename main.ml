@@ -24,33 +24,58 @@ let rec until_assoc x l =
   |yp :: left -> yp::(until_assoc x left)
   |[] -> []
 
-let g' env fundecs (f_name, tmp) =
-  (print_string (Syntax.syn2string tmp));
+let mk_data_cons_list :((Id.t * Type.schema) list ->  ((Id.t * Type.schema) list) M.t)
+  = (fun env ->
+    let rec which_data_cons  = function
+      |Type.TScalar (Type.TData (i,_,_), _) -> i
+      |Type.TFun (_,t) -> which_data_cons t
+      |_ -> assert false
+    in
+    let rec mk_data_cons_list' env ans =
+      match env with
+      |(cons,(ts,ps,t) ):: left ->
+        let data_type_id  = which_data_cons t in
+        mk_data_cons_list' left (List_map.add data_type_id (cons, (ts,ps,t)) ans)
+      |[] -> ans
+    in
+    mk_data_cons_list' env M.empty)
+
   
+(* env:コンストラクタの型環境
+　fundecs: 補助関数の型
+　f_name: 合成目標の関数名
+　tmp:仮のテンプレート
+ *)
+  
+let g' env fundecs (f_name, tmp) = (* envにはコンストラクタの情報 *)
+  (print_string (Syntax.syn2string tmp));
+  (Printf.printf "env\n%s" (Type.env2string (env,[])));
+  let data_cons_list = mk_data_cons_list env in (* データ型とコンストラクタの対応 *)
   let fundecs'  = until_assoc f_name fundecs in
   let env :Type.env = (fundecs'@env , []) in
   let t = List.assoc f_name fundecs in
+  let tmp = Mk_tmp.fold f_name t tmp data_cons_list in
   (Printf.fprintf stderr
                   "%s :: %s\n"
                   f_name
                   (Type.schema2string t));
   g env tmp t
-       
+  
 
 (* synquidに渡せる形式のファイルを出力する 
  input_file :input of synquid_plus*)
 
 let stringof_g_listlist g_listlist =
   (String.concat ""
-    (List.map
-     (fun (g_name,g_t) ->
-       Printf.sprintf
-         "%s :: %s\n\n%s = ?? \n\n"
-         g_name
-         (Type.schema2string g_t)
-         g_name )
-     (List.concat g_listlist)
-    )
+                 (List.map
+                    (fun (g_name,g_t) ->
+                      Printf.sprintf
+                        "%s :: %s\n\n%s = ?? \n\n"
+                        g_name
+                        (Type.schema2string g_t)
+                        g_name )
+                    (List.concat g_listlist)
+                 )
   )
   
 let rec infile_name_to_outfile_name:string -> string =

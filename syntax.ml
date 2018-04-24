@@ -59,5 +59,21 @@ and syn2string_f = function
 
 and syn2string_case {constructor = cons; argNames = xs; body = t} =
   Printf.sprintf " %s %s -> %s" cons (String.concat " " xs) (syn2string t)
-   
-    
+
+(* [e_1; e_2; e3] -> ((e_1 e_2) e_3)  *)
+let mk_fun_app_term: e -> Id.t list -> e =
+  (fun f vars ->
+    List.fold_left (fun e_acc id -> PAppFo (e_acc, PSymbol id)) f vars
+  )
+
+let elist_2_e: e -> e list -> e =
+  (fun f args ->
+    List.fold_left (fun e_acc e -> PAppFo (e_acc, e)) f args)
+        
+let let_rec: Id.t -> Id.t list -> t -> t=
+  (fun f args e ->
+    let fun_dec = List.fold_right (fun arg t_acc -> (PF (PFun (arg, t_acc)))) args e in
+    match fun_dec with
+    |PF body -> PF (PFix (f, body))
+    |_ -> assert false
+  )

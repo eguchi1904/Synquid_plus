@@ -10,11 +10,10 @@ measure elems :: List a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs
   
-
 eq :: x: a -> y: a -> {Bool | _v == (x == y)}
-neq :: x: a -> y: a -> {Bool | _v == (x != y)}
 
-  
-
-intersect :: xs: List a -> ys: List a -> {List a | elems _v == elems xs * elems ys}
-intersect = ??
+sub :: l:List a -> r:List a -> {List a | elems _v == elems l - elems r}
+sub = \l1.\l2.
+ match l1 with
+  Nil -> ??
+  Cons x' xs' -> g_1 x' l2 (sub xs' l2) 

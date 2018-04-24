@@ -1,7 +1,7 @@
 open Formula
 
 let rec replace_UF (target:t) (replace:t) (t:t) = (* t1 = UF (i,[arg]) -> t2 *)
-  if target = t then
+  if Formula_eq.f target  t then
     replace
   else
     (* ((Printf.printf "\n%s is not %s !\n " (p2string_with_sort t) (p2string_with_sort target)); *)

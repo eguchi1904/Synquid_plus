@@ -1,0 +1,34 @@
+data Pair a b where
+	Pair :: x: a -> y: b -> Pair a b
+  
+measure fst :: Pair a b -> a where
+  Pair x y -> x
+  
+measure snd :: Pair a b -> b where
+  Pair x y -> y
+
+data RList a <r :: a -> a -> Bool> where
+  Nil :: RList a <r>
+  Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+  
+termination measure len :: RList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+  
+partition :: p: a -> xs: RList a <{True}> -> {Pair (RList {a | _v <= p} <{True}>) (RList {a | _v > p} <{True}>) | (((len (fst _v)) + (len (snd _v))) == len xs) && (((elems (fst _v)) + (elems (snd _v))) == elems xs)}
+
+quickSort :: xs: RList a <{True}> -> {RList a <{_0 <= _1}> | (len _v == len xs) && (elems _v == elems xs) }
+
+
+quickSort = \l.
+ match l with
+ Nil -> ??
+ Cons x xs -> match partition x xs with
+             Pair l1 l2 -> g_1 x (quickSort l1) (quickSort l2)
+	     
+
+	

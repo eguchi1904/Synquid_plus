@@ -10,6 +10,7 @@ OUR_METHOD="our_method"
 # main
 
 input_file=$1
+input_file=$SCRIPT_DIR$input_file
 echo "\n\n\n----------------------------------------------------------------------"
 $SCRIPT_DIR$OUR_METHOD $input_file$SQ_EXTENSION > /dev/null # our method part
 echo "----------------------------------------------------------------------\n"

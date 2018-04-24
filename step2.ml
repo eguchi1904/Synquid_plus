@@ -1,14 +1,7 @@
 open Syntax
 open Type   
 
-let rec t_alpha_convert t ys =
-  match ys with
-  |[] -> t
-  |y::ys' -> (match t with
-              |TFun ((x,t1),t2) ->
-                let t2' = replace_F x y t2 in (* [y/x]t2 *)
-                TFun ((y,t1),(t_alpha_convert t2' ys'))
-              |_ -> assert false)
+
 
            
 let rec constructor_shape c_t =
