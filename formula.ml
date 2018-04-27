@@ -89,21 +89,21 @@ let rec p2string = function
   |Times (t1,t2) ->
     Printf.sprintf "(%s * %s)" (p2string t1) (p2string t2)
   |Plus (t1,t2) ->
-    Printf.sprintf "%s + %s" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s + %s)" (p2string t1) (p2string t2)
   |Minus (t1,t2) ->
-    Printf.sprintf "%s - %s" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s - %s)" (p2string t1) (p2string t2)
   |Eq (t1,t2) ->
-    Printf.sprintf "%s == %s" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s == %s)" (p2string t1) (p2string t2)
   |Neq (t1,t2) ->
-    Printf.sprintf "(%s)!=(%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s!=%s)" (p2string t1) (p2string t2)
   |Lt (t1,t2) ->
-    Printf.sprintf "(%s)<(%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s < %s)" (p2string t1) (p2string t2)
   |Le (t1,t2) ->
-    Printf.sprintf "%s <= %s" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s <= %s)" (p2string t1) (p2string t2)
   |Gt (t1,t2) ->
-    Printf.sprintf "%s > %s" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s > %s)" (p2string t1) (p2string t2)
   |Ge (t1,t2) ->
-    Printf.sprintf "%s >= %s" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s >= %s)" (p2string t1) (p2string t2)
   |And (t1,t2) ->
     Printf.sprintf " %s && %s" (p2string t1) (p2string t2)
   |Or (t1,t2) ->
@@ -113,15 +113,15 @@ let rec p2string = function
   |Iff (t1,t2) ->
     Printf.sprintf "%s <=> %s" (p2string t1) (p2string t2)
   |Union (t1,t2) ->
-    Printf.sprintf "%s + %s" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s + %s)" (p2string t1) (p2string t2)
   |Intersect (t1,t2) ->
-    Printf.sprintf "%s * %s" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s * %s)" (p2string t1) (p2string t2)
   |Diff (t1,t2) ->
-    Printf.sprintf "%s -%s" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s - %s)" (p2string t1) (p2string t2)
   |Member (t1,t2) ->
-    Printf.sprintf "%s in %s" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s in %s)" (p2string t1) (p2string t2)
   |Subset (t1,t2) ->
-    Printf.sprintf "(%s)<= (%s)" (p2string t1) (p2string t2)
+    Printf.sprintf "(%s <= %s)" (p2string t1) (p2string t2)
   |Neg t ->
     Printf.sprintf "-%s" (p2string t )
   |Not t ->

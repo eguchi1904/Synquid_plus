@@ -35,13 +35,21 @@ let rec t2string = function
       b2string b
     else
       Printf.sprintf "{%s | %s}" (b2string b) (Formula.p2string p)
-  |TFun ((x,t1),t2) -> Printf.sprintf "%s:%s ->\n %s" x (t2string t1) (t2string t2)
+  |TFun ((x,t1),t2) -> Printf.sprintf "%s:%s -> %s" x (t2string t1) (t2string t2)
   |TBot -> "Bot"
 
 and b2string = function
   |TBool ->"Bool"|TInt -> "Int"
   |TData (i,ts,ps) ->
-    let ts_string = List.map (fun t ->Printf.sprintf "(%s)" (t2string t)) ts in
+    let ts_string =
+      List.map
+        (fun t ->
+          (match t with
+           |TScalar ((TVar _), _) ->
+             Printf.sprintf "%s" (t2string t) 
+           |_ -> Printf.sprintf "(%s)" (t2string t)))
+      ts
+    in
     let ps_string_list = List.map Formula.pa2string ps in
     if ps = [] then
       Printf.sprintf "%s %s"
@@ -668,3 +676,10 @@ let rec t_alpha_convert t ys =
                 let t2' = replace_F x y t2 in (* [y/x]t2 *)
                 TFun ((y,t1),(t_alpha_convert t2' ys'))
               |_ -> assert false)
+
+let rec refresh_refinment t =
+  match t with
+  |TScalar (b,_) -> TScalar (b, Formula.Bool true)
+  |TFun ((x,t1),t2) -> TFun ((x, refresh_refinment t1), refresh_refinment t2)
+  |TBot -> TBot
+  

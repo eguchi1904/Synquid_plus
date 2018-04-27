@@ -71,6 +71,10 @@ let rec pop_lst = function
 %token NEWLINE
 
 %left prec_app
+%left AND OR IFF IMPLIES 
+%left EQUAL NEQUAL
+%left MINUS PLUS IN
+%left AST
 
 %type < PreSyntax.id_schemas * PreSyntax.measureInfo list * PreSyntax.id_schemas * ((Id.t * Syntax.t) list) > toplevel
 %type <PreSyntax.id_schemas> m1 /*m1によってコンストラクタの型の環境を作成*/
@@ -83,13 +87,17 @@ let rec pop_lst = function
 %type < PreSyntax.measureInfo > m2
 
 %type < Formula.sort list > sort_shape
+%type < Formula.sort list * Formula.t option > extend_sort_shape
 %type < PreSyntax.measureCase > case
 %type <Type.t> texp
+%type <Formula.t> fexp
 %start toplevel
 
 %%
 
 toplevel:
+| NEWLINE toplevel
+  { $2 }
 | m1 toplevel
 { match ($2) with
     (env, minfos, fundecs, l) -> ($1@env, minfos, fundecs, l)
@@ -156,10 +164,10 @@ fun_dec:
 
 /*measure definition*/
 m2:
-| MEASURE ID COLON COLON sort_shape WHERE nl cases
- { ($2, (pop_lst $5, $8)) }
-| TERMINATION MEASURE ID COLON COLON sort_shape WHERE nl cases
- { ($3, (pop_lst $6, $9)) } 
+| MEASURE ID COLON COLON extend_sort_shape WHERE nl cases
+ { mk_measureInfo $2 $5 $8 false }
+| TERMINATION MEASURE ID COLON COLON extend_sort_shape WHERE nl cases
+ { mk_measureInfo $3 $6 $9 true } 
 
 cases:
 |case cases { $1 :: $2 }
@@ -217,6 +225,7 @@ prg_f:
 
 
 
+
 /* sort shape */
 
 sort_shape:
@@ -236,8 +245,12 @@ sortatom:
 | SET sortatom { SetS $2 }
 | CAPID sortatoms { DataS ($1, $2) }
 
-
-
+extend_sort_shape:
+|sortatom ALLOW extend_sort_shape
+ { match $3 with (args, refinment) -> ($1::args, refinment) }
+|sortatom { ([$1], None) }
+| LCURBRAC sortatom PIPE fexp RCURBRAC /* {Int | _v > 0} */
+  { [$2], Some $4 }
 
 /*type syntax*/
 

@@ -17,4 +17,7 @@ neq :: x: a -> y: a -> {Bool | _v == (x != y)}
   
 
 intersect :: xs: List a -> ys: List a -> {List a | elems _v == elems xs * elems ys}
-intersect = ??
+intersect = \l1.\l2.
+       match l1 with
+        Nil -> ??
+        Cons x xs -> g_1 x l2 (intersect xs l2)

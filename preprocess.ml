@@ -89,7 +89,7 @@ let add_measure env  m_name {constructor = cons; args = xs; body = e } =
 
 
 
-let measure_info2env env ((m_name, (m_shape, cases)):measureInfo) =
+let measure_info2env env ({name = m_name; shape = m_shape; cases = cases; termination = _ }:measureInfo) =
   let env' = List.fold_left
                (fun env case ->add_measure env m_name case)
                env
@@ -485,7 +485,11 @@ let rec mk_data_pas (env:(Id.t * schema) list) =
 (* まず、envにはコンストラクタが入っている。 *)
 let f env minfos fundecs =
   let senv_cons = List.map (fun (cons,(_,_,c_t)) -> (cons, type2pashape c_t) ) env in
-  let senv_mes = List.map (fun (mes, (shape,_)) -> (mes, shape)) minfos in
+  (* let senv_mes = List.map (fun (mes, (shape,_)) -> (mes, shape)) minfos in *)
+  let senv_mes = List.map
+                   (fun minfo -> (minfo.name, PreSyntax.extend2shape minfo.shape))
+                   minfos
+               in
   let senv = senv_cons@senv_mes in
   let env = minfos2env env minfos in (*  measrureの情報を追加 *)
 

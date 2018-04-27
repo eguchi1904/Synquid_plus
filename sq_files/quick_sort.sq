@@ -21,7 +21,7 @@ measure elems :: RList a -> Set a where
   
 partition :: p: a -> xs: RList a <{True}> -> {Pair (RList {a | _v <= p} <{True}>) (RList {a | _v > p} <{True}>) | (((len (fst _v)) + (len (snd _v))) == len xs) && (((elems (fst _v)) + (elems (snd _v))) == elems xs)}
 
-quickSort :: xs: RList a <{True}> -> {RList a <{_0 <= _1}> | (len _v == len xs) && (elems _v == elems xs) }
+quickSort :: xs: RList a <{True}> -> {RList a <{_0 <= _1}> | len _v == len xs && elems _v == elems xs }
 
 
 quickSort = \l.

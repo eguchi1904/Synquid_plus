@@ -12,11 +12,11 @@ OUR_METHOD="our_method"
 input_file=$1
 input_file=$SCRIPT_DIR$input_file
 echo "\n\n\n----------------------------------------------------------------------"
-$SCRIPT_DIR$OUR_METHOD $input_file$SQ_EXTENSION > /dev/null # our method part
+time $SCRIPT_DIR$OUR_METHOD $input_file$SQ_EXTENSION > /dev/null # our method part
 echo "----------------------------------------------------------------------\n"
 
 cd $SYNQUID_DIR
-stack exec -- synquid $input_file$INTERMEDIATE_SUFFIX # synquid part
+time stack exec -- synquid $input_file$INTERMEDIATE_SUFFIX # synquid part
 
 
 

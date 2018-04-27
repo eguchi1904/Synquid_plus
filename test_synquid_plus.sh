@@ -17,5 +17,5 @@ TEST_FILE=(list-intersection
 
 for file in ${TEST_FILE[@]}
 do
-    "${SCRIPT_DIR}/synquid_plus.sh" $TEST_FILE_DIR$file
+    time "${SCRIPT_DIR}/synquid_plus.sh" $TEST_FILE_DIR$file
 done

@@ -37,9 +37,10 @@ let rec type_args t =           (* first-order fun type *)
   |TScalar _ -> []
   |TFun ((x,t1),t2) -> (x,t1)::(type_args t2)
   |TBot -> assert false
-   
-let fold: Id.t -> Type.schema -> Syntax.t -> ((Id.t * Type.schema) list) M.t -> Syntax.t =
-  (fun f_name (_,_,goal_t) tmp data_cons_list ->
+
+(* 型に合った、fold型のテンプレートを生成 *)
+let fold: Id.t -> Type.schema -> Syntax.t -> Data_info.t M.t -> Syntax.t =
+  (fun f_name (_,_,goal_t) tmp data_info_map ->
     match tmp with
     |PHole ->                   (* when there *)
       (match pop_data_type_arg goal_t with
@@ -71,10 +72,10 @@ let fold: Id.t -> Type.schema -> Syntax.t -> ((Id.t * Type.schema) list) M.t -> 
                (nonrec_cons_args_term@othere_args_term@(List.map app_f rec_cons_args)) in
            {constructor = cons; argNames = List.map fst cons_args; body =PE case_body}
          in
-         let cons_schema_list = M.find data data_cons_list in
+         let data_info = M.find data data_info_map in
          let case_list = List.map
                            (fun (cons, (_,_,t)) -> mk_match_case cons t)
-                           cons_schema_list
+                           data_info.cons_list
          in
          let fun_body = PI (PMatch ((PSymbol x),case_list)) in
          let_rec f_name (List.map fst (type_args goal_t)) fun_body

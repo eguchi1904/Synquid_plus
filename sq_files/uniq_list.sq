@@ -10,12 +10,8 @@ measure elems :: RList a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs
 
-uniq:: xs: RList a <{True}> -> {RList a <{_0 != _1}> | elems _v == elems xs}
 eq :: x: a -> y: a -> {Bool | _v == (x == y)}
 neq :: x: a -> y: a -> {Bool | _v == (x != y)}
 
-
-uniq = \l.
- match l with
-  Nil -> ??
-  Cons x' xs' -> g_add2uniq x' (uniq xs')
+uniq:: xs: RList a <{True}> -> {RList a <{_0 != _1}> | elems _v == elems xs}
+uniq = ??
