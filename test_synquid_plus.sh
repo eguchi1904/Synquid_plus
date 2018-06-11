@@ -15,7 +15,11 @@ TEST_FILE=(list-intersection
            quick_sort)
 
 
+
 for file in ${TEST_FILE[@]}
 do
     time "${SCRIPT_DIR}/synquid_plus.sh" $TEST_FILE_DIR$file
 done
+
+time "${SCRIPT_DIR}/synquid_plus.sh" "${TEST_FILE_DIR}test_sort" "merge"
+

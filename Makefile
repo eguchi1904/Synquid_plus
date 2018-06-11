@@ -1,4 +1,4 @@
-OCAMLFLAGS +=  -linkpkg -bin-annot -g
+OCAMLFLAGS +=  -linkpkg -bin-annot -g 
 
 
 
@@ -23,7 +23,7 @@ PACKS = Z3
 
 
 SOURCES = extensions.ml m.ml list_map.ml s.ml id.ml syntax.ml formula.ml formula_eq.ml deformation.ml useZ3.ml find_unknownP.ml \
-type.ml preSyntax.ml data_info.ml  mk_tmp.ml parser.mly lexer.mll preprocess.ml step2.ml\
+type.ml preSyntax.ml data_info.mli data_info.ml  mk_tmp.ml parser.mly lexer.mll preprocess.ml step2.ml\
 qe.ml step3.ml main.ml 
 RESULT = our_method
 

@@ -1,3 +1,4 @@
+open Type
 (* 
 data list a <r::a -> a-> List> where
 Nil::~~
@@ -10,8 +11,30 @@ type t = {
     type_param: Id.t list;
     pred_param: (Id.t * Formula.pa_shape) list;
     cons_list: ((Id.t * Type.schema) list)
-         }
+  }
 
+(* special case of t   -- list  with measure len and elems*)
+type t_list = {
+    data_name: Id.t;
+    type_param: Id.t list;
+    pred_param: (Id.t * Formula.pa_shape) list;
+    cons:Id.t;
+    nil:Id.t;
+    len: PreSyntax.measureInfo;
+    elems:PreSyntax.measureInfo
+  }       
+
+(* special case of t   -- pair with measure fst snd *)          
+type t_pair = {
+    data_name: Id.t;
+    type_param: Id.t list;
+    pred_param: (Id.t * Formula.pa_shape) list;
+    pair:Id.t;
+    fst: PreSyntax.measureInfo;
+    snd: PreSyntax.measureInfo 
+  }
+
+            
 let mk_data_info :((Id.t * Type.schema) list -> t  M.t)
   = (fun env ->
     let rec which_data_cons  = function
@@ -86,3 +109,135 @@ let rec data_info_map_2_string (data_info_map:t M.t) =
   in
   String.concat "\n\n" data_str_list
        
+
+exception Data_List of string
+
+let is_list_nil data_name (_, _, t) =
+  match t with
+  |TScalar ( (TData (id, _,_)), _) when id = data_name ->
+    true
+  |_ -> false
+
+let is_list_cons data_name (_, _, t) =
+  match t with
+  (* 第１引数が再帰ならfalse *)
+  |TFun ((_, TScalar( TData(id,_,_), _)),_)
+       when id = data_name ->
+    false
+  |TFun ((_,t1),
+         TFun ( (_,TScalar ((TData (id2,_,_)),_) ),
+               TScalar( TData(id3,_,_), _)
+        ))
+       when id2 = data_name && id3 = data_name ->
+    true
+  |_ -> false
+         
+  
+                
+let is_list: t -> (t * Id.t * Id.t) option = (* listならdata_name,nil,consに当たるコンストラクたを返す *)
+  (fun data ->
+    let data_name = data.data_name in
+    match data.cons_list with
+    |[(nil, nil_t); (cons, cons_t) ] 
+         when (is_list_nil data_name nil_t)&&
+                (is_list_cons data_name cons_t) ->
+      Some (data, nil, cons)
+    | [(cons, cons_t); (nil, nil_t)]
+             when (is_list_nil data_name nil_t)&&
+                    (is_list_cons data_name cons_t) ->
+       Some (data, nil, cons)
+    |_ -> None
+  )
+
+  
+let extract_list: t M.t -> PreSyntax.measureInfo list -> (t_list* t M.t * PreSyntax.measureInfo list)  =
+  (fun data_info_map minfos ->
+    let list_cons_nil_map = M.map is_list data_info_map in
+    let list_cons_nil =
+      M.fold
+        (fun data_name option acc ->
+          (match acc with
+           |Some _ -> acc
+           |None -> option))
+        list_cons_nil_map
+        None
+    in
+    match list_cons_nil with
+    |None -> raise (Data_List "there are no data type list")
+    |Some (data, nil, cons)->
+      let len_info =List.find PreSyntax.is_len minfos in
+      let elems_info = List.find PreSyntax.is_elems minfos in
+      {data_name= data.data_name;
+       type_param= data.type_param;
+       pred_param= data.pred_param;
+       cons= cons;
+       nil = nil;
+       len = len_info;
+       elems = elems_info
+      },
+      data_info_map,
+      minfos
+      
+  )      
+      
+
+
+(* 以下、pair *)
+
+(* a -> b -> pair a b の形か *)
+let is_pair_cons data_name (_, _, t) =
+  match t with
+  (* 第１引数が再帰ならfalse *)
+  |TFun ((_,TScalar ( TVar(_,a), _)),
+         TFun ( (_,TScalar ( TVar(_,b), _)),
+               TScalar( TData(id,[TScalar ( TVar(_,c), _); TScalar ( TVar(_,d), _)],_), _)
+        ))
+       when id = data_name && a = c && b = d ->
+    true
+  |_ -> false
+         
+  
+                
+let is_pair: t -> (t * Id.t ) option = (* listならdata,pair_consに当たるコンストラクたを返す *)
+  (fun data ->
+    let data_name = data.data_name in
+    match data.cons_list with
+    |[(pair_cons, cons_t)]
+      when (is_pair_cons data_name cons_t) ->
+      Some (data, pair_cons)
+    | _ -> None
+  )
+
+  
+let extract_pair: t M.t -> PreSyntax.measureInfo list -> (t_pair* t M.t * PreSyntax.measureInfo list)  =
+  (fun data_info_map minfos ->
+    let pair_cons_map = M.map is_pair data_info_map in
+    let pair_cons =
+      M.fold
+        (fun data_name option acc ->
+          (match acc with
+           |Some _ -> acc
+           |None -> option))
+        pair_cons_map
+        None
+    in
+    match pair_cons with
+    |None -> raise (Data_List "there are no data type list")
+    |Some (data, pair_cons)->
+      let fst_info =List.find PreSyntax.is_fst minfos in
+      let snd_info = List.find PreSyntax.is_snd minfos in
+      
+      {data_name= data.data_name;
+       type_param= data.type_param;
+       pred_param= data.pred_param;
+       pair = pair_cons;
+       fst = fst_info;
+       snd = snd_info
+      },
+      data_info_map,
+      minfos
+      
+  )      
+          
+      
+      

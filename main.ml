@@ -44,18 +44,17 @@ let mk_data_cons_list :((Id.t * Type.schema) list ->  ((Id.t * Type.schema) list
 (* env:コンストラクタの型環境
 　fundecs: 補助関数の型
 　f_name: 合成目標の関数名
-　tmp:仮のテンプレート
+　tmp:テンプレート（本物）
  *)
+
   
-let g' env fundecs (f_name, tmp) :(Id.t * Syntax.t * ((Id.t * Type.schema) list))
-  = (* envにはコンストラクタの情報 *)
+  let g' cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t * ((Id.t * Type.schema) list))
+  = (* cons_envにはコンストラクタの情報 *)
   (print_string (Syntax.syn2string tmp));
-  (Printf.printf "env\n%s" (Type.env2string (env,[])));
-  let data_info = Data_info.mk_data_info env in (* データ型とコンストラクタの対応 *)
+  (Printf.printf "cons_env\n%s" (Type.env2string (cons_env,[])));
   let fundecs'  = until_assoc f_name fundecs in
-  let env :Type.env = (fundecs'@env , []) in
+  let env :Type.env = (fundecs'@cons_env , []) in
   let t = List.assoc f_name fundecs in
-  let tmp = Mk_tmp.fold f_name t tmp data_info in
   (Printf.fprintf stderr
                   "%s :: %s\n"
                   f_name
@@ -131,7 +130,8 @@ let output2file input_file ((f_tmp_g_list:((Id.t * Syntax.t * ((Id.t * Type.sche
 
 
 
-let main file =
+let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
+               Id.t -> Type.schema -> Syntax.t ) =
   let lexbuf = if file = "" then  Lexing.from_channel stdin
                else let inchan = open_in (file) in
                     Lexing.from_channel inchan
@@ -140,17 +140,30 @@ let main file =
   (* (List.iter print_string (List.map PreSyntax.minfo2string minfos)); *)
   let env,fundecs = Preprocess.f env minfos fundecs in
   let data_info_map = Data_info.mk_data_info env in
+  let mk_tmp = gen_mk_tmp data_info_map minfos in
+  let goals = Mk_tmp.f mk_tmp fundecs goals in (* 各ゴールにtemplateを設定 *)
   let f_tmp_g_list:(Id.t * Syntax.t * ((Id.t * Type.schema) list)) list
-    = List.map (g' env fundecs) goals in
+    = List.map (g' env fundecs) goals
+  in
   (f_tmp_g_list, data_info_map, minfos, fundecs, goals)
 
 
+  
 let _ =
-  let file = ref "" in 
+  let file = ref "" in
+  let mk_tmp_fun = ref Mk_tmp.fold in
   (Arg.parse
-     []
+     ["-tmp",
+      (Arg.String
+         (fun s ->
+           match s with
+           |"merge" -> mk_tmp_fun := Mk_tmp.merge
+           |_ -> mk_tmp_fun := Mk_tmp.fold)
+      ),
+      "tmplates"
+      ]
      (fun s -> file := s)
      "synquid+");
-  let result = main !file in
+  let result = main !file !mk_tmp_fun in
   output2file !file result
 
