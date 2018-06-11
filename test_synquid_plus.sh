@@ -18,7 +18,7 @@ TEST_FILE=(list-intersection
 
 for file in ${TEST_FILE[@]}
 do
-    time "${SCRIPT_DIR}/synquid_plus.sh" $TEST_FILE_DIR$file
+    time "${SCRIPT_DIR}/synquid_plus.sh" $TEST_FILE_DIR$file "fold"
 done
 
 time "${SCRIPT_DIR}/synquid_plus.sh" "${TEST_FILE_DIR}test_sort" "merge"
