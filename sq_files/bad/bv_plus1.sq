@@ -17,13 +17,4 @@ zero :: {Int | _v == 0}
 one :: {Int | _v == 1}
 
 plus :: x: BitVec -> y: {BitVec | len _v == len x} -> {BitVec | value _v == value x + value y}
-plus = \x.\y.
-  match x with
-   Nil -> ??
-   Cons x' xs' -> match y with
-      	          Nil -> ??
-		  Cons y' ys' -> g_1 x' y' (plus xs' ys')
-		  
-
-  
-
+plus =  ??

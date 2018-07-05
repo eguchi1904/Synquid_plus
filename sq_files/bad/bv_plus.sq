@@ -23,7 +23,6 @@ plus = \x.\y.
    Cons x' xs' -> match y with
       	          Nil -> ??
 		  Cons y' ys' -> g_1 x' y' (plus xs' ys')
-		  
 
   
 

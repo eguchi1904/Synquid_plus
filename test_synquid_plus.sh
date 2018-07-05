@@ -21,5 +21,5 @@ do
     time "${SCRIPT_DIR}/synquid_plus.sh" $TEST_FILE_DIR$file "fold"
 done
 
-time "${SCRIPT_DIR}/synquid_plus.sh" "${TEST_FILE_DIR}test_sort" "merge"
+time "${SCRIPT_DIR}/synquid_plus.sh" "${TEST_FILE_DIR}merge_sort" "merge"
 
