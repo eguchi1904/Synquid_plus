@@ -1,0 +1,19 @@
+data List a <p :: Int -> a -> Bool> where
+  Nil :: List a <p>
+  Cons :: x: {a | p 0 _v} -> xs: List a <{p (_0 + 1) _1}> -> List a <p>
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+data TwoDList a <q :: Int -> Int -> a -> Bool> where
+ TwoDNil :: TwoDList a <q>
+ TwoDCons :: l: List a <{q 0 _0 _1}> -> xss:TwoDList a <{q (_0 + 1) _1 _2}> -> TwoDList a <q>
+
+termination measure sumlen:: TwoDList a -> {Int | _v >= 0} where
+ TwoDNil -> 0
+ TwoDCons l xxs -> len l + sumlen xxs
+
+trans:: <q :: Int -> Int -> a -> Bool>. ll:TwoDList a <q> -> {TwoDList a <{q _1 _0 _2} > | sumlen _v == sumlen ll}
+
+trans = ??

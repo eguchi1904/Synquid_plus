@@ -1,0 +1,17 @@
+data RList a <r :: a -> a -> Bool> where
+  Nil :: RList a <r>
+  Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+  
+termination measure len :: RList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+
+eq :: x: a -> y: a -> {Bool | _v == (x == y)}
+neq :: x: a -> y: a -> {Bool | _v == (x != y)}
+
+uniq:: xs: RList a <{True}> -> {RList a <{_0 != _1}> | elems _v == elems xs}
+uniq = ??

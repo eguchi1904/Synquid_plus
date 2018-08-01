@@ -1,0 +1,17 @@
+data RList a <r :: a -> a -> Bool> where
+ Nil :: RList a <r>
+ Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+
+termination measure len :: RList a  -> {Int | _v >= 1} where
+ Nil -> 1
+ Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+ Nil -> []
+ Cons x xs -> [x] + (elems xs)
+
+
+reverse :: <r :: a -> a -> Bool> . xs: RList a <{r _0 _1}> -> {RList a <{r _1 _0}> | (len _v == len xs ) && (elems _v == elems xs)}
+
+reverse = ??
+

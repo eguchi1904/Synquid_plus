@@ -1,0 +1,88 @@
+data Pair a b where
+ Pair :: x: a -> y: b -> Pair a b
+  
+measure fst :: Pair a b -> a where
+  Pair x y -> x
+  
+measure snd :: Pair a b -> b where
+  Pair x y -> y
+
+data RList a <r :: a -> a -> Bool> where
+  Nil :: RList a <r>
+  Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+  
+termination measure len :: RList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+  
+
+
+leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
+geq :: x: a -> y: a -> {Bool | _v == (x <= y)}
+neq :: x: a -> y: a -> {Bool | _v == (x != y)}
+not :: x:Bool -> {Bool | _v == (!x)}
+eq :: x: a -> y: a -> {Bool | _v == (x == y)}
+add :: x: Int -> y:Int -> {Int | _v == (x + y)}
+dec :: x: Int -> y:Int -> {Int | _v == (x - y)}
+mul :: x: Int -> y:Int -> {Int | _v == (x * y)}
+
+zero :: {Int | _v == 0 }
+one :: {Int | _v == 1 }
+true ::{Bool | _v}
+false ::{Bool |!_v}
+
+split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }	
+  
+
+sum = \x.
+      if leq x zero then
+       zero
+     else
+      add x (sum (dec x one))
+
+test1 = let id = \x.x in
+       (id id) zero
+
+-- this should be fail
+-- test2 = let id = \x.x in
+--       ( \f.if f true then f zero else f one)
+--let comp = fun f -> fun g -> fun x -> g (f x) in comp (comp (fun x -> x * 2) (fun x -> if x = 0 then true else false)) (fun x -> if x then false else true) 2;;
+
+
+test3 =
+ let repeat = \f. \n. \x. if eq n zero then x else f (repeat f (dec n one) x) in
+ let h = \x. if x then false else true in
+ let notnot = repeat h (add one one) in
+ let h2 = \x. add x one in
+ let succsucc = repeat h2 (add one one) in
+ if notnot true then succsucc zero else zero
+
+fix = \f. \x. f (fix f) x 
+
+test4 =
+   let foldn = \n. \b. \f.
+   (let loop = \i. \c. (if not (geq c n) then
+                           loop (add i one) (f i c)
+		        else
+			  c)
+    in
+    loop zero b)
+    in foldn
+
+test5 =
+ let snoc = \x. \l. match l with
+   Cons y ys -> Cons y (snoc x ys)
+   Nil -> Cons x Nil
+ in
+ let rev = \l. match l with
+   Cons y ys -> snoc y (rev ys)
+   Nil -> Nil
+ in
+ (\x. \y. rev (Cons x (Cons y (Cons (add one x) Nil))) )
+ 
+
+

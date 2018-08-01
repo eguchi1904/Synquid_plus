@@ -1,0 +1,20 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+
+measure elems :: List a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+qualifier {x == y}
+true::{Bool| _v == True}
+false::{Bool | _v == False}
+and:: l:List Bool -> {Bool | _v == (elems l == [True] || elems l == [])}
+and = ??
+or :: l:List Bool -> {Bool | _v == (True in elems l)}
+or = ??
+  

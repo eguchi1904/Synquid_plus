@@ -1,0 +1,234 @@
+open Extensions                 (* listモジュールの拡張など *)
+
+exception ML_Inf_Err of string
+   
+type t =
+  |MLBool|MLInt
+  |MLDate of Id.t * (t list) 
+  |MLVar of Id.t
+  |MLFun of t * t
+
+module Syn = Syntax
+module TaSyn = TaSyntax
+
+
+let rec fv t = match t with
+  |MLVar id -> [id]
+  |MLDate (i, tys) -> List.concat (List.map fv tys)
+  |MLBool|MLInt -> []
+  |MLFun (t1, t2) -> (fv t1)@(fv t2)
+
+                   
+(* -------------------------------------------------- *)
+(* schema *)
+(* -------------------------------------------------- *)
+type schema =  (Id.t list) *  t
+
+let ty_of_schema ty:schema = ([], ty)
+                           
+let generalize fv_list t =  (fv_list, t)
+
+let rec instantiate' table ty = match ty with
+  |MLVar x when List.mem_assoc x table -> MLVar (List.assoc x table)
+  |MLVar x -> MLVar x
+  |MLDate (i, tys) -> MLDate (i, List.map (instantiate' table) tys)
+  |MLBool -> MLBool
+  |MLInt -> MLInt
+  |MLFun (ty1, ty2) -> MLFun (instantiate' table ty1, instantiate' table ty2)
+                          
+let instantiate ((bvs, ty):schema) =
+  let betas:Id.t list = List.map Id.genid bvs in
+  let new_ty = instantiate' (List.combine bvs betas) ty in
+  (betas, new_ty)
+                 
+  
+
+let fv_schema ((bvs, ty):schema) = List.diff (fv ty) bvs
+
+let access_type_in_schema (f:t-> t) ((bvs, ty):schema) = (bvs, (f ty))
+
+(*--------------------------------------------------*)
+(* environment *)
+(*--------------------------------------------------*)
+type 'a env = (Id.t * 'a) list
+
+let empty_env = []
+              
+let add_env x t env = (x, t)::env
+
+let find_env x env = List.assoc x env
+
+let mem_env x env = List.mem_assoc x env
+
+let foldl_env (f:'a -> (Id.t* 'b) -> 'a) (seed:'a) (env:'b env)=   List.fold_left f seed env
+
+let access_data_in_env (f:'a -> 'a) (env:'a env) =
+  foldl_env (fun acc (x, sch) -> acc@[(x, f sch)] )  empty_env env
+    
+let rec access_data_in_env (f:'a -> 'a) (env: 'a env) = match env with
+  |(x, sch)::lest -> (x, f sch)::(access_data_in_env f lest)
+  | [] -> []
+
+                   
+let rec  fv_env env = match env with
+  |(x, sch)::lest -> (fv_schema sch)@(fv_env lest)
+  |[] -> []
+  
+  
+
+(* -------------------------------------------------- *)
+(* substitution *)
+(* -------------------------------------------------- *)
+type 'a subst = 'a M.t              (* 肩変数のsubstitution *)
+
+let subst_empty = M.empty
+
+let subst_singleton = M.singleton
+              
+let rec subst_ty sita ty = match ty with
+  |MLVar x when M.mem x sita -> M.find x sita
+  |MLVar x -> MLVar x
+  |MLDate (i, tys) -> MLDate (i, List.map (subst_ty sita) tys)
+  |MLBool -> MLBool
+  |MLInt -> MLInt
+  |MLFun (ty1, ty2) -> MLFun ((subst_ty sita ty1), (subst_ty sita ty2))
+
+let subst_sch sita ((bvs, ty):schema) =
+  let sita' = M.delete_list sita bvs in
+  (bvs, (subst_ty sita' ty))
+
+let subst_env sita env =  access_data_in_env (subst_sch sita) env
+
+let rec subst_cons sita c = match c with
+  |(ty1, ty2)::left -> (subst_ty sita ty1, subst_ty sita  ty2)::(subst_cons sita left)
+  |[] -> []
+
+let subst_tasyn (sita:t subst) =  TaSyn.access_annotation_t (subst_sch sita)
+
+let subst_tasyn_e (sita:t subst) =  TaSyn.access_annotation_e (subst_sch sita)
+                                  
+let subst_tasyn_b (sita:t subst) =  TaSyn.access_annotation_b (subst_sch sita)
+
+let subst_tasyn_f (sita:t subst) =  TaSyn.access_annotation_f (subst_sch sita)
+
+let subst_compose sita1 sita2 = (* \forall t. composed_sita t = sita1(sita2 t) *)
+  M.union (fun i t1 t2 -> Some t2)
+          sita1
+          (M.mapi (fun i t2 -> subst_ty sita1 t2) sita2)
+
+      
+(* -------------------------------------------------- *)
+(* ML type infer *)
+(* -------------------------------------------------- *)
+                      
+           
+let infer env e = (MLInt, TaSyntax.PHole, M.empty) (* dummy *)
+
+let rec unify c sita = match c with
+  |[] -> sita
+  |(MLBool, MLBool)::left|(MLInt, MLInt)::left -> unify left sita
+  |(MLVar a, ty2)::left when (not (List.mem a (fv ty2))) ->
+    let new_left = subst_cons (subst_singleton a ty2) left in
+    let new_sita = subst_compose (subst_singleton a ty2) sita in
+    unify new_left new_sita
+  |(ty2, MLVar a)::left when (not (List.mem a (fv ty2))) ->
+    let new_left = subst_cons (subst_singleton a ty2) left in
+    let new_sita = subst_compose (subst_singleton a ty2) sita in
+    unify new_left new_sita
+  |(ty2, MLVar a)::left  ->
+    raise (ML_Inf_Err "occurrences err")
+  |( MLVar a, ty2)::left ->
+    raise (ML_Inf_Err "occurrences err")
+  |( (MLFun (ty1_in, ty1_out)), (MLFun (ty2_in, ty2_out)))::left ->
+    unify ((ty1_in, ty2_in)::(ty1_out, ty2_out)::left) sita
+  |(MLDate (i, tys1), MLDate (i', tys2))::left when i = i' ->
+    if List.length tys1 <> List.length tys2 then
+      raise (ML_Inf_Err (Printf.sprintf "data type %s's parameters unmatch" i))
+    else
+      unify ((List.combine tys1 tys2)@left) sita
+  |_ -> raise (ML_Inf_Err "infer err")
+
+let unify2 ty1 ty2 = unify [(ty1, ty2)] subst_empty                                          
+   
+let rec  infer_t env e = match e with
+  |Syn.PLet (x, t1, t2) ->
+    let (ta_t1, ty1, sita1) = infer_t env t1 in
+    let fv_ty1 = List.diff (fv ty1) (fv_env (subst_env sita1 env)) in
+    let env2 =  subst_env sita1 (add_env x (generalize fv_ty1 ty1) env) in
+    let (ta_t2, ty2, sita2) = infer_t env2 t2 in
+    let sch1 = generalize fv_ty1 (subst_ty sita2 ty1) in
+    ((TaSyn.PLet ((x, sch1), ta_t1, ta_t2)), ty2, subst_compose sita2 sita1)
+    
+  |Syn.PE e -> let (ta_e, ty, sita) = infer_e env e in
+               (TaSyn.PE ta_e, ty, sita)
+
+  |Syn.PI b -> let (ta_b, ty, sita) = infer_b env b in
+               (TaSyn.PI ta_b, ty, sita)
+
+  |Syn.PF f -> let (ta_f, ty, sita) = infer_f env f in
+               (TaSyn.PF ta_f, ty, sita)
+
+and infer_e env e = match e with
+  |Syn.PSymbol x ->
+    (try let  sch = find_env x env in
+         let (betas, new_ty) = instantiate sch in
+         let instans_type_list = List.map (fun i -> ty_of_schema (MLVar i)) betas in
+         (TaSyn.PSymbol (x, instans_type_list), new_ty, subst_empty)
+     with
+       Not_found -> raise (ML_Inf_Err (Printf.sprintf "%s is not in scope" x))
+    )
+  |Syn.PAuxi _ -> raise (ML_Inf_Err "encounter unknown auxiliary function")
+  |Syn.PAppFo (e1, e2) ->
+    let (ta_e1, ty1, sita1) = infer_e env e1 in
+    let (ta_e2, ty2, sita2) = infer_e (subst_env sita1 env) e2 in
+    let alpha = MLVar (Id.genid "'a") in
+    let sita3 = unify [(ty1, MLFun (ty2, alpha))] subst_empty in
+    let sita3_sita2 = (subst_compose sita3 sita2) in
+    let new_ta_e1 = subst_tasyn_e  sita3_sita2 ta_e1 in
+    let new_ta_e2 = subst_tasyn_e sita3 ta_e2 in
+    ( TaSyn.PAppFo (new_ta_e1, new_ta_e2),
+      subst_ty sita3 alpha,
+      subst_compose sita3_sita2 sita1
+    )
+
+
+and infer_b env b = match b with
+     |Syn.PIf (e1, t2, t3) ->
+    (* infer e1, t2, t3 *)
+    let (ta_e1, ty1, sita1) = infer_e env e1 in
+    let env' = subst_env sita1 env in
+    let (ta_t2, ty2, sita2) = infer_t env' t2 in
+    let env'' = subst_env sita2 env' in
+    let (ta_t3, ty3, sita3) = infer_t env'' t3 in
+    (* unification *)
+    let sita3_sita2 = subst_compose sita3 sita2 in
+    let ty1' = subst_ty sita3_sita2 ty1 in
+    let ty2' = subst_ty sita3 ty2 in
+    let sita4 = unify [(ty1', MLBool); (ty2', ty3)] subst_empty in
+    let sita4_sita3_sita2 = subst_compose sita4 sita3_sita2 in
+    let sita4_sita3       = subst_compose sita3 sita3 in
+    let new_ta_e1 = subst_tasyn_e sita4_sita3_sita2 ta_e1 in
+    let new_ta_t2 = subst_tasyn sita4_sita3       ta_t2 in
+    let new_ta_t3 = subst_tasyn sita4             ta_t3 in
+    (TaSyn.PIf (new_ta_e1, new_ta_t2, new_ta_t3),
+     subst_ty sita4 ty3,
+     subst_compose sita4_sita3_sita2 sita1)
+
+    
+    
+    
+    
+    
+    
+            
+
+         
+         
+    
+    
+
+
+
+                
+
+             

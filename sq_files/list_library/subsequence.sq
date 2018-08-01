@@ -1,0 +1,20 @@
+data RList a <r :: a -> a -> Bool> where
+ Nil :: RList a <r>
+ Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+
+termination measure len :: RList a  -> {Int | _v >= 1} where
+ Nil -> 1
+ Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+ Nil -> []
+ Cons x xs -> [x] + (elems xs)
+
+
+leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
+neq :: x: a -> y: a -> {Bool | _v == (x != y)}
+
+subsequences:: <r :: a -> a -> Bool> . l1: RList a <{r _0 _1}> ->  l2: RList a <{r _0 _1}> ->
+ {Bool | _v == ((elems l1) <= (elems l2) )}
+
+subsequences = ??

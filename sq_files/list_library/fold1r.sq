@@ -1,0 +1,17 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: List a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+	
+fold1r :: <p :: List a -> a -> Bool> .
+		f: (xs: List a -> x: a -> acc: {a | p xs _v} -> {a | p (Cons x xs) _v}) ->
+		    ys: {List a |len _v > 0 }->    
+		{a | p ys _v}
+fold1r = ??

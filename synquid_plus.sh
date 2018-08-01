@@ -1,4 +1,6 @@
 #!/bin/sh
+# set path to libz3.dylib
+export DYLD_LIBRARY_PATH=~/.opam/4.06.1/lib/z3/
 INTERMEDIATE_SUFFIX="_2sq.sq"
 SQ_EXTENSION=".sq"
 

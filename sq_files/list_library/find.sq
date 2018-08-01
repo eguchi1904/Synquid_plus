@@ -1,0 +1,33 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+  
+measure elems :: List a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+  
+  
+data Option a where
+  None :: Option a
+  Some :: x:a -> Option a
+
+measure opelem :: Option a -> Set a where
+  None -> []
+  Some x -> [x]
+
+measure isNone :: Option a -> Bool where
+  None -> True
+  Some x -> False
+
+qualifier {x == y}
+
+
+
+find :: <p :: Int -> a -> Bool> .  f:(x: a -> {Bool | _v == p x}) -> l:List a ->
+     {Option a| if _v in elems l && p _v}
+
+filter::

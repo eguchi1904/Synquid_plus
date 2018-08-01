@@ -1,0 +1,33 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+  
+measure elems :: List a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+
+data Pair a b where
+ Pair :: x: a -> y: b -> Pair a b
+  
+measure fst :: Pair a b -> a where
+  Pair x y -> x
+  
+measure snd :: Pair a b -> b where
+  Pair x y -> y
+  
+true :: {Bool | _v == True}
+false :: {Bool | _v == False }
+
+
+zero :: {Int | _v == 0}
+inc :: x: Int -> {Int | _v == x + 1}
+dec :: x: Int -> {Int | _v == x - 1}
+
+span :: <p :: a -> Bool> . 
+  f:(x: a -> {Bool | _v == p x}) -> xs: List a ->
+   {Pair (List {a|p _v}) (List {a|!(p _v)}) | len (fst _v) + len (snd _v) == len xs　&& elems (fst _v) + elems (snd _v) == elems xs }
+span = ??
