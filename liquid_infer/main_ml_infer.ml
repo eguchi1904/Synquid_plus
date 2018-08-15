@@ -73,16 +73,15 @@ let output2file input_file  (data_info_map, minfos, fundecs, id_type_list) =
                            fundecs
   in
   let id_type_str_list = List.map
-                           (fun (x, (tasyn, ty)) ->
-                             Printf.sprintf "%s::%s\n %s"
+                           (fun (x, ty) ->
+                             Printf.sprintf "%s::%s\n"
                                             x
-                                            (Ml.string_of_t ty)
-                                            (TaSyntax.syn2string Ml.string_of_sch tasyn))
+                                            (Type.t2string ty))
                            id_type_list
   in
   let id_type_list_str = String.concat "\n" id_type_str_list in
   let fundecs_str = String.concat "\n\n" fundecs_str_list in
-  (Printf.fprintf stdout "%s \n\n%s \n\n%s \n\n %s\n"
+  (Printf.fprintf outchan "%s \n\n%s \n\n%s \n\n %s\n"
                   data_info_str
                   minfos_str
                   fundecs_str
@@ -90,8 +89,15 @@ let output2file input_file  (data_info_map, minfos, fundecs, id_type_list) =
   (* 以下で、入力ファイルを書き込み *)
   close_out outchan
 
-  let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x)))
+let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x)))
 
+let qualifiers =
+  let x = Formula.genUnkownP "x" in
+  let y = Formula.genUnkownP "y" in
+  [Formula.Neq (x,y);  Formula.Lt (x,y)]
+
+let qualifiers = []
+(* todo:expand qualifier を作成する *)
 let main file = 
   let lexbuf = if file = "" then  Lexing.from_channel stdin
                else let inchan = open_in (file) in
@@ -101,9 +107,17 @@ let main file =
   (* (List.iter print_string (List.map PreSyntax.minfo2string minfos)); *)
   let cons_env,fundecs = Preprocess.f cons_env minfos fundecs in
   let data_info_map = Data_info.mk_data_info cons_env in
-  let ml_env = Ml.shape_env ((cons_env@fundecs),[]) in
+  let init_env = ((cons_env@fundecs),[]) in
+  let ml_env = Ml.shape_env init_env in
+  let id_mltype_list =
+    List.map (fun (x, t) -> (x, Ml.infer ml_env (rec_def x t)  ))
+             goals
+  in
   let id_type_list =
-    List.map (fun (x, t) -> (x, Ml.infer ml_env (rec_def x t)  )) 
+    List.map
+      (fun (x, t) ->
+        let z3_env =  UseZ3.mk_z3_env () in
+        (x, TypeInfer.f z3_env data_info_map qualifiers init_env (rec_def x t)  ))
              goals
   in
   (data_info_map, minfos, fundecs, id_type_list)

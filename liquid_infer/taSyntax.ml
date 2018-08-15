@@ -7,6 +7,7 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
    |PSymbol of (Id.t *  'a list)     (* x[t1,t2, ... ] *)
    |PAuxi of Id.t               (* auxiliary function *)
    |PAppFo of 'a e * 'a e
+   |PAppHo of 'a e * 'a f            
                                  
  and 'a b =                        (* branching-term *)
    |PIf of 'a e * 'a t * 'a t
@@ -33,6 +34,7 @@ and access_annotation_e f e = match e with
   |PSymbol (x, ty_list) -> PSymbol (x, List.map f ty_list)
   |PAuxi i -> PAuxi i
   |PAppFo (e1, e2)-> PAppFo (access_annotation_e f  e1, access_annotation_e f e2)
+  |PAppHo (e1, f2) -> PAppHo (access_annotation_e f e1, access_annotation_f f f2)
 
 and access_annotation_b f b = match b with
   |PIf (e, t1, t2) -> PIf (access_annotation_e f e,
@@ -44,8 +46,45 @@ and access_annotation_b f b = match b with
 and access_annotation_f f (PFun ((x, sch), t1)) = PFun ((x, f sch), access_annotation_t f t1)
 
 and access_annotation_case f {constructor =  c; argNames = x_sch_list; body = t} =
-  {constructor = c; argNames = List.map (fun (x, sch) -> (x, f sch)) x_sch_list; body = t}
+  {constructor = c;
+   argNames = List.map (fun (x, sch) -> (x, f sch)) x_sch_list;
+   body = access_annotation_t f t}
 
+  
+
+let rec substitute (x:Id.t) (dest:'a e) (t:'a t)  = match t with
+  |PLet ((y, sch), t1, t2) when y = x ->  t
+  |PLet ((y, sch), t1, t2) ->
+    PLet ((y, sch), (substitute x dest t1), (substitute x dest t2))
+  |PE e -> PE (substitute_e x dest e)
+  |PI b -> PI (substitute_b x dest b)
+  |PF f -> PF (substitute_f x dest f)
+  |PHole -> PHole
+
+and substitute_e (x:Id.t) (dest:'a e) (e:'a e) =  match e with
+  |PSymbol (i, sch) when i = x ->  dest
+  |PSymbol (i, sch) -> PSymbol (i, sch)
+  |PAuxi i -> PAuxi i
+  |PAppFo (e1, e2) -> PAppFo (substitute_e x dest e1, substitute_e x dest e2)
+  |PAppHo (e1, f2) -> PAppHo (substitute_e x dest e1, substitute_f x dest f2)
+
+and substitute_b x dest b = match b with
+  |PIf (e1, t2, t3) -> PIf (substitute_e x dest e1, substitute x dest t2, substitute x dest t3)
+  |PMatch (e, case_list) ->
+    PMatch (substitute_e x dest e, List.map (substitute_case x dest) case_list)
+
+and substitute_case x dest {constructor =  c; argNames = x_sch_list; body = t } =
+  if List.mem_assoc x x_sch_list then
+    {constructor =  c; argNames = x_sch_list; body = t }
+  else
+    {constructor =  c; argNames = x_sch_list; body = substitute x dest t }
+
+and substitute_f x dest  (PFun ((y, sch), t1)) =
+  if x = y then
+    (PFun ((y, sch), t1))
+  else
+    (PFun ((y, sch), substitute x dest t1))
+                     
 
   
 
@@ -68,6 +107,7 @@ and syn2string_e f = function
                                      (String.concat "," (List.map f xs))
   |PAuxi i -> i
   |PAppFo (e1,e2) -> Printf.sprintf "%s (%s)" (syn2string_e f e1) (syn2string_e f e2)
+  |PAppHo (e1, fterm) -> Printf.sprintf "%s (%s)" (syn2string_e f e1) (syn2string_f f fterm)
 
 and syn2string_b f = function
   |PIf (e,t1,t2) ->
@@ -89,4 +129,6 @@ and syn2string_case f {constructor = cons; argNames = xs; body = t} =
   let xs' = List.map (fun (x, anno) -> Printf.sprintf "%s:%s" x (f anno)) xs in
   Printf.sprintf " %s %s -> %s" cons (String.concat " " xs') (syn2string f t)
 
-                         
+  
+
+

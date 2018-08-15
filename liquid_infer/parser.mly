@@ -136,6 +136,7 @@ m1: /*ユーザー定義型*/
 
   }
 
+
 t_paras:
 | ID t_paras { $1 :: $2 }
 | { [] }
@@ -200,6 +201,8 @@ prg_e:
 |prg_eatom { $1 }
 | prg_e prg_eatom  %prec prec_app
   { PAppFo( $1, $2 ) }
+| prg_e prg_f  %prec prec_app
+  { PAppHo( $1, $2 ) }  
   
 prg_eatom:
 | LPAREN prg_e RPAREN { $2 }
@@ -270,7 +273,7 @@ basetype:
 | INTSYMBOL {TInt}
 | BOOLSYMBOL {TBool}
 | CAPID tatoms pas { TData($1, $2, $3) }
-| ID { TVar (M.empty, $1) }
+| ID { TAny $1 }
 
 tatoms:
 | tatom tatoms  { $1 :: $2 }

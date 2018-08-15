@@ -53,7 +53,7 @@ let rec any2unknownsort_pa (args,rets) =
   let args' = List.map (sort_subst sita) args in
   let rets' = sort_subst sita rets in
   (args', rets')
-           
+
 
            
 let rec t_args c_t =
@@ -113,8 +113,9 @@ let rec base2pashape = function
                      ts
     in
     DataS (i, sortlist)
-  |TVar (_,i) -> AnyS i
-  |_ -> assert false
+  |TAny i -> AnyS i
+  |TVar (_,i) -> assert false
+
 
 and type2pashape = function
   |TScalar (b,_) -> ([], base2pashape b)

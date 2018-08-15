@@ -7,6 +7,7 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
    |PSymbol of (Id.t *  'a list)     (* x[t1,t2, ... ] *)
    |PAuxi of Id.t               (* auxiliary function *)
    |PAppFo of 'a e * 'a e
+   |PAppHo of 'a e * 'a f
                                  
  and 'a b =                        (* branching-term *)
    |PIf of 'a e * 'a t * 'a t
@@ -18,6 +19,8 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
 
 
  and 'a case = {constructor : Id.t ; argNames : (Id.t * 'a) list ; body : 'a t}
+
+val substitute: Id.t -> 'a e -> 'a t -> 'a t
 
 val syn2string: ('a -> string) -> 'a t -> string
              

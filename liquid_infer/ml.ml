@@ -1,3 +1,6 @@
+(* -------------------------------------------------- *)
+(* ML type inference *)
+(* -------------------------------------------------- *)
 open Extensions                 (* listモジュールの拡張など *)
 
 exception ML_Inf_Err of string
@@ -54,7 +57,9 @@ let rec string_of_t t :string= let open Printf in
 (* -------------------------------------------------- *)
 type schema =  (Id.t list) *  t
 
-let ty_of_schema ty:schema = ([], ty)
+let ty_of_schema (ty:t) = ([], ty)
+
+let ty_in_schema ((bvs, ty):schema) = ty
 
 let shape_sch ((bvs, pas, ty):Type.schema) =
   (bvs, shape ty)
@@ -81,7 +86,8 @@ let instantiate ((bvs, ty):schema) =
   let betas:Id.t list = List.map Id.genid bvs in
   let new_ty = instantiate' (List.combine bvs betas) ty in
   (betas, new_ty)
-                 
+
+
   
 
 let fv_schema ((bvs, ty):schema) = List.diff (fv ty) bvs
@@ -103,7 +109,7 @@ let add_env x t env = (x, t)::env
 
 let add_list_env xs env = xs@env
 
-let find_env x env = List.assoc x env
+let find_env x (env:'a env) = List.assoc x env
 
 let mem_env x env = List.mem_assoc x env
 
@@ -165,6 +171,13 @@ let subst_compose (sita1: t subst) (sita2: t subst) = (* \forall t. composed_sit
           sita1
           (M.mapi (fun i t2 -> subst_ty sita1 t2) sita2)
 
+  
+let instantiate_implicit tys ((bvs, ty):schema) = 
+  if (List.length tys) <> (List.length bvs) then
+    raise (ML_Inf_Err "instatiate implicit err")
+  else
+    let sita = M.add_list2 bvs tys M.empty in
+    subst_ty sita ty
       
 (* -------------------------------------------------- *)
 (* ML type infer *)
@@ -216,6 +229,13 @@ let rec  infer_t env e = match e with
     (* derive shcema of t1 *)
     let fv_ty1 = List.diff (fv ty1') (fv_env env' ) in
     let sch1 =  generalize fv_ty1 ty1' in
+    (* insert explicit instantiation for recursive function.
+       In ml polymorphism, recursive functions are always instantiated by
+       its polymorphic type parameter (not by concrete type such as Int or Bool )
+     *)
+    let fv_ty1_var = List.map (fun beta -> ty_of_schema (MLVar beta)) fv_ty1 in
+    let instantiate_x = TaSyn.PSymbol (x, fv_ty1_var) in
+    let ta_t1' = TaSyn.substitute x  instantiate_x ta_t1' in
     (* infer t2 *)
     let env2 =  add_env x sch1 env' in
     let (ta_t2, ty2, c2) = infer_t env2 t2 in
@@ -248,6 +268,15 @@ and infer_e env e = match e with
     let alpha = MLVar (Id.genid "'a") in
     let c3 = (ty1, MLFun (ty2, alpha))::c1@c2  in
     ( TaSyn.PAppFo (ta_e1, ta_e2),
+      alpha,
+      c3
+    )
+  |Syn.PAppHo (e1, f2) ->
+    let (ta_e1, ty1, c1) = infer_e env e1 in
+    let (ta_f2, ty2, c2) = infer_f env f2 in
+    let alpha = MLVar (Id.genid "'a") in
+    let c3 = (ty1, MLFun (ty2, alpha))::c1@c2  in
+    ( TaSyn.PAppHo (ta_e1, ta_f2),
       alpha,
       c3
     )
@@ -310,5 +339,45 @@ let infer env t =
   let (ta_t, ty_t, c) = infer_t env t in
   let sita = unify c subst_empty in
   (subst_tasyn sita ta_t, subst_ty sita ty_t)
-                
-             
+
+  
+(*****************************************)
+(* type inference of program with type annotation *)
+(*****************************************)  
+let rec ta_infer env (t:schema TaSyntax.t) = match t with
+  |TaSyn.PLet ((x, sch), t1, t2) -> ta_infer (add_env x sch env) t2
+  |TaSyn.PE e -> ta_infer_e env e
+  |TaSyn.PI b -> ta_infer_b env b
+  |TaSyn.PF f -> ta_infer_f env f
+  |TaSyn.PHole -> assert false
+and ta_infer_e env e = match e with
+  |TaSyn.PSymbol (x, tys) ->
+    let sch = find_env x env in
+    instantiate_implicit (List.map ty_in_schema tys) sch
+  |TaSyn.PAuxi _ -> raise (ML_Inf_Err "encounter auxi")
+  |TaSyn.PAppFo (e1, _)| TaSyn.PAppHo (e1, _) ->
+    (match ta_infer_e env e1 with
+     |MLFun (ty1, ty2) -> ty2
+     |_ -> assert false
+    )
+
+and ta_infer_b env b = match b with
+  |TaSyn.PIf (e1, t2, t3) ->   ta_infer env t2
+  |TaSyn.PMatch (e, case_list) ->
+    (match case_list with
+     |case::_ -> ta_infer_case env case
+     | [] -> assert false)
+
+and ta_infer_case env {TaSyn.constructor = _ ; TaSyn.argNames = x_ty_list; TaSyn.body = t } =
+  ta_infer (add_list_env x_ty_list env) t
+
+and ta_infer_f env f = match f with
+  |TaSyn.PFun ((x, sch), t) ->
+    let x_ty = ty_in_schema sch in
+    let t_ty = ta_infer (add_env x sch env) t in
+    MLFun (x_ty, t_ty)
+                             
+                             
+                             
+  
+    

@@ -10,8 +10,12 @@ type id_expr_map = ((Id.t),(Expr.expr)) Hashtbl.t
 type id_fun_map = ((Id.t), (FuncDecl.func_decl)) Hashtbl.t
 
 type z3_env = sort_map * id_expr_map * id_fun_map
-            
-let ctx = mk_context [] 
+
+(* z3 global context *)
+let ctx = mk_context [("trace","true"); ("well_sorted_check","true");("debug_ref_count","true")]
+let () = (toggle_warning_messages true)
+        
+        
 
 let mk_z3_env () :z3_env=
   (Hashtbl.create 12345),(Hashtbl.create 12345),(Hashtbl.create 12345)
@@ -28,12 +32,14 @@ let rec sort2z3 (ctx:context) (smap:sort_map) (s:Formula.sort) =
   match s with
   |Formula.BoolS -> Boolean.mk_sort ctx
   |Formula.IntS -> Integer.mk_sort ctx
-  |Formula.DataS (i, ss) as s->
-    (try Hashtbl.find smap s  with
+  |Formula.DataS (i, _) ->
+    (* D Ti ignore Ti*)
+    let dummy = Formula.IntS in
+    (try Hashtbl.find smap (Formula.DataS (i, [dummy]))  with
        Not_found ->
        (Printf.printf "let's make z3 sort! %s\n" (Formula.sort2string s));
        let new_z3_sort = Sort.mk_uninterpreted_s ctx (gen_string i) in
-       (Hashtbl.add smap s new_z3_sort);
+       (Hashtbl.add smap (Formula.DataS (i, [dummy])) new_z3_sort);
        new_z3_sort)
   |Formula.SetS s1 ->
     let z_s1 = sort2z3 ctx smap s1 in
@@ -53,7 +59,8 @@ let rec sort2z3 (ctx:context) (smap:sort_map) (s:Formula.sort) =
 (* 副作用：　適宜smap,emap,fmapを更新 *)
 let rec formula2z3 (ctx:context) (smap:sort_map) (emap:id_expr_map) (fmap:id_fun_map) (e:Formula.t) 
         :Expr.expr * Sort.sort =
-  match e with
+  try
+  (match e with
   |Formula.Bool b ->
     (Boolean.mk_val ctx b), (Boolean.mk_sort ctx)
    
@@ -72,19 +79,26 @@ let rec formula2z3 (ctx:context) (smap:sort_map) (emap:id_expr_map) (fmap:id_fun
     
   |Formula.Var (sort, i) ->
     let z_sort = sort2z3 ctx smap sort in
-    (try (Hashtbl.find emap i) ,z_sort with
+
+    (try
+       let z3_i =  (Hashtbl.find emap i) in
+       (* (Printf.printf "\n%s z_sort is %s\n" i (Z3.Sort.to_string (get_sort z3_i))); *)
+       (z3_i,z_sort)
+     with
       Not_found ->
       let new_var = (Expr.mk_const_s ctx i z_sort) in
       (Hashtbl.add emap i new_var);
       new_var, z_sort)
 
   |Formula.Unknown (sita, i) ->
-    let z_sort = sort2z3 ctx smap Formula.BoolS in
-    (try (Hashtbl.find emap i) ,z_sort with
-      Not_found ->
-      let new_var = (Expr.mk_const_s ctx i z_sort) in
-      (Hashtbl.add emap i new_var);
-      new_var, z_sort)    
+    (Printf.printf "p2z3: encounter unknown predicate: %s\n" i);
+    assert false
+    (* let z_sort = sort2z3 ctx smap Formula.BoolS in *)
+    (* (try (Hashtbl.find emap i) ,z_sort with *)
+    (*   Not_found -> *)
+    (*   let new_var = (Expr.mk_const_s ctx i z_sort) in *)
+    (*   (Hashtbl.add emap i new_var); *)
+    (*   new_var, z_sort)     *)
       
   |Formula.Cons (sort, i , args) ->
     let (z_args_e, z_args_s) = List.split (List.map (formula2z3 ctx smap emap fmap) args) in
@@ -236,6 +250,10 @@ let rec formula2z3 (ctx:context) (smap:sort_map) (emap:id_expr_map) (fmap:id_fun
    (assert (z_s1 = (Boolean.mk_sort ctx)));
    (Boolean.mk_not ctx z_e1), z_s1
 
+  )
+  with Z3.Error mess ->
+       (Printf.printf "Error!when try to convert:\n%s\nZ3_Mess:%s\n" (Formula.p2string_with_sort e) mess);
+       assert false
 (* let substitute_z3 ((smap,emap,fmap):z3_env) (sita:) (z3_e:Expr.expr) = *)
 (*   let sita_list = M.bindings sita in *)
 (*   let vars, ps = List.split *)
@@ -244,12 +262,20 @@ let rec formula2z3 (ctx:context) (smap:sort_map) (emap:id_expr_map) (fmap:id_fun
                 
 
 
-let convert ((smap,emap,fmap):z3_env) (e:Formula.t) =
+(* let convert ((smap,emap,fmap):z3_env) (e:Formula.t) = *)
+(*   (Printf.printf "\n\nconvert:%s\n" (Formula.p2string_with_sort e)); *)
+(*   formula2z3 ctx smap emap fmap e *)
+
+  
+let convert (e:Formula.t) =
+  let ((smap,emap,fmap):z3_env) = mk_z3_env () in
+  (* (Printf.printf "\n\nconvert:%s\n" (Formula.p2string_with_sort e)); *)
   formula2z3 ctx smap emap fmap e
   
 exception CANT_SOLVE
         
 let is_valid (e:Expr.expr) =
+  (* (Printf.printf "\n\nis_valid:\n%s" (Z3.Expr.to_string e)); *)
   let solver = mk_solver ctx None in
   let not_e =  (Boolean.mk_not ctx e) in
   (Solver.add solver [not_e]);

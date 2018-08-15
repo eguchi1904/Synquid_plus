@@ -140,7 +140,7 @@ let main file =
   let env,fundecs = Preprocess.f env minfos fundecs in
   let data_info_map = Data_info.mk_data_info env in
   let id_type_list = List.map (TypeInfer.f qualifiers env) goals in
-  let fundecs = fundecs@id_type_list in
+    let fundecs = fundecs@id_type_list in
   (data_info_map, minfos, fundecs, goals)
 
 

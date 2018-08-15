@@ -21,11 +21,11 @@ measure elems :: RList a -> Set a where
   
 
 
-leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
-geq :: x: a -> y: a -> {Bool | _v == (x <= y)}
-neq :: x: a -> y: a -> {Bool | _v == (x != y)}
+leq :: x: a -> y: a -> {Bool | _v <==> (x <= y)}
+geq :: x: a -> y: a -> {Bool | _v <==> (x >= y)}
+neq :: x: a -> y: a -> {Bool | _v  <==> (x != y)}
 not :: x:Bool -> {Bool | _v == (!x)}
-eq :: x: a -> y: a -> {Bool | _v == (x == y)}
+eq :: x: a -> y: a -> {Bool | _v  <==> (x == y)}
 add :: x: Int -> y:Int -> {Int | _v == (x + y)}
 dec :: x: Int -> y:Int -> {Int | _v == (x - y)}
 mul :: x: Int -> y:Int -> {Int | _v == (x * y)}
@@ -83,6 +83,12 @@ test5 =
    Nil -> Nil
  in
  (\x. \y. rev (Cons x (Cons y (Cons (add one x) Nil))) )
- 
+
+test6 =
+ let repeat = \f. \n. \x. if eq n zero then x else f (repeat f (dec n one) x) in
+ let notnot = repeat (\x. if x then false else true) (add one one) in
+ let succsucc = repeat (\x. add x one) (add one one) in
+ if notnot true then succsucc zero else zero
+
 
 

@@ -63,7 +63,7 @@ let rec replace_UF (target:t) (replace:t) (t:t) = (* t1 = UF (i,[arg]) -> t2 *)
 let print_qformula bv pre_list  p =
   let bv_str = String.concat "," (S.elements bv) in
   (Printf.printf "\n\nbv=[%s]\n------------------------------\n" bv_str);
-  (List.iter (fun formula ->Printf.printf "%s\n" (p2string formula)) pre_list);
+  (List.iter (fun formula -> Printf.printf "%s\n" (p2string formula)) pre_list);
   (print_string "------------------------------\n");
   (Printf.printf "%s\n\n" (p2string p))
   

@@ -1,3 +1,5 @@
+open Extensions
+   
 type t =
   |TScalar of basetype * Formula.t
   |TFun of (Id.t * t) * t
@@ -7,8 +9,8 @@ type t =
    |TBool
    |TInt
    |TData of  Id.t * (t list) * ( Formula.pa list)  (* Di T <p> *)
-   |TVar of (Formula.subst) * Id.t                  (* with pending substitution *)
-   |TAny of Id.t                 (* a,b... トップレベルの型パラメタ、具体化しない*)
+   |TVar of (Formula.subst) * Id.t                  (* will unuse *)
+   |TAny of Id.t                
           
 
 type schema =  (Id.t list) * ((Id.t * Formula.pa_shape) list) * t
@@ -21,14 +23,15 @@ let rec free_tvar' = function
   |TBot -> []
 
 and free_tvar_base = function
-  |TVar (_, i) -> [i]
+  |TAny  i -> [i]
+  |TVar _ -> assert false
   |TData (_, ts, ps) ->
     List.concat (List.map free_tvar' ts)
-  |_ -> []
 
+  |TInt|TBool -> []
 
       
-let free_tvar t = Formula.list_uniq (free_tvar' t)
+let free_tvar t =  List.uniq (free_tvar' t)
 
 
 
@@ -93,6 +96,8 @@ and b2string_sort = function
   |TVar (_,x) -> Printf.sprintf "Var(%s)" x
   |TAny a ->Printf.sprintf "%s" a          
 
+
+          
 let rec b2sort  = function
   |TBool -> Some Formula.BoolS
   |TInt-> Some Formula.IntS
@@ -112,9 +117,13 @@ let rec b2sort  = function
       Some (Formula.DataS (i,ts_sort))
   |TVar _ -> None
   |TAny a -> Some (Formula.AnyS a)
+           
 and type2sort = function
   |TScalar (b,p) -> b2sort b
   |_ -> None
+
+let schema2sort ((_,_,ty) :schema) = type2sort ty
+                                   
       
       
 
@@ -186,6 +195,10 @@ let env_empty:env = ([],[])
 let env_add ((l, p):env) ((x,t):Id.t * t) =
   ((x,([],[],t) )::l), p
 
+let env_add_list ((l, p):env) (xts: (Id.t * t) list) =
+  let xschs = List.map (fun (x, t) -> (x, mk_mono_schmea t)) xts in
+  (xschs@l, p)
+
 let env_add_schema ((l,p):env) (x,s) =
   ((x,s)::l, p)
 
@@ -205,7 +218,15 @@ let genTvar s = TScalar (TVar (M.empty,(Id.genid s)), (Formula.Bool true) )
 (* Id.t型に対する、　{a true}を返す *)
 let id2Tvar s =  TScalar (TVar (M.empty,s), (Formula.Bool true) )
 
+let rec mk_sort_env ((x_tys, _):env) = match x_tys with
+  |(x, ty)::left ->
+    (match schema2sort ty with
+     |Some sort -> (x,sort)::(mk_sort_env (left,[]))
+     |None -> mk_sort_env (left,[]))
+  |[] -> []
 
+  
+               
 exception InferErr of string
 exception SubstErr of string
 
@@ -235,6 +256,21 @@ let rec substitute_F (sita:Formula.subst) (t:t) =
 (* 型変数への代入 *)
 let rec substitute_T (sita:subst) (t:t) =
   match t with
+  |TScalar( TAny v, p) when M.mem v sita ->
+    let t' = M.find v sita in
+    (match t' with
+     |TScalar( b , p') ->
+       if p' = Formula.Bool true then
+         TScalar( b, p)
+       else if p = Formula.Bool true then
+         TScalar( b, p')
+       else
+         TScalar( b, (Formula.And(p',p) ) )
+      
+     |TFun _ -> t'              (* ignore p *)
+     |_ -> (Printf.printf "formula:%s\n" (Formula.p2string p));assert false
+    )
+    
   |TScalar( TVar(psubst,v) , p  ) when M.mem v sita ->
     let t' = substitute_F psubst (M.find v sita) in
     (match t' with
@@ -292,7 +328,7 @@ let rec env_substitute_F (sita:Formula.subst) ((ts,ps):env) :env=
   
   
 
-(* 述語変数の置換 [x/y]t *)
+(* 述語変数の置換 [y/x]t x -> yに変換*)
 let rec replace_F x y t =
   match t with
   |TScalar( TData( i, ts, ps), p ) ->
@@ -344,6 +380,7 @@ let instantiate ((ts,ps,t):schema) =
   in
   (substitute_pa sita_pa ( substitute_T sita_t t) )
 
+(*　explicit だった。。 *)
 let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
   let sita_t = List.fold_left2
                  (fun sita i t' ->M.add i t' sita)
@@ -373,6 +410,48 @@ let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
                                    ( substitute_T sita_t t)))  
   
 
+let rec fvar_alpha_convert (env: Formula.t M.t) (gen_id: Id.t ->  Id.t)  = function
+  |TScalar (b, phi) -> TScalar (fvar_alpha_convert_basetype env gen_id b,
+                                Formula.substitution env phi)
+  |TFun ((x, ty1), ty2) ->
+    let x' = gen_id x in
+    let dummyS = Formula.BoolS in
+    let env2 = M.add x (Formula.Var (dummyS, x')) env in
+    TFun ((x, fvar_alpha_convert env gen_id ty1),
+          fvar_alpha_convert env2  gen_id  ty2)
+  |TBot -> TBot
+
+and fvar_alpha_convert_basetype env gen_id  = function
+  |TBool|TInt|TAny _ as b -> b
+  |TData (i, tys, pas) ->
+    TData (i, List.map (fvar_alpha_convert env gen_id) tys,
+           List.map (Formula.substitution_to_pa env) pas)
+  |TVar _ -> assert false
+    
+
+let rec tvar_alpha_convert (env: Formula.t M.t) (gen_id: Id.t ->  Id.t)  = function
+  |TScalar (b, phi) -> TScalar (tvar_alpha_convert_basetype env gen_id b,
+                                phi)
+  |TFun ((x, ty1), ty2) ->
+    let x' = gen_id x in
+    let dummyS = Formula.BoolS in
+    let env2 = M.add x (Formula.Var (dummyS, x')) env in
+    TFun ((x, tvar_alpha_convert env gen_id ty1),
+          tvar_alpha_convert env2  gen_id  ty2)
+  |TBot -> TBot
+
+and tvar_alpha_convert_basetype env gen_id  = function
+  |TBool|TInt|TAny _ as b -> b
+  |TData (i, tys, pas) ->
+    TData (i, List.map (tvar_alpha_convert env gen_id) tys,
+           List.map (Formula.substitution_to_pa env) pas)
+  |TVar _ -> assert false
+    
+  
+  
+
+
+  
 (* fに関係するenvの条件を抜き出す。 *)
 (* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
 (*   match tenv with *)
@@ -404,12 +483,12 @@ let rec env2formula' (tenv:((Id.t*schema) list)) vset =
   |[] -> Formula.Bool true       
        
 
-let env2formula ((tenv,ps):env) (f:Formula.t) =
+let env2formula ((tenv,ps):env) free_v =
   let p = List.fold_right (fun p acc -> Formula.And (p,acc))
                           ps
                           (Formula.Bool true)
   in
-  let tenv_p = env2formula' tenv (S.union (Formula.fv f) (Formula.fv p)) in
+  let tenv_p = env2formula' tenv (S.union free_v (Formula.fv p)) in
   Formula.And (tenv_p, p)
   
   
@@ -471,7 +550,7 @@ let mk_constrain_pa env (args1, p1) (args2, p2) =
   in
   let sita2 =mk_subst args1 args2  in
   let p2' = Formula.substitution sita2 p2 in
-  let env_f = env2formula env (Formula.And (p1 ,p2')) in
+  let env_f = env2formula env (Formula.fv (Formula.And (p1 ,p2'))) in
   (env_f, p1, p2')
 
   
@@ -577,12 +656,12 @@ let rec split (cs:subtype_constrain list) (tsubst:subst) =
 
      |TBool, TBool |TInt, TInt ->
        let cs_res, sub_res = split left tsubst in
-       let env_p = env2formula env (Formula.Implies (p1, p2)) in
+       let env_p = env2formula env (Formula.fv (Formula.Implies (p1, p2))) in
        ((env_p, p1, p2)::cs_res), sub_res
 
      |TAny i1, TAny i2 when i1 = i2 ->
        let cs_res, sub_res = split left tsubst in
-       let env_p = env2formula env (Formula.Implies (p1, p2)) in
+       let env_p = env2formula env (Formula.fv (Formula.Implies (p1, p2))) in
        ((env_p, p1, p2)::cs_res), sub_res
 
 

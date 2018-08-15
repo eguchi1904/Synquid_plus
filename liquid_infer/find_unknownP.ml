@@ -52,7 +52,7 @@ let rec isnt_valid z3_env cs pcandi =
   |(env, e1, e2 )::cs' -> (* env/\e => sita*P *)
     let sita:subst = M.map (fun tlist -> and_list tlist) pcandi in
     let p = substitution sita (Implies ( (And (env,e1)), e2)) in
-    let z3_p,p_s = UseZ3.convert z3_env p in
+    let z3_p,p_s = UseZ3.convert  p in
     if UseZ3.is_valid z3_p then
       isnt_valid z3_env cs' pcandi
     else
@@ -67,15 +67,13 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
     let qs' = List.filter
                 (fun q ->let q' = substitution sita_i q in
                          let p = substitution sita (Implies ((And(env,e), q'))) in
-                         let z3_p,p_s = UseZ3.convert z3_env p in
+                         let z3_p,p_s = UseZ3.convert p in
                          UseZ3.is_valid z3_p)
                 qs
     in
     M.add i qs' pcandi
   |_ -> raise (PredicateNotExist "can't refine")
     
-    
-
                        
 
 let rec iter_weak z3_env pcandi cs =

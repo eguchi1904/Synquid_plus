@@ -1,9 +1,12 @@
+open Extensions
 (* UFLIA *)
 type sort = BoolS | IntS | DataS of Id.t * (sort list) | SetS of sort | AnyS of Id.t
-            |UnknownS of Id.t
+            |UnknownS of Id.t   (* for preprocess *)
 
 (* type unop = Neg | Not *)
-                                                                      
+
+
+              
 (* type binop = *)
 (*     Times | Plus | Minus |          (\* Int -> Int -> Int      *\) *)
 (*     Eq | Neq |                     (\* a -> a -> Bool *\) *)
@@ -12,7 +15,7 @@ type sort = BoolS | IntS | DataS of Id.t * (sort list) | SetS of sort | AnyS of 
 (*     Union | Intersect | Diff |     (\* Set -> Set -> Set *\) *)
 (*     Member | Subset                (\* Int/Set -> Set -> Bool *\) *)
 
-(* formula -- predicate unknownはなくて良いかな <= 嘘 *)
+(* formula -- predicate unknownはなくて良いかも、let C in Tなので *)
 type t =
   |Bool of bool
   |Int of int
@@ -165,19 +168,19 @@ let rec p2string_with_sort = function
   |Minus (t1,t2) ->
     Printf.sprintf "(%s)-(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
   |Eq (t1,t2) ->
-    Printf.sprintf "%s == %s" (p2string_with_sort t1) (p2string_with_sort t2)
+    Printf.sprintf "(%s == %s)" (p2string_with_sort t1) (p2string_with_sort t2)
   |Neq (t1,t2) ->
     Printf.sprintf "(%s)!=(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
   |Lt (t1,t2) ->
-    Printf.sprintf "(%s)<(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+    Printf.sprintf "(%s < %s)" (p2string_with_sort t1) (p2string_with_sort t2)
   |Le (t1,t2) ->
-    Printf.sprintf "(%s)<=(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+    Printf.sprintf "(%s <= %s)" (p2string_with_sort t1) (p2string_with_sort t2)
   |Gt (t1,t2) ->
-    Printf.sprintf "(%s)>(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+    Printf.sprintf "(%s > %s)" (p2string_with_sort t1) (p2string_with_sort t2)
   |Ge (t1,t2) ->
-    Printf.sprintf "(%s)>=(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+    Printf.sprintf "(%s >= %s)" (p2string_with_sort t1) (p2string_with_sort t2)
   |And (t1,t2) ->
-    Printf.sprintf "(%s)&&(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
+    Printf.sprintf "(%s && %s)" (p2string_with_sort t1) (p2string_with_sort t2)
   |Or (t1,t2) ->
     Printf.sprintf "(%s)||(%s)" (p2string_with_sort t1) (p2string_with_sort t2)
   |Implies (t1,t2) ->
@@ -202,7 +205,7 @@ let rec p2string_with_sort = function
 
 
    
-              
+(* 普通の変数の *)
 let rec fv = function               (* 自由変数、 *)
   |Var (_,i) when i = Id.valueVar_id -> S.empty (* _v は自由変数でない *)
   |Var (_,i) -> S.singleton i
@@ -231,13 +234,46 @@ let rec fv_sort' = function               (* 自由変数、sortの情報付き�
    ->(fv_sort' t1)@(fv_sort' t2)
   |Neg t1 |Not t1 ->fv_sort' t1
   |All (args,t1) |Exist (args,t1) ->
-    List.filter (fun (x,_) -> List.mem x (List.map fst args))  (fv_sort' t1) 
+    List.filter (fun (x,_) -> List.mem x (List.map fst args))  (fv_sort' t1)
+   
+let fv_sort e = List.uniq (fv_sort' e)
 
-let rec list_uniq = function
-  |[] -> []
-  |x::xs -> if List.mem x xs then list_uniq xs else x::(list_uniq xs)
+(* _vも自由変数とみなすversion *)
+let rec fv_sort_in_v' = function               (* 自由変数、sortの情報付き。 *)
+  |Var (s,i) -> [(i,s)]
+  |Bool _ | Int _ |Unknown _ -> []
+  |Set (_, ts) |Cons (_,_, ts) |UF (_,_,ts) ->
+    List.fold_left (fun acc t -> acc@(fv_sort_in_v' t)) [] ts
+  |If (t1,t2,t3) ->(fv_sort_in_v' t1)@(fv_sort_in_v' t2)@(fv_sort_in_v' t3)
+  |Times(t1,t2) |Plus(t1,t2) |Minus (t1,t2) |Eq(t1,t2) | Neq(t1,t2)|Lt(t1,t2)
+   |Le(t1,t2)|Gt(t1,t2)|Ge(t1,t2)|And(t1,t2)|Or(t1,t2)|Implies(t1,t2)|Iff(t1,t2)
+   |Union(t1,t2) |Intersect(t1,t2) |Diff(t1,t2) |Member(t1,t2) |Subset(t1,t2)
+   ->(fv_sort_in_v' t1)@(fv_sort_in_v' t2)
+  |Neg t1 |Not t1 ->fv_sort_in_v' t1
+  |All (args,t1) |Exist (args,t1) ->
+    List.filter (fun (x,_) -> List.mem x (List.map fst args))  (fv_sort_in_v' t1)
+  
+              
+let fv_sort_include_v e =  List.uniq (fv_sort_in_v' e)
+    
+   
+(* 普通の変数の *)
+let rec extract_unknown_p = function               (* 自由変数、 *)
+  |Unknown (_, i) -> S.singleton i
+  |Bool _ | Int _ |Var _ -> S.empty
+  |Set (_, ts) |Cons (_,_, ts) |UF (_,_,ts) ->
+    List.fold_left (fun acc t -> S.union acc (extract_unknown_p t)) S.empty ts
+  |If (t1,t2,t3) ->S.union (extract_unknown_p t1) (S.union (extract_unknown_p t2) (extract_unknown_p t3) )
+  |Times(t1,t2) |Plus(t1,t2) |Minus (t1,t2) |Eq(t1,t2) | Neq(t1,t2)|Lt(t1,t2)
+   |Le(t1,t2)|Gt(t1,t2)|Ge(t1,t2)|And(t1,t2)|Or(t1,t2)|Implies(t1,t2)|Iff(t1,t2)
+   |Union(t1,t2) |Intersect(t1,t2) |Diff(t1,t2) |Member(t1,t2) |Subset(t1,t2)
+   ->S.union (extract_unknown_p t1) (extract_unknown_p t2)
+  |Neg t1 |Not t1 ->extract_unknown_p t1
+  |All (args,t1) |Exist (args,t1) ->
+    S.diff (extract_unknown_p t1) (S.of_list (List.map fst args))
+   
 
-let fv_sort e = list_uniq (fv_sort' e)
+
 
 let rec and_list (es:t list) =
   match es with
@@ -297,7 +333,6 @@ let genUnknownPa_shape ((arg_sort,rets):pa_shape) s =
 
 
 let rec substitution (sita:subst) (t:t) =
-(* substitueは、Var i に対して、Any iではなく *)
   match t with
   |Var (s,i) when (* s = BoolS && *) M.mem i sita ->
     (match M.find i sita with
@@ -445,6 +480,10 @@ let pa_replace x y ((args,t):pa) =
     let t' = replace x y t in
     (args, t')
 
+let substitution_to_pa sita ((args,t):pa) :pa=
+  let sita' = M.delete_list sita (List.map fst args) in
+  (args, (substitution sita' t))
+  
 (* sort中のvar,unkonwnに対する代入
   preprocess
   type instantiate 
