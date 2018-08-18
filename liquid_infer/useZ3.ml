@@ -37,7 +37,7 @@ let rec sort2z3 (ctx:context) (smap:sort_map) (s:Formula.sort) =
     let dummy = Formula.IntS in
     (try Hashtbl.find smap (Formula.DataS (i, [dummy]))  with
        Not_found ->
-       (Printf.printf "let's make z3 sort! %s\n" (Formula.sort2string s));
+       (* (Printf.printf "let's make z3 sort! %s\n" (Formula.sort2string s)); *)
        let new_z3_sort = Sort.mk_uninterpreted_s ctx (gen_string i) in
        (Hashtbl.add smap (Formula.DataS (i, [dummy])) new_z3_sort);
        new_z3_sort)
@@ -90,7 +90,7 @@ let rec formula2z3 (ctx:context) (smap:sort_map) (emap:id_expr_map) (fmap:id_fun
       (Hashtbl.add emap i new_var);
       new_var, z_sort)
 
-  |Formula.Unknown (sita, i) ->
+  |Formula.Unknown (sort_sita, sita, i) ->
     (Printf.printf "p2z3: encounter unknown predicate: %s\n" i);
     assert false
     (* let z_sort = sort2z3 ctx smap Formula.BoolS in *)
@@ -278,7 +278,10 @@ let is_valid (e:Expr.expr) =
   (* (Printf.printf "\n\nis_valid:\n%s" (Z3.Expr.to_string e)); *)
   let solver = mk_solver ctx None in
   let not_e =  (Boolean.mk_not ctx e) in
+  (* let st = Sys.time () in *)
   (Solver.add solver [not_e]);
+  (* let ed = Sys.time () in *)
+  (* (Printf.printf "z3:end_solving:%f\n" (ed -. st )); *)
   let ret = Solver.check solver [] in
   if ret = UNSATISFIABLE then
     true
@@ -287,4 +290,15 @@ let is_valid (e:Expr.expr) =
   else
     raise CANT_SOLVE
   
-  
+
+let satisfiable_but_not_valid (e:Expr.expr) =
+    let solver = mk_solver ctx None in
+    (Solver.add solver [e]);
+    let ret = Solver.check solver [] in
+    if ret = UNSATISFIABLE then
+      false
+    else if ret = SATISFIABLE then
+      not (is_valid e)
+  else
+    raise CANT_SOLVE
+    

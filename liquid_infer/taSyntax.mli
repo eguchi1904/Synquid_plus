@@ -29,3 +29,4 @@ val access_annotation_e: ('a -> 'a) ->('a e) -> ('a e)
 val access_annotation_b: ('a -> 'a) ->('a b) -> ('a b)
 val access_annotation_f: ('a -> 'a) ->('a f) -> ('a f)
                
+val fv: 'a t -> S.t

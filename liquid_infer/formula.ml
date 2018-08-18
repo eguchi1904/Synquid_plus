@@ -5,7 +5,7 @@ type sort = BoolS | IntS | DataS of Id.t * (sort list) | SetS of sort | AnyS of 
 
 (* type unop = Neg | Not *)
 
-
+type sort_subst = sort M.t
               
 (* type binop = *)
 (*     Times | Plus | Minus |          (\* Int -> Int -> Int      *\) *)
@@ -21,7 +21,7 @@ type t =
   |Int of int
   |Set of sort * (t list)         (* set literal [1, 2, 3] *)
   |Var of sort * Id.t             (* input variable *)
-  |Unknown of subst * Id.t        (* predicate unknown with pending substitution *)
+  |Unknown of sort_subst * subst * Id.t        (* predicate unknown with pending substitution *)
   |Cons of sort * Id.t * (t list) (* datatype constructor *)
   |UF of sort * Id.t * (t list)   (* uninterpreted function *)
   |All of (Id.t * sort) list * t  (* 使わない *)
@@ -79,7 +79,16 @@ let rec p2string = function
   |Set (_,ts) ->let ts_string = String.concat ", " (List.map p2string ts) in
                 Printf.sprintf "[%s]" ts_string
   |Var (_,id) ->Printf.sprintf "%s " id
-  |Unknown (_,id)->Printf.sprintf "P[%s]" id
+ |Unknown (_, sita, id)->
+    let sita_list = M.bindings sita in
+    let sita_str_list = List.map
+                          (fun (s, p) -> Printf.sprintf "%s->%s" s (p2string p))
+                          sita_list
+    in
+    if sita_list = [] then
+      Printf.sprintf "P[%s]" id
+    else
+      Printf.sprintf "[%s].P[%s]" (String.concat ";" sita_str_list) id              
   |Cons (_,id,ts)|UF (_,id,ts) ->
     let ts_string = String.concat " " (List.map p2string ts) in
     Printf.sprintf "(%s %s)" id ts_string
@@ -151,7 +160,16 @@ let rec p2string_with_sort = function
   |Set (s,ts) ->let ts_string = String.concat ", " (List.map p2string_with_sort ts) in
                 Printf.sprintf "([%s]:%s)" ts_string (sort2string s)
   |Var (s,id) ->Printf.sprintf "(%s:%s) " id (sort2string s)
-  |Unknown (_,id)->Printf.sprintf "P[%s]" id
+  |Unknown (sort_sita, sita, id)->
+    let sita_list = M.bindings sita in
+    let sita_str_list = List.map
+                          (fun (s, p) -> Printf.sprintf "%s->%s" s (p2string_with_sort p))
+                          sita_list
+    in
+    if sita_list = [] then
+      Printf.sprintf "P[%s]" id
+    else
+      Printf.sprintf "[%s].P[%s]" (String.concat ";" sita_str_list) id
   |Cons (s,id,ts)|UF (s,id,ts) ->
     let ts_string = String.concat " " (List.map p2string_with_sort ts) in
     Printf.sprintf "((%s %s):%s)" id ts_string (sort2string s)
@@ -221,6 +239,22 @@ let rec fv = function               (* 自由変数、 *)
   |All (args,t1) |Exist (args,t1) ->
     S.diff (fv t1) (S.of_list (List.map fst args))
 
+
+let rec fv_include_v = function               (* 自由変数、 *)
+  |Var (_,i) -> S.singleton i
+  |Bool _ | Int _ |Unknown _ -> S.empty
+  |Set (_, ts) |Cons (_,_, ts) |UF (_,_,ts) ->
+    List.fold_left (fun acc t -> S.union acc (fv_include_v t)) S.empty ts
+  |If (t1,t2,t3) ->S.union (fv_include_v t1) (S.union (fv_include_v t2) (fv_include_v t3) )
+  |Times(t1,t2) |Plus(t1,t2) |Minus (t1,t2) |Eq(t1,t2) | Neq(t1,t2)|Lt(t1,t2)
+   |Le(t1,t2)|Gt(t1,t2)|Ge(t1,t2)|And(t1,t2)|Or(t1,t2)|Implies(t1,t2)|Iff(t1,t2)
+   |Union(t1,t2) |Intersect(t1,t2) |Diff(t1,t2) |Member(t1,t2) |Subset(t1,t2)
+   ->S.union (fv_include_v t1) (fv_include_v t2)
+  |Neg t1 |Not t1 ->fv_include_v t1
+  |All (args,t1) |Exist (args,t1) ->
+    S.diff (fv_include_v t1) (S.of_list (List.map fst args))
+    
+
 let rec fv_sort' = function               (* 自由変数、sortの情報付き。 *)
   |Var (_,i) when i = Id.valueVar_id -> [] (* _v は自由変数でない *)
   |Var (s,i) -> [(i,s)]
@@ -259,7 +293,7 @@ let fv_sort_include_v e =  List.uniq (fv_sort_in_v' e)
    
 (* 普通の変数の *)
 let rec extract_unknown_p = function               (* 自由変数、 *)
-  |Unknown (_, i) -> S.singleton i
+  |Unknown (_, _, i) -> S.singleton i
   |Bool _ | Int _ |Var _ -> S.empty
   |Set (_, ts) |Cons (_,_, ts) |UF (_,_,ts) ->
     List.fold_left (fun acc t -> S.union acc (extract_unknown_p t)) S.empty ts
@@ -290,18 +324,8 @@ let rec list_and (es:t) =
   |e -> [e]
 
   
-(* え、間違ってるじゃん　7/30 *)
-let subst_compose (sita1:subst) (sita2:subst) = (* sita t = sita1(sita2 t) *)
-  let sita2' = M.mapi
-                 (fun i t ->
-                   match t with
-                   |Var( _,i')|Unknown (_,i') when M.mem i' sita1 ->
-                     M.find i' sita1
-                   |_ -> t)
-                 sita2         
-  in
-  M.union (fun i t1 t2 -> Some t2) sita1 sita2'
-  
+
+
 
 let genFvar s i = Var (s, (Id.genid i))
 
@@ -314,38 +338,217 @@ let id2pa_shape i ((arg_sorts,rets):pa_shape) :pa =
   (args,body)
   
 
-let genUnkownP i = Unknown (M.empty, (Id.genid i))
+let genUnkownP i = Unknown (M.empty, M.empty, (Id.genid i))
                  
 let genUnknownPa ((args,p):pa) s = (args, genUnkownP s) (* for predicate abstraction *)
 
 let genUnknownPa_shape ((arg_sort,rets):pa_shape) s =
-  let args,_ = List.fold_right
-               (fun  sort (args,i) -> ((Id.genid (string_of_int i)),sort)::args,i+1)
+  let args = List.fold_right
+               (fun  sort args -> ((Id.gen_pa_arg ()), sort)::args)
                arg_sort
-               ([],0)
+               []
   in
   (args, genUnkownP s)
+
+
+(* -------------------------------------------------- *)
+(* sort *)
+(* -------------------------------------------------- *)
+let rec var_in_sort = function
+  |AnyS i -> S.singleton i
+  |UnknownS i -> S.singleton i 
+  |DataS (i, sortlist) ->
+    List.fold_left (fun acc sort -> S.union (var_in_sort sort) acc) S.empty sortlist
+  |SetS s -> var_in_sort s
+  |BoolS|IntS -> S.empty
+  
+(* sort中のvar,unkonwnに対する代入
+  preprocess
+  type instantiate 
+ で使用。 *)
+let rec sort_subst sita = function
+  |AnyS i when M.mem i sita -> M.find i sita
+  |UnknownS i when M.mem i sita -> M.find i sita
+  |DataS (i, sortlist) ->DataS(i, List.map (sort_subst sita) sortlist )
+  |SetS s -> SetS (sort_subst sita s)
+  | s -> s
+
+let compose_sort_subst (sita1:sort M.t) (sita2:sort M.t) = (* sita t = sita1(sita2 t) *)
+  let sita2' = M.mapi
+                 (fun i t ->
+                   sort_subst sita1 t)
+                 sita2         
+  in
+  M.union (fun i t1 t2 -> Some t2) sita1 sita2'           
+
+let rec sort_subst_to_shape sita ((args, s):pa_shape) :pa_shape=
+  (List.map (sort_subst sita) args, sort_subst sita s)
+       
+let rec sort_subst2formula (sita:sort_subst) = function
+  |Bool b -> Bool b
+  |Int i -> Int i
+  |Unknown (sort_sita, formula_sita, i) ->
+    let sort_sita' = compose_sort_subst sita sort_sita in
+    let formula_sita' = M.map (sort_subst2formula sita) formula_sita in
+    Unknown (sort_sita', formula_sita', i)
+  |Set (s, ts) ->
+    let ts' = List.map (sort_subst2formula sita) ts in
+    Set (sort_subst sita s, ts')
+  |Var (s,i) ->Var (sort_subst sita s, i)
+  |Cons (s, i, ts) ->
+    let ts' = List.map (sort_subst2formula sita) ts in
+    Cons (sort_subst sita s, i, ts')
+  |UF (s, i, ts) ->
+    let ts' = List.map (sort_subst2formula sita) ts in
+    UF (sort_subst sita s, i, ts')
+                  
+  (* 残りはただの再起 *)
+  |All (is, t') ->All (is, (sort_subst2formula sita t'))
+  |Exist (is, t') ->Exist (is, (sort_subst2formula sita t'))
+  |If (t1, t2, t3) ->If ((sort_subst2formula sita t1),
+                         (sort_subst2formula sita t2),
+                         (sort_subst2formula sita t3))
+  |Times (t1, t2) -> Times ((sort_subst2formula sita t1),
+                            (sort_subst2formula sita t2))
+  |Plus (t1, t2) -> Plus ((sort_subst2formula sita t1),
+                          (sort_subst2formula sita t2))
+  |Minus (t1, t2) -> Minus ((sort_subst2formula sita t1),
+                            (sort_subst2formula sita t2))
+  |Eq (t1, t2) -> Eq ((sort_subst2formula sita t1),
+                      (sort_subst2formula sita t2))
+  |Neq (t1, t2) -> Neq ((sort_subst2formula sita t1),
+                        (sort_subst2formula sita t2))
+  |Lt (t1, t2) -> Lt ((sort_subst2formula sita t1),
+                      (sort_subst2formula sita t2))
+  |Le (t1, t2) -> Le ((sort_subst2formula sita t1),
+                      (sort_subst2formula sita t2))
+  |Gt (t1, t2) -> Gt ((sort_subst2formula sita t1),
+                      (sort_subst2formula sita t2))
+  |Ge (t1, t2) -> Ge ((sort_subst2formula sita t1),
+                      (sort_subst2formula sita t2))
+  |And (t1, t2) -> And ((sort_subst2formula sita t1),
+                        (sort_subst2formula sita t2))
+  |Or (t1, t2) -> Or ((sort_subst2formula sita t1),
+                      (sort_subst2formula sita t2))
+  |Implies (t1, t2) -> Implies ((sort_subst2formula sita t1),
+                                (sort_subst2formula sita t2))
+  |Iff (t1, t2) -> Iff ((sort_subst2formula sita t1),
+                        (sort_subst2formula sita t2))
+  |Union (t1, t2) -> Union ((sort_subst2formula sita t1),
+                            (sort_subst2formula sita t2))
+  |Intersect (t1, t2) -> Intersect ((sort_subst2formula sita t1),
+                                    (sort_subst2formula sita t2))
+  |Diff (t1, t2) -> Diff ((sort_subst2formula sita t1),
+                          (sort_subst2formula sita t2))
+  |Member (t1, t2) -> Member ((sort_subst2formula sita t1),
+                              (sort_subst2formula sita t2))
+  |Subset (t1, t2) -> Subset ((sort_subst2formula sita t1),
+                              (sort_subst2formula sita t2))
+  |Neg t1 -> Neg (sort_subst2formula sita t1)
+  |Not t1 -> Not (sort_subst2formula sita t1)
+           
+
+let rec sort_anyids = function
+  |AnyS i  -> S.singleton i
+  |DataS (i, sortlist) ->
+    let anyids_list = List.map sort_anyids sortlist in
+    List.fold_left (fun acc ids -> S.union acc ids) S.empty anyids_list
+  |SetS s -> sort_anyids s
+  |BoolS|IntS -> S.empty
+  |UnknownS _ -> assert false
+
+(* Any a と Unkown a' で　a != a' *)
+(* ソートs中のAny a を　Unknown a' に変換する *)
+let rec any2unknownsort s =
+  let any_ids = sort_anyids s in
+  let sita = S.fold
+               (fun any_id sita -> M.add any_id (UnknownS (Id.genid any_id)) sita)
+               any_ids
+               M.empty
+  in
+  sort_subst sita s
+
+let rec any2unknownsort_pa (args,rets) =
+  let any_args =
+    List.fold_left
+      (fun acc set -> S.union set acc)
+      S.empty
+      (List.map sort_anyids args)
+  in
+  let any_ids = S.union any_args (sort_anyids rets) in
+  let sita = S.fold
+               (fun any_id sita -> M.add any_id (UnknownS (Id.genid any_id)) sita)
+               any_ids
+               M.empty
+  in
+  let args' = List.map (sort_subst sita) args in
+  let rets' = sort_subst sita rets in
+  (args', rets')
+  
+  
+exception Unify_Err
+let rec unify_sort constrain sita =
+  match constrain with
+
+  |((UnknownS a), sort2):: c  ->
+    let sita' = compose_sort_subst (M.singleton a sort2) sita in
+    let c' = List.map           (* 制約全体に代入[sort2/a]c *)
+               (fun (c1,c2)-> (sort_subst (M.singleton a sort2) c1,
+                               sort_subst (M.singleton a sort2) c2))
+               c
+    in
+    unify_sort c' sita'
+    
+  |(sort2, (UnknownS a)) :: c ->
+    let sita' = compose_sort_subst (M.singleton a sort2) sita in
+    let c' = List.map           (* 制約全体に代入[sort2/a]c *)
+               (fun (c1,c2)-> (sort_subst (M.singleton a sort2) c1,
+                               sort_subst (M.singleton a sort2) c2))
+               c
+    in
+    unify_sort c' sita'
+                                                    
+  |(DataS (i, sorts1), (DataS (i', sorts2))) :: c  when i = i' ->
+    let new_c = (List.map2 (fun a b ->(a,b)) sorts1 sorts2)@c in
+    unify_sort new_c sita
+
+  |((SetS s1),(SetS s2)) :: c ->
+    let new_c = (s1,s2) :: c in
+    unify_sort new_c sita
+
+  |(s1,s2) :: c when s1 = s2 -> unify_sort c sita
+
+  |[] -> sita
+
+  |(s1,s2) :: c ->
+    raise Unify_Err
+
+
+    
       
 (* let genUnknownPreAbst i ((arg_s,s):pa_shape) = *)
 (*   let args = List.map (fun s ->(Id.genid "ar"),s) arg_s in *)
 (*   let unknownP = genUnkownP i in *)
 (*   Abs (args,unknownP) *)
+let rec subst_compose (sita1:subst) (sita2:subst) = (* sita t = sita1(sita2 t) *)
+  M.union (fun i t1 t2 -> Some t2)
+          sita1
+          (M.mapi (fun i t2 -> substitution sita1 t2) sita2)
 
-
-let rec substitution (sita:subst) (t:t) =
+and substitution (sita:subst) (t:t) =
   match t with
   |Var (s,i) when (* s = BoolS && *) M.mem i sita ->
     (match M.find i sita with
      |Var (_,i') -> Var (s,i')  (* 代入先のsortを参照する。 *)
      | p -> p)
 
-  |Unknown (sita1, i) when M.mem i sita ->
+  |Unknown (sort_sita, sita1, i) when M.mem i sita ->
     let p = M.find i sita in
-    substitution sita1 p        (* pending substitution を展開する。 *)
+    (sort_subst2formula sort_sita (substitution sita1 p))        (* pending substitution を展開する。 *)
 
-  |Unknown (sita1, i) ->
+  |Unknown (sort_sita, sita1, i) ->
     let sita' = subst_compose sita sita1 in
-    Unknown (sita', i)          (* pending substitution を合成 *)
+    Unknown (sort_sita, sita', i)          (* pending substitution を合成 *)
 
   (* 残りはただの再起 *)
   |Set (s, ts) ->
@@ -483,76 +686,9 @@ let pa_replace x y ((args,t):pa) =
 let substitution_to_pa sita ((args,t):pa) :pa=
   let sita' = M.delete_list sita (List.map fst args) in
   (args, (substitution sita' t))
-  
-(* sort中のvar,unkonwnに対する代入
-  preprocess
-  type instantiate 
- で使用。 *)
-let rec sort_subst sita = function
-  |AnyS i when M.mem i sita -> M.find i sita
-  |UnknownS i when M.mem i sita -> M.find i sita
-  |DataS (i, sortlist) ->DataS(i, List.map (sort_subst sita) sortlist )
-  |SetS s -> SetS (sort_subst sita s)
-  | s -> s
 
-let rec sort_subst2formula sita = function
-  |Set (s, ts) ->
-    let ts' = List.map (sort_subst2formula sita) ts in
-    Set (sort_subst sita s, ts')
-  |Var (s,i) ->Var (sort_subst sita s, i)
-  |Cons (s, i, ts) ->
-    let ts' = List.map (sort_subst2formula sita) ts in
-    Cons (sort_subst sita s, i, ts')
-  |UF (s, i, ts) ->
-    let ts' = List.map (sort_subst2formula sita) ts in
-    UF (sort_subst sita s, i, ts')
-                  
-  (* 残りはただの再起 *)
-  |All (is, t') ->All (is, (sort_subst2formula sita t'))
-  |Exist (is, t') ->Exist (is, (sort_subst2formula sita t'))
-  |If (t1, t2, t3) ->If ((sort_subst2formula sita t1),
-                         (sort_subst2formula sita t2),
-                         (sort_subst2formula sita t3))
-  |Times (t1, t2) -> Times ((sort_subst2formula sita t1),
-                            (sort_subst2formula sita t2))
-  |Plus (t1, t2) -> Plus ((sort_subst2formula sita t1),
-                          (sort_subst2formula sita t2))
-  |Minus (t1, t2) -> Minus ((sort_subst2formula sita t1),
-                            (sort_subst2formula sita t2))
-  |Eq (t1, t2) -> Eq ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |Neq (t1, t2) -> Neq ((sort_subst2formula sita t1),
-                        (sort_subst2formula sita t2))
-  |Lt (t1, t2) -> Lt ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |Le (t1, t2) -> Le ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |Gt (t1, t2) -> Gt ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |Ge (t1, t2) -> Ge ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |And (t1, t2) -> And ((sort_subst2formula sita t1),
-                        (sort_subst2formula sita t2))
-  |Or (t1, t2) -> Or ((sort_subst2formula sita t1),
-                      (sort_subst2formula sita t2))
-  |Implies (t1, t2) -> Implies ((sort_subst2formula sita t1),
-                                (sort_subst2formula sita t2))
-  |Iff (t1, t2) -> Iff ((sort_subst2formula sita t1),
-                        (sort_subst2formula sita t2))
-  |Union (t1, t2) -> Union ((sort_subst2formula sita t1),
-                            (sort_subst2formula sita t2))
-  |Intersect (t1, t2) -> Intersect ((sort_subst2formula sita t1),
-                                    (sort_subst2formula sita t2))
-  |Diff (t1, t2) -> Diff ((sort_subst2formula sita t1),
-                          (sort_subst2formula sita t2))
-  |Member (t1, t2) -> Member ((sort_subst2formula sita t1),
-                              (sort_subst2formula sita t2))
-  |Subset (t1, t2) -> Subset ((sort_subst2formula sita t1),
-                              (sort_subst2formula sita t2))
-  |Neg t1 -> Neg (sort_subst2formula sita t1)
-  |Not t1 -> Not (sort_subst2formula sita t1)
-  |t ->t 
-  
+
+     
   
 
 let pa2string ((arg,p):pa) =

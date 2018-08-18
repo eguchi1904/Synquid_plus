@@ -7,9 +7,14 @@
 
 module Liq = Type
 module TaSyn = TaSyntax
-
+             
+type qualifier = Formula.t
+               
 type cons = |WF of (Liq.env * Liq.t)           (* well formendness *)
             |Sub of (Liq.env * Liq.t * Liq.t ) (* subtyping *)
+
+                  
+  
 
 val fresh: Data_info.t M.t -> Ml.t -> Liq.t 
                   

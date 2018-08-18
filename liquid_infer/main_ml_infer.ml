@@ -62,18 +62,20 @@ let rec infile_name_to_outfile_name:string -> string =
 (*   close_out outchan *)
 
 
-let output2file input_file  (data_info_map, minfos, fundecs, id_type_list) =
-  let output_file = infile_name_to_outfile_name input_file in
-  let outchan = open_out  output_file in
+let output2file output_file  (data_info_map, minfos, fundecs, id_type_list) =
+  let outchan =
+(match output_file with  |None -> stdout |Some s -> open_out s) in
   let data_info_str = Data_info.data_info_map_2_string data_info_map in
   let minfos_str = PreSyntax.minfo_list_2_string minfos in
   let fundecs_str_list = List.map
                            (fun (fname, schm) ->
+
                              Printf.sprintf "%s::%s" fname (Type.schema2string schm))
                            fundecs
   in
   let id_type_str_list = List.map
                            (fun (x, ty) ->
+                             let ty = Alpha.mk_readable_ty ty in
                              Printf.sprintf "%s::%s\n"
                                             x
                                             (Type.t2string ty))
@@ -97,6 +99,9 @@ let qualifiers =
   [Formula.Neq (x,y);  Formula.Lt (x,y)]
 
 let qualifiers = []
+
+
+
 (* todo:expand qualifier を作成する *)
 let main file = 
   let lexbuf = if file = "" then  Lexing.from_channel stdin
@@ -107,6 +112,18 @@ let main file =
   (* (List.iter print_string (List.map PreSyntax.minfo2string minfos)); *)
   let cons_env,fundecs = Preprocess.f cons_env minfos fundecs in
   let data_info_map = Data_info.mk_data_info cons_env in
+  let cons_env =
+    List.map
+      (fun (id, sch) ->
+        (id, Data_info.fix_sort_in_pred_param_schema data_info_map sch))
+      cons_env
+  in
+  let fundecs =
+    List.map
+      (fun (id, sch) ->
+        (id, Data_info.fix_sort_in_pred_param_schema data_info_map sch))
+      fundecs
+  in
   let init_env = ((cons_env@fundecs),[]) in
   let ml_env = Ml.shape_env init_env in
   let id_mltype_list =
@@ -126,19 +143,24 @@ let main file =
   
 let _ =
   let file = ref "" in
+  let out_file = ref None in
   let mk_tmp_fun = ref Mk_tmp.fold in
   (Arg.parse
-     ["-tmp",
+     [("-tmp",
       (Arg.String
          (fun s ->
            match s with
            |"merge" -> mk_tmp_fun := Mk_tmp.merge
            |_ -> mk_tmp_fun := Mk_tmp.fold)
       ),
-      "tmplates"
+      "tmplates");
+      ("-o",
+       (Arg.String
+          (fun s -> out_file := Some s)),
+        "output file name")
       ]
      (fun s -> file := s)
      "synquid+");
   let result = main !file in
-  output2file !file result
+  output2file !out_file result
 

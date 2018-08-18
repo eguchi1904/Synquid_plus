@@ -17,42 +17,42 @@ let sdummy = Formula.IntS
 (*   |_ -> false *)
 
 
-let rec sort_anyids = function
-  |AnyS i  -> S.singleton i
-  |DataS (i, sortlist) ->
-    let anyids_list = List.map sort_anyids sortlist in
-    List.fold_left (fun acc ids -> S.union acc ids) S.empty anyids_list
-  |SetS s -> sort_anyids s
-  |BoolS|IntS -> S.empty
-  |UnknownS _ -> assert false
+(* let rec sort_anyids = function *)
+(*   |AnyS i  -> S.singleton i *)
+(*   |DataS (i, sortlist) -> *)
+(*     let anyids_list = List.map sort_anyids sortlist in *)
+(*     List.fold_left (fun acc ids -> S.union acc ids) S.empty anyids_list *)
+(*   |SetS s -> sort_anyids s *)
+(*   |BoolS|IntS -> S.empty *)
+(*   |UnknownS _ -> assert false *)
 
 (* Any a と Unkown a' で　a != a' *)
 (* ソートs中のAny a を　Unknown a' に変換する *)
-let rec any2unknownsort s =
-  let any_ids = sort_anyids s in
-  let sita = S.fold
-               (fun any_id sita -> M.add any_id (UnknownS (Id.genid any_id)) sita)
-               any_ids
-               M.empty
-  in
-  sort_subst sita s
+(* let rec any2unknownsort s = *)
+(*   let any_ids = sort_anyids s in *)
+(*   let sita = S.fold *)
+(*                (fun any_id sita -> M.add any_id (UnknownS (Id.genid any_id)) sita) *)
+(*                any_ids *)
+(*                M.empty *)
+(*   in *)
+(*   sort_subst sita s *)
 
-let rec any2unknownsort_pa (args,rets) =
-  let any_args =
-    List.fold_left
-      (fun acc set -> S.union set acc)
-      S.empty
-      (List.map sort_anyids args)
-  in
-  let any_ids = S.union any_args (sort_anyids rets) in
-  let sita = S.fold
-               (fun any_id sita -> M.add any_id (UnknownS (Id.genid any_id)) sita)
-               any_ids
-               M.empty
-  in
-  let args' = List.map (sort_subst sita) args in
-  let rets' = sort_subst sita rets in
-  (args', rets')
+(* let rec any2unknownsort_pa (args,rets) = *)
+(*   let any_args = *)
+(*     List.fold_left *)
+(*       (fun acc set -> S.union set acc) *)
+(*       S.empty *)
+(*       (List.map sort_anyids args) *)
+(*   in *)
+(*   let any_ids = S.union any_args (sort_anyids rets) in *)
+(*   let sita = S.fold *)
+(*                (fun any_id sita -> M.add any_id (UnknownS (Id.genid any_id)) sita) *)
+(*                any_ids *)
+(*                M.empty *)
+(*   in *)
+(*   let args' = List.map (sort_subst sita) args in *)
+(*   let rets' = sort_subst sita rets in *)
+(*   (args', rets') *)
 
 
            
@@ -101,7 +101,7 @@ let minfos2env env minfos :(Id.t * Type.schema) list =
   List.fold_left measure_info2env env minfos
 
 
-(* constructorの型から、述語としてのsortを作る。　＊型は一階 *)
+(* constructorの型から、述語としてのsortを作る。　＊型は一階 これもtype.mlにあるな *)
 let rec base2pashape = function
   |TBool -> BoolS
   |TInt -> IntS
@@ -131,58 +131,58 @@ and type2pashape = function
 
 (* 単一化で、使う。ソート中のunknown な変数を他のソートで代入する。 *)
 (* sort_substがあるのでいらない気がしてきた(追記） *)
-let rec subst_unknown_sort s1 s2 target_sort=
-  match target_sort with
-  |BoolS |IntS -> target_sort
-  |DataS (id, slist) -> DataS (id, (List.map (subst_unknown_sort s1 s2) slist))
-  |SetS s' -> subst_unknown_sort s1 s2 s'
-  |UnknownS id when id = s1 -> s2
-  |s -> s
+(* let rec subst_unknown_sort s1 s2 target_sort= *)
+(*   match target_sort with *)
+(*   |BoolS |IntS -> target_sort *)
+(*   |DataS (id, slist) -> DataS (id, (List.map (subst_unknown_sort s1 s2) slist)) *)
+(*   |SetS s' -> subst_unknown_sort s1 s2 s' *)
+(*   |UnknownS id when id = s1 -> s2 *)
+(*   |s -> s *)
 
-let compose_sort_subst (sita1:sort M.t) (sita2:sort M.t) = (* sita t = sita1(sita2 t) *)
-  let sita2' = M.mapi
-                 (fun i t ->
-                   sort_subst sita1 t)
-                 sita2         
-  in
-  M.union (fun i t1 t2 -> Some t2) sita1 sita2'      
-(* unknown ソートに関する代入を作成する。 *)
-let rec unify_sort constrain sita =
-  match constrain with
+(* let compose_sort_subst (sita1:sort M.t) (sita2:sort M.t) = (\* sita t = sita1(sita2 t) *\) *)
+(*   let sita2' = M.mapi *)
+(*                  (fun i t -> *)
+(*                    sort_subst sita1 t) *)
+(*                  sita2          *)
+(*   in *)
+(*   M.union (fun i t1 t2 -> Some t2) sita1 sita2'       *)
+(* (\* unknown ソートに関する代入を作成する。 *\) *)
+(* let rec unify_sort constrain sita = *)
+(*   match constrain with *)
 
-  |((UnknownS a), sort2):: c  ->
-    let sita' = compose_sort_subst (M.singleton a sort2) sita in
-    let c' = List.map           (* 制約全体に代入[sort2/a]c *)
-               (fun (c1,c2)-> (subst_unknown_sort a sort2 c1,
-                               subst_unknown_sort a sort2 c2))
-               c
-    in
-    unify_sort c' sita'
+(*   |((UnknownS a), sort2):: c  -> *)
+(*     let sita' = compose_sort_subst (M.singleton a sort2) sita in *)
+(*     let c' = List.map           (\* 制約全体に代入[sort2/a]c *\) *)
+(*                (fun (c1,c2)-> (subst_unknown_sort a sort2 c1, *)
+(*                                subst_unknown_sort a sort2 c2)) *)
+(*                c *)
+(*     in *)
+(*     unify_sort c' sita' *)
     
-  |(sort2, (UnknownS a)) :: c ->
-    let sita' = compose_sort_subst (M.singleton a sort2) sita in
-    let c' = List.map           (* 制約全体に代入[sort2/a]c *)
-               (fun (c1,c2)-> (subst_unknown_sort a sort2 c1,
-                               subst_unknown_sort a sort2 c2))
-               c
-    in
-    unify_sort c' sita'
+(*   |(sort2, (UnknownS a)) :: c -> *)
+(*     let sita' = compose_sort_subst (M.singleton a sort2) sita in *)
+(*     let c' = List.map           (\* 制約全体に代入[sort2/a]c *\) *)
+(*                (fun (c1,c2)-> (subst_unknown_sort a sort2 c1, *)
+(*                                subst_unknown_sort a sort2 c2)) *)
+(*                c *)
+(*     in *)
+(*     unify_sort c' sita' *)
                                                     
-  |(DataS (i, sorts1), (DataS (i', sorts2))) :: c  when i = i' ->
-    let new_c = (List.map2 (fun a b ->(a,b)) sorts1 sorts2)@c in
-    unify_sort new_c sita
+(*   |(DataS (i, sorts1), (DataS (i', sorts2))) :: c  when i = i' -> *)
+(*     let new_c = (List.map2 (fun a b ->(a,b)) sorts1 sorts2)@c in *)
+(*     unify_sort new_c sita *)
 
-  |((SetS s1),(SetS s2)) :: c ->
-    let new_c = (s1,s2) :: c in
-    unify_sort new_c sita
+(*   |((SetS s1),(SetS s2)) :: c -> *)
+(*     let new_c = (s1,s2) :: c in *)
+(*     unify_sort new_c sita *)
 
-  |(s1,s2) :: c when s1 = s2 -> unify_sort c sita
+(*   |(s1,s2) :: c when s1 = s2 -> unify_sort c sita *)
 
-  |[] -> sita
+(*   |[] -> sita *)
 
-  |(s1,s2) :: c ->
-    (Printf.printf "%s vs %s" (sort2string s1) (sort2string s2));
-    assert false
+(*   |(s1,s2) :: c -> *)
+(*     (Printf.printf "%s vs %s" (sort2string s1) (sort2string s2)); *)
+(*     assert false *)
 
 
 
@@ -229,7 +229,7 @@ let rec fillsort' senv senv_param senv_var = function
     let es_sorts, constrainlist = List.split sort_constrain in
     let constrain = List.concat constrainlist in
     let (argsort, rets) = any2unknownsort_pa (List.assoc i senv) in
-    (Printf.printf "\n\ninstans measure:%s as %s\n\n" i (pashape2string (argsort, rets)));
+    (* (Printf.printf "\n\ninstans measure:%s as %s\n\n" i (pashape2string (argsort, rets))); *)
     let new_c = List.map2 (fun a b ->(a,b)) es_sorts argsort in
     UF (rets, i, es'), (rets, new_c@constrain)
 
@@ -465,7 +465,8 @@ let rec which_data_cons = function
   |TScalar (TData(i, _,_), _) ->i
   |TFun ((x,t1), t2) -> which_data_cons t2
   |_ -> assert false
-  
+
+(* data型の、predicate paramのshapeを推測 *)
 let rec mk_data_pas (env:(Id.t * schema) list) =
   List.fold_left
     (fun data_pas (i, (ts,ps,t)) ->

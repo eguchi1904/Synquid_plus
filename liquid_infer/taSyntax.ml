@@ -1,3 +1,4 @@
+open Extensions
 (* type(:'a) annotation *)
 type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
           (* let x:schema= e1 in e2 *)
@@ -129,6 +130,48 @@ and syn2string_case f {constructor = cons; argNames = xs; body = t} =
   let xs' = List.map (fun (x, anno) -> Printf.sprintf "%s:%s" x (f anno)) xs in
   Printf.sprintf " %s %s -> %s" cons (String.concat " " xs') (syn2string f t)
 
+
+
+
+
+  
+  
+let rec fv t = match t with
+  |PLet ((x, anno), t1, t2) ->
+    S.remove x (S.union (fv t1) (fv t2))
+  |PE e -> fv_e  e
+  |PI b -> fv_b  b
+  |PF fundec -> fv_f  fundec
+  |PHole -> S.empty
+
+and fv_e  = function
+  |PSymbol (i, xs) -> S.singleton i
+  |PAuxi i -> S.singleton i
+  |PAppFo (e1,e2) -> (S.union (fv_e e1) (fv_e e2))
+  |PAppHo (e1, fterm) -> (S.union (fv_e e1) (fv_f fterm))
+
+and fv_b  = function
+  |PIf (e,t1,t2) ->
+    (S.union (fv_e e) (S.union (fv t1) (fv t2)))
+  |PMatch (e, cases) ->
+    S.union (fv_e e)
+            (List.fold_left
+               (fun acc case -> S.union acc (fv_case case))
+               S.empty
+               cases
+            )
+   
+and fv_f  = function
+  |PFun ((x, anno), t) ->
+    S.remove x (fv t)
+
+and fv_case  {constructor = cons; argNames = xs; body = t} =
+  S.diff (fv t) (S.of_list (List.map fst xs))
+
+
   
 
 
+  
+
+    

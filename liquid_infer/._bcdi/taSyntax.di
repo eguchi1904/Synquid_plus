@@ -1,1 +1,1 @@
-taSyntax.cmi : id.cmo
+taSyntax.cmi : s.cmo id.cmo

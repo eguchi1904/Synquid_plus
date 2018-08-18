@@ -288,7 +288,7 @@ pa:
 | LESS LCURBRAC fexp RCURBRAC GREATER /* <{r _0 _1}> */
  { ([], $3) }
 | LESS ID GREATER /* <r> 略記*/
- { ([($2, sdummy)], Unknown(M.empty, $2) ) }  /*dummy*/
+ { ([($2, sdummy)], Unknown(M.empty, M.empty, $2) ) }  /*dummy*/
 
 
 

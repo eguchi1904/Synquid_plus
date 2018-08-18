@@ -37,6 +37,7 @@ false ::{Bool |!_v}
 
 split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }	
   
+sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}>|(len _v == len l) && (elems _v == elems l)}
 
 sum = \x.
       if leq x zero then
@@ -90,5 +91,7 @@ test6 =
  let succsucc = repeat (\x. add x one) (add one one) in
  if notnot true then succsucc zero else zero
 
-
+test_list :: RList {Int| _v >= 0} <{True}>
+test7 = sort test_list
+      
 

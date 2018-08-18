@@ -67,6 +67,82 @@ let mk_data_info :((Id.t * Type.schema) list -> t  M.t)
 
   )
 
+  
+(* 
+instantiate_pred_param_shape
+Example
+
+input1
+----------------------------------------
+List a <r:: a -> a -> Bool>
+ |~~
+ |~~
+
+input2
+----------------------------------------
+a = {Int| _v > 0}
+
+output
+----------------------------------------
+r:: Int -> Int -> Bool
+
+ *)
+let instantiate_pred_param_shape  {data_name = _;
+                                   type_param = ty_param;
+                                   pred_param = p_param;
+                                   cons_list = _}
+                                  (tys:Type.t list) =
+  
+    let sita_sort_list = List.map2 (fun a ty -> (a, Type.type2sort ty))
+                                   ty_param
+                                   tys
+    in
+    let sita_sort = List.fold_left
+                      (fun acc a_sort ->
+                        match a_sort with
+                        |(a, None) -> acc
+                        |(a, Some sort) -> M.add a sort acc)
+                      M.empty
+                      sita_sort_list
+    in
+    List.map
+      (fun (r, shape) ->  (r, (Formula.sort_subst_to_shape sita_sort shape) ))
+      p_param
+
+let adjust_pa_shape ((args, t):Formula.pa) ((arg_sort, sort):Formula.pa_shape) =
+  let new_args = List.combine (List.map fst args) arg_sort in
+  let sita_sort_list = List.combine (List.map snd args) arg_sort in
+  let sita_sort = List.fold_left
+                    (fun acc (s1,s2) ->
+                      match s1 with
+                      |Formula.AnyS i -> M.add i s2 acc
+                      |_ -> acc)
+                    M.empty
+                    sita_sort_list
+  in
+  let new_t = Formula.sort_subst2formula sita_sort t in
+  (new_args, new_t)
+                                          
+let rec fix_sort_in_pred_param datainfo_map ty = match ty with
+  |TScalar (TData (i, tys, pas), p) ->
+    let datainfo = M.find i datainfo_map in
+    let pa_shape_list = instantiate_pred_param_shape datainfo tys in
+    let pas' =
+      List.map2 adjust_pa_shape pas (List.map snd pa_shape_list)
+    in
+    let tys' = List.map (fix_sort_in_pred_param datainfo_map) tys in
+    TScalar (TData (i, tys', pas'), p)
+  |TScalar (b, p) -> TScalar (b, p)
+  |TFun ((x, ty1), ty2) ->
+    let ty1' = fix_sort_in_pred_param datainfo_map ty1 in
+    let ty2' = fix_sort_in_pred_param datainfo_map ty2 in
+    TFun ((x, ty1'), ty2')
+  |TBot -> TBot
+
+let fix_sort_in_pred_param_schema datainfo_map (alist,pas, ty) =
+  (alist,pas, fix_sort_in_pred_param datainfo_map ty)
+                                             
+  
 
 let param_2_string (ts: Id.t list) (ps:(Id.t * Formula.pa_shape) list) =
   let ts_string = String.concat " " ts in

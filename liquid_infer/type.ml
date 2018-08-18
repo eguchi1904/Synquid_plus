@@ -27,7 +27,6 @@ and free_tvar_base = function
   |TVar _ -> assert false
   |TData (_, ts, ps) ->
     List.concat (List.map free_tvar' ts)
-
   |TInt|TBool -> []
 
       
@@ -42,7 +41,7 @@ let rec t2string = function
       b2string b
     else
       Printf.sprintf "{%s | %s}" (b2string b) (Formula.p2string p)
-  |TFun ((x,t1),t2) -> Printf.sprintf "%s:%s -> %s" x (t2string t1) (t2string t2)
+  |TFun ((x,t1),t2) -> Printf.sprintf "(%s:%s -> %s)" x (t2string t1) (t2string t2)
   |TBot -> "Bot"
 
 and b2string = function
@@ -123,9 +122,15 @@ and type2sort = function
   |_ -> None
 
 let schema2sort ((_,_,ty) :schema) = type2sort ty
-                                   
-      
-      
+
+let rec sort2type sort = TScalar (sort2type_base sort, Formula.Bool true)
+                                       
+and sort2type_base = function
+  |Formula.BoolS -> TBool
+  |Formula.IntS -> TInt
+  |Formula.DataS (i, sort_list) -> TData (i, (List.map sort2type sort_list), [])
+  |Formula.AnyS i -> TAny i
+  |Formula.SetS _|Formula.UnknownS _ -> raise (Invalid_argument "sort2type")
 
       
 
@@ -218,6 +223,8 @@ let genTvar s = TScalar (TVar (M.empty,(Id.genid s)), (Formula.Bool true) )
 (* Id.t型に対する、　{a true}を返す *)
 let id2Tvar s =  TScalar (TVar (M.empty,s), (Formula.Bool true) )
 
+let id2TAny s =  TScalar (TAny s, (Formula.Bool true) )
+
 let rec mk_sort_env ((x_tys, _):env) = match x_tys with
   |(x, ty)::left ->
     (match schema2sort ty with
@@ -272,16 +279,7 @@ let rec substitute_T (sita:subst) (t:t) =
     )
     
   |TScalar( TVar(psubst,v) , p  ) when M.mem v sita ->
-    let t' = substitute_F psubst (M.find v sita) in
-    (match t' with
-     |TScalar( b , p') ->
-       if p' = Formula.Bool true then
-         TScalar( b, p)
-       else if p = Formula.Bool true then
-         TScalar( b, p')
-       else
-         TScalar( b, (Formula.And(p',p) ) )
-     |_ -> raise (SubstErr "type variable isnt scalar"))
+    assert false
   |TScalar( TData( i, ts, ps), p ) ->
     let ts' = List.map (substitute_T sita) ts in
     TScalar( TData( i, ts', ps), p )
@@ -352,7 +350,14 @@ let rec sort_subst2type sita (t:t) =
   match t with
   |TScalar( TData( i, ts, ps), p ) ->
     let ts' = List.map (sort_subst2type sita ) ts in
-    let ps' = List.map (fun (args,t) ->(args,Formula.sort_subst2formula sita t)) ps in
+    let ps' = List.map
+                (fun (args,t) ->
+                  let args' =
+                    List.map (fun (x, sort) -> (x, Formula.sort_subst sita sort)) args
+                  in
+                  (args',Formula.sort_subst2formula sita t))
+                ps
+    in
     let p' = Formula.sort_subst2formula sita p in
     TScalar( TData (i, ts', ps'), p')
     
@@ -367,18 +372,6 @@ let rec sort_subst2type sita (t:t) =
   | _ -> t
 
 
-let instantiate ((ts,ps,t):schema) =
-  let sita_t = List.fold_left
-                 (fun sita i ->M.add i (genTvar "a") sita )
-                 M.empty
-                 ts
-  in
-  let sita_pa = List.fold_left
-                  (fun sita (i,shape) ->M.add i (Formula.genUnknownPa_shape shape "p") sita)
-                  M.empty
-                  ps
-  in
-  (substitute_pa sita_pa ( substitute_T sita_t t) )
 
 (*　explicit だった。。 *)
 let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
@@ -410,48 +403,11 @@ let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
                                    ( substitute_T sita_t t)))  
   
 
-let rec fvar_alpha_convert (env: Formula.t M.t) (gen_id: Id.t ->  Id.t)  = function
-  |TScalar (b, phi) -> TScalar (fvar_alpha_convert_basetype env gen_id b,
-                                Formula.substitution env phi)
-  |TFun ((x, ty1), ty2) ->
-    let x' = gen_id x in
-    let dummyS = Formula.BoolS in
-    let env2 = M.add x (Formula.Var (dummyS, x')) env in
-    TFun ((x, fvar_alpha_convert env gen_id ty1),
-          fvar_alpha_convert env2  gen_id  ty2)
-  |TBot -> TBot
-
-and fvar_alpha_convert_basetype env gen_id  = function
-  |TBool|TInt|TAny _ as b -> b
-  |TData (i, tys, pas) ->
-    TData (i, List.map (fvar_alpha_convert env gen_id) tys,
-           List.map (Formula.substitution_to_pa env) pas)
-  |TVar _ -> assert false
-    
-
-let rec tvar_alpha_convert (env: Formula.t M.t) (gen_id: Id.t ->  Id.t)  = function
-  |TScalar (b, phi) -> TScalar (tvar_alpha_convert_basetype env gen_id b,
-                                phi)
-  |TFun ((x, ty1), ty2) ->
-    let x' = gen_id x in
-    let dummyS = Formula.BoolS in
-    let env2 = M.add x (Formula.Var (dummyS, x')) env in
-    TFun ((x, tvar_alpha_convert env gen_id ty1),
-          tvar_alpha_convert env2  gen_id  ty2)
-  |TBot -> TBot
-
-and tvar_alpha_convert_basetype env gen_id  = function
-  |TBool|TInt|TAny _ as b -> b
-  |TData (i, tys, pas) ->
-    TData (i, List.map (tvar_alpha_convert env gen_id) tys,
-           List.map (Formula.substitution_to_pa env) pas)
-  |TVar _ -> assert false
-    
-  
-  
-
-
-  
+let instantiate ((ts,ps,t):schema) =
+  let ts' = List.map genTvar ts in
+  let ps' = List.map (fun (i, shape) -> Formula.genUnknownPa_shape shape i) ps in
+  instantiate_implicit (ts,ps,t) ts' ps'
+ 
 (* fに関係するenvの条件を抜き出す。 *)
 (* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
 (*   match tenv with *)
@@ -490,6 +446,38 @@ let env2formula ((tenv,ps):env) free_v =
   in
   let tenv_p = env2formula' tenv (S.union free_v (Formula.fv p)) in
   Formula.And (tenv_p, p)
+
+let rec mk_subst_for_const_var ((tenv, ps):env) =
+  match tenv with
+  |(x, ([],[], TScalar (b, Formula.Eq ( Formula.Var (_, v),
+                                        Formula.Int i))))::left
+   |(x, ([],[], TScalar (b, Formula.Eq ( Formula.Int i,
+                                         Formula.Var (_, v) ))))::left
+       when v = Id.valueVar_id
+   ->
+    M.add x (Formula.Int i) (mk_subst_for_const_var (left,ps))
+   
+  |(x, ([],[], TScalar (b, Formula.Eq ( Formula.Var (_, v),
+                                        Formula.Bool tf))))::left
+   |(x, ([],[], TScalar (b, Formula.Eq ( Formula.Bool tf,
+                                         Formula.Var (_, v) ))))::left
+       when v = Id.valueVar_id
+   ->
+    M.add x (Formula.Bool tf) (mk_subst_for_const_var (left,ps))
+
+  |(x, ([],[], TScalar (b,  Formula.Var (_, v))))::left
+       when v = Id.valueVar_id ->
+    M.add x (Formula.Bool true) (mk_subst_for_const_var (left,ps))
+
+  |(x, ([],[], TScalar (b,  (Formula.Not (Formula.Var (_, v))))))::left
+       when v = Id.valueVar_id ->
+    M.add x (Formula.Bool false) (mk_subst_for_const_var (left,ps))
+
+  |_ ::left -> mk_subst_for_const_var (left,ps)
+
+  |[] -> M.empty
+                           
+   
   
   
 (* schemeを未知のVarで instantiate しながら、制約を作る。*)

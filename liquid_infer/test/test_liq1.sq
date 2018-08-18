@@ -1,0 +1,69 @@
+data Pair a b where
+ Pair :: x: a -> y: b -> Pair a b
+  
+measure fst :: Pair a b -> a where
+  Pair x y -> x
+  
+measure snd :: Pair a b -> b where
+  Pair x y -> y
+
+data RList a <r :: a -> a -> Bool> where
+  Nil :: RList a <r>
+  Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+  
+termination measure len :: RList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+  
+
+
+leq :: x: a -> y: a -> {Bool | _v <==> (x <= y)}
+geq :: x: a -> y: a -> {Bool | _v <==> (x >= y)}
+neq :: x: a -> y: a -> {Bool | _v  <==> (x != y)}
+not :: x:Bool -> {Bool | _v == (!x)}
+eq :: x: a -> y: a -> {Bool | _v  <==> (x == y)}
+add :: x: Int -> y:Int -> {Int | _v == (x + y)}
+dec :: x: Int -> y:Int -> {Int | _v == (x - y)}
+mul :: x: Int -> y:Int -> {Int | _v == (x * y)}
+
+zero :: {Int | _v == 0 }
+one :: {Int | _v == 1 }
+true ::{Bool | _v}
+false ::{Bool |!_v}
+
+split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }	
+  
+sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}>|(len _v == len l) && (elems _v == elems l)}
+
+id :: x:a -> {a | _v == x}
+
+test1 = id zero
+test_list :: RList {Int| _v >= 0} <{True}>
+
+test7 = sort test_list
+-- test6 =
+--  let repeat = \f. \n. \x. if eq n zero then x else f (repeat f (dec n one) x) in
+--  let notnot = repeat (\x. if x then false else true) (add one one) in
+--  let succsucc = repeat (\x. add x one) (add one one) in
+--  if notnot true then succsucc zero else zero
+
+
+-- tst =
+-- let repeat = \f. \n. \x. if eq n zero then x else f (repeat f (dec n one) x) in	
+-- let h = \x. if x then false else true in
+-- let notnot = repeat h (add one one) in
+-- repeat h (add one one)
+
+-- test =
+-- let repeat = \f. \n. \x. if eq n zero then x else f (repeat f (dec n one) x) in
+-- let h = \x. if x then false else true in
+-- let notnot = repeat h (add one one) in
+-- let h2 = \x. add x one in
+-- repeat h2 (add one one) 
+
+
+

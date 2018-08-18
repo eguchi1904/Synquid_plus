@@ -1,3 +1,4 @@
+open Extensions
 module Liq = Type
 module TaSyn = TaSyntax
 
@@ -21,7 +22,19 @@ let cons2string = function
                    (Liq.env2string env) (Liq.t2string ty1)  (Liq.t2string ty2)
 
 let scons2string = function
-  |SWF _-> "SWF \n"
+  |SWF (senv, e1)->
+    let senv_str =
+      String.concat
+        "\n"
+        (List.map
+           (fun (x, sort) ->
+             Printf.sprintf "%s: %s" x (Formula.sort2string sort))
+           senv)
+    in
+    Printf.sprintf "SWF\n--------------------------------------------------\n%s\n--------------------------------------------------\n%s\n"
+                   senv_str
+                   (Formula.p2string_with_sort e1)
+    
   |SSub (env, e1, e2) ->
     let env_list = Formula.list_and env in
     Printf.sprintf "--------------------------------------------------\n%s\n--------------------------------------------------\n%s <:%s\n"
@@ -87,12 +100,12 @@ let pa_subtyping_to_simple_cons env (args1, p1) (args2, p2) =
 let rec split_cons (c:cons) = match c with
   |WF (env, Liq.TFun ((x, ty1), ty2) ) ->
     let env2 = Liq.env_add env (x, ty1) in
-    (split_cons (WF (env, ty1)))@(split_cons (WF (env2, ty2)))
+   (split_cons (WF (env, ty1)))@(split_cons (WF (env2, ty2)))
   |WF (env, Liq.TScalar (base_ty, phi)) ->
     (match Liq.b2sort base_ty with
     |None -> raise (LiqErr "dont know what sort is this")
     |Some b_sort ->
-      let senv = (Id.valueVar_id, b_sort)::(Liq.mk_sort_env env) in
+      let senv =(Liq.mk_sort_env env) in
       (match base_ty with
        |Liq.TData (data, tys, pas) ->
          let tys_simple_cons = 
@@ -101,9 +114,9 @@ let rec split_cons (c:cons) = match c with
          let pas_simple_cons =
            List.map (fun (args_sort, p) -> SWF(args_sort@senv, p)) pas
          in
-         (SWF (senv, phi))::(tys_simple_cons@pas_simple_cons)
+         (SWF ((Id.valueVar_id, b_sort)::senv, phi))::(tys_simple_cons@pas_simple_cons)
        |Liq.TBool|Liq.TInt|Liq.TAny _ ->
-         [SWF (senv, phi)]
+         [SWF ((Id.valueVar_id, b_sort)::senv, phi)]
        |Liq.TVar _ -> assert false (* becase TVar will be unused *)))
   |WF (env, TBot) -> []
 
@@ -145,6 +158,93 @@ let rec split_cons (c:cons) = match c with
        
        
 
+(* -------------------------------------------------- *)
+(* qualifiers  *)
+(* -------------------------------------------------- *)
+
+type qualifier = Formula.t
+
+
+(* 
+return well formed assignments to variable in qualifier
+
+input
+----------------------------------------
+senv: environment of well formedness 
+q_var_sort: (variable in qualifier * its sort) list
+
+output
+----------------------------------------
+list of all possible (sita_var, sita_sort)
+
+ *)
+let rec gen_sita_q_list (senv: (Id.t * Formula.sort) list)
+                    (q_var_sort: ((Id.t * Formula.sort) list))
+                    sita_var     (* var subst for q_var_sort *)
+                    sita_sort   (* sort subst for q_var_sort *)
+  =
+  match q_var_sort with
+  |(v1, v1_sort)::left ->
+    let v1_sort = Formula.sort_subst sita_sort v1_sort in
+    (* convert  AnyS i in v1_sort which isnt include in sita_sort
+       AnyS i-> UnknownS i 
+     *)
+    let fv_v1_sort = Formula.var_in_sort v1_sort in
+    let yet_instantiate_var =
+      S.elements
+        (S.filter (fun v -> M.mem v sita_sort) fv_v1_sort)
+    in
+    let any2unknown_list = List.map (fun i -> (i, Formula.UnknownS i)) yet_instantiate_var in
+    let any2unknown = M.add_list any2unknown_list M.empty in
+    let v1_sort = Formula.sort_subst any2unknown v1_sort in
+    let sita_var_sita_sort_candi =
+      List.map
+        (fun (x, x_sort) ->
+          try
+            let sita_sort_x_v1 = Formula.unify_sort [(v1_sort, x_sort)] M.empty in
+            let sita_var' = M.add v1 (Formula.Var (x_sort, x)) sita_var  in
+            let sita_sort' = M.union (fun _ -> assert false) sita_sort_x_v1 sita_sort in
+            gen_sita_q_list senv left sita_var' sita_sort'
+          with
+            Formula.Unify_Err -> [])
+        senv
+    in
+    List.concat sita_var_sita_sort_candi
+
+  |[] ->
+    let fv_in_sita_var =
+      M.fold
+        (fun x x_p acc -> S.union (Formula.fv_include_v x_p) acc)
+        sita_var
+        S.empty
+    in
+    if (S.mem Id.valueVar_id fv_in_sita_var)||
+         (S.exists (Id.is_pa_arg) fv_in_sita_var)
+    then
+      [(sita_var, sita_sort)]
+    else 
+      []
+          
+          
+ 
+                          
+    
+
+let gen_p_candidate const_var_sita (senv: (Id.t * Formula.sort) list) (q:qualifier) =
+  let q_var_sort =  Formula.fv_sort_include_v q in
+  let sita_var_sita_sort_list = gen_sita_q_list senv q_var_sort M.empty M.empty in
+  let p_candi = 
+  List.map
+    (fun (sita_var, sita_sort) ->
+      Formula.substitution sita_var
+                           (Formula.sort_subst2formula sita_sort q))
+    sita_var_sita_sort_list
+  in
+  let p_candi = List.map (Formula.substitution const_var_sita) p_candi in
+  let p_candi = List.uniq_f Formula_eq.f p_candi in
+  p_candi
+  
+    
     
 (* -------------------------------------------------- *)
 (* auxiliary function  *)
@@ -175,13 +275,14 @@ let rec fresh (data_info_map: Data_info.t M.t) t =
   |Ml.MLBool -> Liq.TScalar (Liq.TBool, Formula.genUnkownP "k")
   |Ml.MLInt -> Liq.TScalar (Liq.TInt, Formula.genUnkownP "k")
   |Ml.MLData (i, tys) when M.mem i data_info_map ->
+    let tys_tmp = List.map (fresh data_info_map) tys in
     let data_info = M.find i data_info_map in
-    let pa_shape_list = data_info.pred_param in
+    let pa_shape_list = Data_info.instantiate_pred_param_shape data_info tys_tmp in
     let unknown_pa_list = List.map
                             (fun (s, shape) -> Formula.genUnknownPa_shape shape s)
                             pa_shape_list
     in
-    let tys_tmp = List.map (fresh data_info_map) tys in
+
     Liq.TScalar (Liq.TData (i, tys_tmp, unknown_pa_list), Formula.genUnkownP "k")
   |Ml.MLData (i, _) -> assert false
   |Ml.MLVar x -> Liq.TScalar ((Liq.TAny x), Formula.genUnkownP "k") (* TAny i　型 *)
@@ -195,18 +296,32 @@ let rec fresh (data_info_map: Data_info.t M.t) t =
 let rec cons_gen dinfos env t =
   let mk_tmp env t =  fresh  dinfos (Ml.ta_infer (Ml.shape_env env) t)  in
   match t with
-  |TaSyn.PLet ((x, (alist, ty)), t1, t2) ->
+  |TaSyn.PLet ((x, (alist, ty)), t1, t2) when S.mem x (TaSyn.fv t1)->
     let new_tmp = mk_tmp env t in
     let new_tmp_x =  fresh dinfos ty in
     let new_tmp_x_sch = (alist, [], new_tmp_x) in
+    (* disable let polimorphism for predicate *)
     let env2 =  (Liq.env_add_schema env (x, new_tmp_x_sch)) in
     let (tmp1, c1) = cons_gen dinfos env2 t1 in
     (* let env2 =  (Liq.env_add env (x, tmp1)) in *)
     let (tmp2, c2) = cons_gen dinfos env2 t2 in
     let new_c =  [WF (env, new_tmp);
+                  WF (env, new_tmp_x);
                   Sub (env, tmp1, new_tmp_x);
                   Sub (env2, tmp2, new_tmp)]@c1@c2 in
     (new_tmp, new_c)
+ |TaSyn.PLet ((x, (alist, ty)), t1, t2) ->
+   let new_tmp = mk_tmp env t in
+   let (tmp1, c1) = cons_gen dinfos env t1 in
+    (* disable let polimorphism for predicate *)
+   let tmp1_sch = (alist, [], tmp1) in
+    let env2 =  (Liq.env_add_schema env (x, tmp1_sch )) in
+
+    (* let env2 =  (Liq.env_add env (x, tmp1)) in *)
+    let (tmp2, c2) = cons_gen dinfos env2 t2 in
+    let new_c =  [WF (env, new_tmp);
+                  Sub (env2, tmp2, new_tmp)]@c1@c2 in
+    (new_tmp, new_c)    
   |TaSyn.PE e ->
     let new_tmp = mk_tmp env t in
     let ((Liq.TLet (c_env, tmp_e)), c) = cons_gen_e dinfos env e in
@@ -262,13 +377,29 @@ and cons_gen_e dinfos env e =
        
      |(alist, plist, ty_x) ->
        let unknown_pa_list = List.map (fun (p, shape) -> Formula.genUnknownPa_shape shape p) plist in
+       (* plistのwell formedness が必要 *)
+       let c_pa_list = List.map
+                         (fun (args_sort, p) ->
+
+                           let arg_env= List.map (fun (x, sort) -> (x, Liq.sort2type sort))
+                                                  args_sort
+                           in
+                           let env' = Liq.env_add_list env arg_env in
+                           WF (env', Liq.TScalar (Liq.TBool, p))
+                         )
+                         unknown_pa_list
+       in
+                           
        let tys_tmp = List.map (fresh dinfos) tys in
-       
-       let sita_ty = M.add_list2 alist tys_tmp M.empty in
-       let sita_pa = M.add_list2 (List.map fst plist) unknown_pa_list M.empty in
-       let ty_x' = Liq.substitute_pa sita_pa (Liq.substitute_T sita_ty ty_x) in (* [p'\p][ty\a]ty *)
        let c_tys = List.map (fun ty -> WF (env, ty)) tys_tmp in
-       (Liq.TLet (Liq.env_empty, ty_x'), c_tys))
+
+       let ty_x' = Liq.instantiate_implicit (alist, plist, ty_x) tys_tmp unknown_pa_list in
+       (* let sita_ty = M.add_list2 alist tys_tmp M.empty in *)
+
+       (* let sita_pa = M.add_list2 (List.map fst plist) unknown_pa_list M.empty in *)
+       (* let ty_x' = Liq.substitute_pa sita_pa (Liq.substitute_T sita_ty ty_x) in (\* [p'\p][ty\a]ty *\) *)
+
+       (Liq.TLet (Liq.env_empty, ty_x'), c_pa_list@c_tys))
   |TaSyn.PAuxi _ -> assert false
 
 and cons_gen_b dinfos env b =
@@ -376,40 +507,103 @@ let subst_inv (sita:Formula.subst) :Formula.subst =
   M.empty
 
   
-let rec init_p_assignment' (cs:simple_cons list) (pcandi:p_assign) =
+(* let rec init_p_assignment' (cs:simple_cons list) (pcandi:p_assign) = *)
+(*   match cs with *)
+(*   |SSub (env, Formula.Unknown _, Formula.Unknown _) :: cs' ->  *)
+(*   (\* raise (Invalid_argument "predicateunknown vs predicateunknown") *\) *)
+(*     init_p_assignment' cs' pcandi *)
+(*   |SSub (env, Formula.Unknown (sita, i), e) :: cs' *)
+(*        when S.is_empty (Formula.extract_unknown_p e)-> *)
+(*     let sita_inv = subst_inv sita in *)
+(*     let e' = Formula.substitution sita_inv e in *)
+(*     init_p_assignment' cs' (add_p_assign pcandi i e') *)
+(*   |SSub (env, e, Formula.Unknown (sita, i)) :: cs' *)
+(*           when S.is_empty (Formula.extract_unknown_p e) -> *)
+(*     let sita_inv = subst_inv sita in *)
+(*     let e' = Formula.substitution sita_inv e in     *)
+(*     init_p_assignment' cs' (add_p_assign pcandi i e') *)
+(*   |_ :: cs' -> init_p_assignment' cs' pcandi *)
+(*   |[] -> *)
+(*     pcandi *)
+
+let rec extend_qualifiers cs qs =
   match cs with
   |SSub (env, Formula.Unknown _, Formula.Unknown _) :: cs' -> (* とりあえず *)
   (* raise (Invalid_argument "predicateunknown vs predicateunknown") *)
-    init_p_assignment' cs' pcandi
-  |SSub (env, Formula.Unknown (sita, i), e) :: cs'
+    extend_qualifiers cs' qs
+  |SSub (env, Formula.Unknown (sort_sita, sita, i), e) :: cs'
        when S.is_empty (Formula.extract_unknown_p e)->
-    let sita_inv = subst_inv sita in
-    let e' = Formula.substitution sita_inv e in
-    init_p_assignment' cs' (add_p_assign pcandi i e')
-  |SSub (env, e, Formula.Unknown (sita, i)) :: cs'
+    (* let sita_inv = subst_inv sita in *)
+    (* let e' = Formula.substitution sita_inv e in *)
+    extend_qualifiers cs' (e::qs)
+  |SSub (env, e, Formula.Unknown (sort_sita, sita, i)) :: cs'
           when S.is_empty (Formula.extract_unknown_p e) ->
-    let sita_inv = subst_inv sita in
-    let e' = Formula.substitution sita_inv e in    
-    init_p_assignment' cs' (add_p_assign pcandi i e')
-  |_ :: cs' -> init_p_assignment' cs' pcandi
-  |[] ->
-    pcandi
-   
+    (* let sita_inv = subst_inv sita in *)
+    (* let e' = Formula.substitution sita_inv e in *)
+    extend_qualifiers cs' (e::qs)
+  |_ :: cs' -> extend_qualifiers cs' qs
+  |[] -> qs
 
-let rec init_p_assignment (qualifiers:Formula.t list) (cs:simple_cons list) =
+let rec refine_qualifiers const_var_sita qs =
+  let qs = List.map (Formula.substitution const_var_sita) qs in
+  List.uniq_f Formula_eq.f qs
+
+
+let rec k_positive_pos cs = match cs with
+  |SSub (env, e1, e2) :: cs' ->
+    let e2_list = Formula.list_and e2 in
+    let k_set_e2 = List.fold_left
+                  (fun acc e -> match e with
+                                 |Formula.Unknown (_,_, i) -> S.add i acc
+                                 |_ -> acc)
+                   S.empty
+                   e2_list
+    in
+    let premise_list = (Formula.list_and env)@(Formula.list_and e1) in
+    let k_set_premise = List.fold_left
+                          (fun acc e -> match e with
+                                        |Formula.Unknown (_,_, i) -> S.add i acc
+                                        |_ -> acc)
+                          S.empty
+                          premise_list
+    in
+    let positive_k = S.diff k_set_e2 k_set_premise in
+    S.union positive_k (k_positive_pos cs')
+  | SWF _ ::cs' -> k_positive_pos cs'
+  |[] -> S.empty
+    
+                                   
+
+let rec init_p_assignment const_var_sita (qualifiers:Formula.t list) (cs:simple_cons list) =
+  let qualifiers = refine_qualifiers const_var_sita (extend_qualifiers cs qualifiers) in
+  (* kset: set of all predicate unknowns in cs *)
   let k_set = List.fold_left
                 (fun acc scons -> S.union acc (unknown_p_in_simple_cons scons))
                 S.empty
                  cs
   in
-  let p_assign = S.fold
-                   (fun k acc -> M.add k qualifiers acc)
-                   k_set
+  let p_assign = List.fold_left
+                   (fun acc c ->
+                     match c with
+                     |SWF (senv, Formula.Unknown (sort_sita, sita, k)) ->
+                       let p_list = List.concat (List.map (gen_p_candidate const_var_sita senv) qualifiers) in
+                       M.add k p_list acc
+                     |_ -> acc)
                    M.empty
+                   cs
   in
-  init_p_assignment' cs p_assign
+  (assert (S.for_all (fun k -> M.mem k p_assign) k_set));
+  let p_assign = M.map (List.uniq_f Formula_eq.f) p_assign in
+  let p_assign = M.map
+                   (fun p_list -> List.filter (fun p -> UseZ3.satisfiable_but_not_valid (fst (UseZ3.convert p))) p_list)
+               p_assign
+  in
+  let k_negative_set = S.diff k_set (k_positive_pos cs) in
+  S.fold
+    (fun  k_negative acc -> M.add k_negative [] acc)
+    k_negative_set
+    p_assign
 
-  
 (* -------------------------------------------------- *)
 (* constraints solving *)
 (* -------------------------------------------------- *)
@@ -433,9 +627,9 @@ let rec isnt_valid z3_env cs p_candi =
  is not valid,
    filater qs -> qs'.
  *)
-let filter_qualifiers sita_pcandi env e sita_i qs =
+let filter_qualifiers sita_pcandi env e (sort_sita_i, sita_i, qs) =
    List.filter
-     (fun q ->let q' = Formula.substitution sita_i q in
+     (fun q ->let q' = (Formula.sort_subst2formula sort_sita_i (Formula.substitution sita_i q) ) in
               let p = Formula.substitution
                         sita_pcandi
                         (Formula.Implies ((Formula.And(env,e), q')))
@@ -452,19 +646,19 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
     let new_k_predicate =
       List.map
         (function
-         |Formula.Unknown (sita_i, i) ->
+         |Formula.Unknown (sort_sita_i, sita_i, i) ->
            let qs = M.find i pcandi in
-           let qs' = filter_qualifiers sita_pcandi env e sita_i qs in
+           let qs' = filter_qualifiers sita_pcandi env e (sort_sita_i, sita_i, qs) in
            (i, qs')
          | _ ->  raise (SolvingErr "can't refine"))
         k_list
     in
     M.add_list new_k_predicate pcandi
     
-  |SWF (senv, Formula.Unknown (sita_i, i)) ->
+  |SWF (senv, Formula.Unknown (sort_sita_i, sita_i, i)) ->
     let qs = M.find i pcandi in
     let qs' = List.filter
-                (fun q -> let q' = Formula.substitution sita_i q in
+                (fun q -> let q' = (Formula.sort_subst2formula sort_sita_i (Formula.substitution sita_i q)) in
                           is_valid_simple_cons z3_env (SWF (senv, q')))
                 qs
     in
@@ -472,12 +666,17 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
   |_ -> raise (SolvingErr "can't refine")
     
         
-       
-
-let rec solve z3_env (cs:simple_cons list) (p_candi:p_assign) =
+let rec solve' z3_env (cs:simple_cons list) (p_candi:p_assign) =
   match isnt_valid z3_env cs p_candi with
   |None -> p_candi
-  |Some scons -> solve z3_env cs (refine z3_env p_candi scons)
+  |Some scons -> solve' z3_env cs (refine z3_env p_candi scons)
+
+let rec solve z3_env (cs:simple_cons list) (p_candi:p_assign) =
+  let wf_cs,sub_cs = List.partition (function |SWF _ -> true|SSub _ -> false) cs in
+  (* first solve well formedness constraint and then subtyping constraints *)
+  let p_candi' = solve' z3_env wf_cs p_candi in
+  let p_candi'' = solve' z3_env sub_cs p_candi' in
+  p_candi''
 
 
 (* -------------------------------------------------- *)
@@ -502,12 +701,20 @@ let rec scons_list_to_string scs = match scs with
   
     
 let liqInfer z3_env dinfos qualifiers env ta_t =
-  (print_string (TaSyn.syn2string Ml.string_of_sch ta_t));
+  (* (print_string (TaSyn.syn2string Ml.string_of_sch ta_t)); *)
   let (tmp, cs) = cons_gen dinfos env ta_t in
-  (print_string (cons_list_to_string cs));
+  (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
+  (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs) in
   (* (print_string (scons_list_to_string simple_cs)); *)
-  let p_candi = init_p_assignment qualifiers simple_cs in
+  let const_var_sita = Liq.mk_subst_for_const_var env in
+  
+  let st = Sys.time () in
+  let p_candi = init_p_assignment const_var_sita qualifiers simple_cs in
+  let ed = Sys.time () in
+  (Printf.printf "end_init_p_candi:%f\n" (ed -. st ));
+  
+  let p_candi_debug = M.bindings p_candi in
   let p_assign = solve z3_env simple_cs p_candi in
   let sita = M.map (fun tlist -> Formula.and_list tlist) p_assign in
   Liq.substitute_F sita tmp
