@@ -19,6 +19,6 @@ time $SCRIPT_DIR$OUR_METHOD $input_file$SQ_EXTENSION "-tmp" $tmp > /dev/null # o
 echo "----------------------------------------------------------------------\n"
 
 cd $SYNQUID_DIR
-time stack exec -- synquid $input_file$INTERMEDIATE_SUFFIX  -f=AllArguments # synquid part
+time stack exec -- synquid $input_file$INTERMEDIATE_SUFFIX  -f=AllArguments -a=3 -m=2 -e # synquid part
 
 

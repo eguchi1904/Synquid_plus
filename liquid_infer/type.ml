@@ -154,8 +154,8 @@ let rec env2string ((xts,ps):env) =
   let rec xts2string = function
     (* |(x,(_,_,t1))::( y, (_,_,t2) )::xts' -> *)
     (*   Printf.sprintf "%s:%s; %s:%s\n%s" x (t2string t1) y (t2string t2) (xts2string xts') *)
-    |(x,(_,_,t))::xts' ->
-      Printf.sprintf "%s :: %s\n%s" x (t2string t) (xts2string xts')
+    |(x,sch)::xts' ->
+      Printf.sprintf "%s :: %s\n%s" x (schema2string sch) (xts2string xts')
     |[] ->""
   in
   let rec ps2string = function

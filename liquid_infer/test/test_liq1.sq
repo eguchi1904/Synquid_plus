@@ -39,12 +39,29 @@ split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |(((
   
 sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}>|(len _v == len l) && (elems _v == elems l)}
 
-id :: x:a -> {a | _v == x}
+-- idの型は以下で十分。
+id :: x:a -> a
 
-test1 = id zero
+
+
+--test1 = id (id zero)
 test_list :: RList {Int| _v >= 0} <{True}>
 
-test7 = sort test_list
+testId = id zero
+
+--test7 = sort test_list
+-- test5 =
+--  let snoc = \x. \l. match l with
+--    Cons y ys -> Cons y (snoc x ys)
+--    Nil -> Cons x Nil
+--  in
+--  let rev = \l. match l with
+--    Cons y ys -> snoc y (rev ys)
+--    Nil -> Nil
+--  in
+--  (\x. \y. rev (Cons x (Cons y (Cons (add one x) Nil))) )
+
+ 
 -- test6 =
 --  let repeat = \f. \n. \x. if eq n zero then x else f (repeat f (dec n one) x) in
 --  let notnot = repeat (\x. if x then false else true) (add one one) in

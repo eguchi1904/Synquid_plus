@@ -343,8 +343,9 @@ let genUnkownP i = Unknown (M.empty, M.empty, (Id.genid i))
 let genUnknownPa ((args,p):pa) s = (args, genUnkownP s) (* for predicate abstraction *)
 
 let genUnknownPa_shape ((arg_sort,rets):pa_shape) s =
+  (Id.init_pa_arg_counter ());
   let args = List.fold_right
-               (fun  sort args -> ((Id.gen_pa_arg ()), sort)::args)
+               (fun  sort args -> args@[((Id.gen_pa_arg ()), sort)])
                arg_sort
                []
   in
@@ -362,7 +363,7 @@ let rec var_in_sort = function
   |SetS s -> var_in_sort s
   |BoolS|IntS -> S.empty
   
-(* sort中のvar,unkonwnに対する代入
+(* sort中のanyS,unkonwnSに対する代入
   preprocess
   type instantiate 
  で使用。 *)
