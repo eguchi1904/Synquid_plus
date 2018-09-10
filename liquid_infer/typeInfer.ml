@@ -422,7 +422,11 @@ and cons_gen_case dinfos env new_tmp e_tmp  {TaSyn.constructor= con;
 and cons_gen_f dinfos env (TaSyn.PFun ((x, ty_x), t)) =
   let mk_tmp env f =  fresh  dinfos (Ml.ta_infer_f (Ml.shape_env env) f)  in
   match mk_tmp env (TaSyn.PFun ((x, ty_x), t)) with
-  |Liq.TFun ((_, tmp_in), tmp_out) as new_tmp-> (* tmp_outはまだ引数に依存していない *)
+  |Liq.TFun ((new_x, tmp_in), tmp_out) as new_tmp-> (* tmp_outはまだ引数に依存していない *)
+    (* この,new_xの情報が消えるので非常にまずい
+       下の1行は応急手当て、
+     *)
+    let new_tmp = Liq.TFun ((x, tmp_in), tmp_out) in
     let env' =  (Liq.env_add env (x, tmp_in)) in
     let (tmp_t, c_t) = cons_gen dinfos env' t in
     (new_tmp,

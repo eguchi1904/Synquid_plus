@@ -94,11 +94,15 @@ let output2file output_file  (data_info_map, minfos, fundecs, id_type_list) =
 let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x)))
 
 let qualifiers =
-  let x = Formula.genUnkownP "x" in
-  let y = Formula.genUnkownP "y" in
-  [Formula.Neq (x,y);  Formula.Lt (x,y)]
+  let open Formula in
+  let valVar = Var (IntS, Id.valueVar_id) in
+  let x_id =  Id.genid "x" in
+  let x = Var (IntS, x_id) in
+  let qLe = Qualifier.mk_qualifier [x_id]  (Formula.Le (x, valVar)) in
+  let qGe = Qualifier.mk_qualifier [x_id]  (Formula.Ge (x, valVar)) in
+    [qLe; qLe]
 
-let qualifiers = []
+
 
 
 

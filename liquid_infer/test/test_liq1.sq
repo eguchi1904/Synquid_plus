@@ -22,7 +22,7 @@ measure elems :: RList a -> Set a where
 
 
 leq :: x: a -> y: a -> {Bool | _v <==> (x <= y)}
-geq :: x: a -> y: a -> {Bool | _v <==> (x >= y)}
+geq :: x: Int -> y:Int  -> {Bool | _v <==> (x >= y)}
 neq :: x: a -> y: a -> {Bool | _v  <==> (x != y)}
 not :: x:Bool -> {Bool | _v == (!x)}
 eq :: x: a -> y: a -> {Bool | _v  <==> (x == y)}
@@ -47,7 +47,17 @@ id :: x:a -> a
 --test1 = id (id zero)
 test_list :: RList {Int| _v >= 0} <{True}>
 
-testId = id zero
+max = \a. \b.
+   if geq a b then a else b
+
+myadd = \x. add x one
+   
+sum = \x.
+      if leq x zero then
+        zero
+     else
+      add x (sum (dec x one))
+
 
 --test7 = sort test_list
 -- test5 =

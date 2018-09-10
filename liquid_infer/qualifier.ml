@@ -6,6 +6,9 @@ type t = (Id.t list) * Formula.t
 
 let formula_to_qualifier (e:Formula.t) = ([], e)
 
+let mk_qualifier bvs e = (bvs, e)
+                       
+
 let substitution (subst:Formula.subst) ((bvs, e):t) = (bvs, Formula.substitution subst e)
 
 
