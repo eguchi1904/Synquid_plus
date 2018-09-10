@@ -17,8 +17,8 @@ SOURCES = extensions.ml m.ml list_map.ml s.ml id.ml syntax.ml formula.ml formula
 deformation.ml useZ3.ml find_unknownP.ml \
 type.ml alpha.mli alpha.ml preSyntax.ml data_info.mli data_info.ml  mk_tmp.ml parser.mly lexer.mll preprocess.ml\
 taSyntax.mli taSyntax.ml ml.mli ml.ml qualifier.mli qualifier.ml typeInfer.mli typeInfer.ml \
- main_ml_infer.ml 
-RESULT = liquid_infer
+step2.ml qe.ml step3.ml  main.ml 
+RESULT = main
 
 
 

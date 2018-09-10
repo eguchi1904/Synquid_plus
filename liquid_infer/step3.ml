@@ -2,14 +2,14 @@ open Type
 open Formula
 
 let mk_all argv env p =
-  let env_f = env2formula env p in
+  let env_f = env2formula env (Formula.fv p) in
   let bv = fv_sort' (And (env_f, p)) in
   let bv = List.filter (fun (x,s) -> not (S.mem x argv)) bv in
   let env_f_list = list_and env_f in
   QAll (bv, env_f_list, p)
 
 let mk_exist argv env p = 
-  let env_f = env2formula env p in
+  let env_f = env2formula env  (Formula.fv p) in
   let bv = fv_sort' (And (env_f, p)) in
   let bv = List.filter (fun (x,s) -> not (S.mem x argv)) bv in
   let env_f_list = list_and env_f in
@@ -19,7 +19,7 @@ let necess_pa argv env ((arg,p):pa) =
   let pa' = genUnknownPa (arg,p) "P" in
   let argv' = S.union argv (S.of_list (List.map fst arg) ) in (* argも全称化対象外 *)
   match pa' with
-  |arg,Unknown(_,p_i) ->
+  |arg,Unknown(_,_,p_i) ->
     (pa',[p_i, (mk_all argv' env p)])
   |_ -> assert false
     
@@ -27,7 +27,7 @@ let suff_pa argv env ((arg,p):pa) =
   let pa' = genUnknownPa (arg,p) "P" in
   let argv' = S.union argv (S.of_list (List.map fst arg) ) in (* argも全称化対象外 *)  
   match pa' with
-  |arg,Unknown(_,p_i) ->
+  |arg,Unknown( _,_,p_i) ->
     (pa',[p_i, (mk_exist argv' env p)])
   |_ -> assert false
 
@@ -42,12 +42,12 @@ let rec necess_type (argv:S.t) env t =
     let p_map2 = List.concat p_map2s in
     let p_i = Id.genid "P" in
     let p_map = (p_i, mk_all argv env p)::(p_map2 @ p_map1) in
-    TScalar( TData (i, ts', pas'), Unknown (M.empty, p_i)), p_map
+    TScalar( TData (i, ts', pas'), Unknown (M.empty, M.empty, p_i)), p_map
 
   |TScalar( b, p) ->
     let p_i = Id.genid "P" in
     let p_map = [(p_i, mk_all argv env p)] in
-    TScalar(b, Unknown (M.empty, p_i)), p_map
+    TScalar(b, Unknown (M.empty, M.empty, p_i)), p_map
     
   |TFun ((x,t1), t2) ->
     let t1',p_map1 = suff_type argv env t1 in
@@ -65,12 +65,12 @@ and suff_type argv env t =
     let p_map2 = List.concat p_map2s in
     let p_i = Id.genid "P" in
     let p_map = (p_i, mk_exist argv env p)::(p_map2 @ p_map1) in
-    TScalar( TData (i, ts', pas'), Unknown (M.empty, p_i)), p_map
+    TScalar( TData (i, ts', pas'), Unknown (M.empty, M.empty, p_i)), p_map
     
   |TScalar( b, p) ->
     let p_i = Id.genid "P" in
     let p_map = [(p_i, mk_exist argv env p)] in
-    TScalar(b, Unknown (M.empty, p_i)), p_map
+    TScalar(b, Unknown (M.empty, M.empty, p_i)), p_map
     
   |TFun ((x,t1), t2) ->
     let t1',p_map1 = necess_type argv env t1 in

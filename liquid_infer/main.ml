@@ -124,24 +124,70 @@ let output2file input_file  (data_info_map, minfos, fundecs, goals) =
   (* 以下で、入力ファイルを書き込み *)
   close_out outchan
 
+let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x)))
 let qualifiers =
-  let x = Formula.genUnkownP "x" in
-  let y = Formula.genUnkownP "y" in
-  [Formula.Neq (x,y);  Formula.Lt (x,y)]
-  
+  let open Formula in
+  let valVar = Var (IntS, Id.valueVar_id) in
+  let x_id =  Id.genid "x" in
+  let x = Var (IntS, x_id) in
+  let qLe = Qualifier.mk_qualifier [x_id]  (Formula.Le (x, valVar)) in
+  let qGe = Qualifier.mk_qualifier [x_id]  (Formula.Ge (x, valVar)) in
+    [qLe; qLe]
 
-let main file = 
+
+let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
+               Id.t -> Type.schema -> Syntax.t ) = 
   let lexbuf = if file = "" then  Lexing.from_channel stdin
                else let inchan = open_in (file) in
                     Lexing.from_channel inchan
   in
-  let  (env, minfos, fundecs, goals)  = Parser.toplevel Lexer.main lexbuf in
+  let  (cons_env, minfos, fundecs, defs)  = Parser.toplevel Lexer.main lexbuf in
   (* (List.iter print_string (List.map PreSyntax.minfo2string minfos)); *)
-  let env,fundecs = Preprocess.f env minfos fundecs in
-  let data_info_map = Data_info.mk_data_info env in
-  let id_type_list = List.map (TypeInfer.f qualifiers env) goals in
-    let fundecs = fundecs@id_type_list in
-  (data_info_map, minfos, fundecs, goals)
+  let cons_env,fundecs = Preprocess.f cons_env minfos fundecs in
+  let data_info_map = Data_info.mk_data_info cons_env in
+  (* 応急手当て、predicateパラメタのsortの整合性合わせ*)
+  let cons_env =
+    List.map
+      (fun (id, sch) ->
+        (id, Data_info.fix_sort_in_pred_param_schema data_info_map sch))
+      cons_env
+  in
+  let fundecs =
+    List.map
+      (fun (id, sch) ->
+        (id, Data_info.fix_sort_in_pred_param_schema data_info_map sch))
+      fundecs
+  in
+
+
+  let syn_goals, infer_goals = List.partition
+                                 (fun (id, _) -> List.mem_assoc id fundecs)
+                                 defs
+  in
+  (* synthesith *)
+  let mk_tmp = gen_mk_tmp data_info_map minfos in
+  let syn_goals = Mk_tmp.f mk_tmp fundecs syn_goals in (* 各ゴールにtemplateを設定 *)
+  let f_tmp_g_list:(Id.t * Syntax.t * ((Id.t * Type.schema) list)) list
+    = List.map (g' cons_env fundecs) syn_goals
+  in
+  let new_fundecs = List.fold_left
+                   (fun acc (id, t, auxi_defs) ->
+                     acc@auxi_defs)
+                   fundecs
+                   f_tmp_g_list
+  in
+  (* liquid type infer *)
+  let init_env = ((cons_env@fundecs),[]) in
+  let id_type_list =
+    List.map
+      (fun (x, t) ->
+        let z3_env =  UseZ3.mk_z3_env () in
+        (x, TypeInfer.f z3_env data_info_map qualifiers init_env (rec_def x t)  ))
+      infer_goals
+  in
+  let id_sch_list = List.map (fun (id, ty) -> (id, (([],[],ty):Type.schema))) id_type_list in
+  let new_fundecs = new_fundecs@id_sch_list in
+  (data_info_map, minfos, new_fundecs, defs)
 
 
   
@@ -160,6 +206,6 @@ let _ =
       ]
      (fun s -> file := s)
      "synquid+");
-  let result = main !file in
+  let result = main !file !mk_tmp_fun in
   output2file !file result
 
