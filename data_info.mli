@@ -22,6 +22,11 @@ type t_pair = {
   snd : PreSyntax.measureInfo;
 }
 val mk_data_info : (Id.t * Type.schema) list -> t M.t
+
+val instantiate_pred_param_shape : t -> Type.t list -> (Id.t * Formula.pa_shape) list
+
+val fix_sort_in_pred_param_schema: t M.t -> Type.schema -> Type.schema
+  
 val param_2_string : Id.t list -> (Id.t * Formula.pa_shape) list -> string
 val data_info_2_string : t -> string
 val data_info_map_2_string : t M.t -> string

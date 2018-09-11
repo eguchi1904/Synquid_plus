@@ -1,3 +1,4 @@
+
 (* customized version of Map *)
 
 module M =
@@ -11,3 +12,8 @@ include M
 
 let add_list xys env = List.fold_left (fun env (x, y) -> add x y env) env xys
 let add_list2 xs ys env = List.fold_left2 (fun env x y -> add x y env) env xs ys
+let delete_list map xs =
+    M.filter (fun key _ -> not (List.mem key xs)) map
+
+
+  

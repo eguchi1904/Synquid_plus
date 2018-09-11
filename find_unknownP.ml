@@ -31,11 +31,11 @@ let rec guess_candidate' cs (pcandi:(t list) M.t) =
   |(env, Unknown _, Unknown _) :: cs' -> (* とりあえず *)
   (* raise (Invalid_argument "predicateunknown vs predicateunknown") *)
     guess_candidate' cs' pcandi
-  |(env, Unknown (sita, i), e) :: cs' ->
+  |(env, Unknown (_, sita, i), e) :: cs' ->
     let sita_inv = subst_inv sita in
     let e' = substitution sita_inv e in
     guess_candidate' cs' (add_pcandi pcandi i e')
-  |(env, e, Unknown (sita, i)) :: cs'->
+  |(env, e, Unknown (_,sita, i)) :: cs'->
     let sita_inv = subst_inv sita in
     let e' = substitution sita_inv e in    
     guess_candidate' cs' (add_pcandi pcandi i e')
@@ -52,7 +52,7 @@ let rec isnt_valid z3_env cs pcandi =
   |(env, e1, e2 )::cs' -> (* env/\e => sita*P *)
     let sita:subst = M.map (fun tlist -> and_list tlist) pcandi in
     let p = substitution sita (Implies ( (And (env,e1)), e2)) in
-    let z3_p,p_s = UseZ3.convert z3_env p in
+    let z3_p,p_s = UseZ3.convert  p in
     if UseZ3.is_valid z3_p then
       isnt_valid z3_env cs' pcandi
     else
@@ -61,21 +61,19 @@ let rec isnt_valid z3_env cs pcandi =
 
 let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *)
   match c with
-  |(env, e, Unknown (sita_i, i)) ->
+  |(env, e, Unknown (_,sita_i, i)) ->
     let sita = M.map (fun tlist -> and_list tlist) pcandi in
     let qs = M.find i pcandi in
     let qs' = List.filter
                 (fun q ->let q' = substitution sita_i q in
                          let p = substitution sita (Implies ((And(env,e), q'))) in
-                         let z3_p,p_s = UseZ3.convert z3_env p in
+                         let z3_p,p_s = UseZ3.convert p in
                          UseZ3.is_valid z3_p)
                 qs
     in
     M.add i qs' pcandi
   |_ -> raise (PredicateNotExist "can't refine")
     
-    
-
                        
 
 let rec iter_weak z3_env pcandi cs =
