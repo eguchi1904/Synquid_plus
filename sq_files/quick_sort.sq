@@ -23,12 +23,13 @@ partition :: p: a -> xs: RList a <{True}> -> {Pair (RList {a | _v <= p} <{True}>
 
 quickSort :: xs: RList a <{True}> -> {RList a <{_0 <= _1}> | len _v == len xs && elems _v == elems xs }
 
+	     
 
 quickSort = \l.
  match l with
   Nil -> ??
   Cons x xs -> match partition x xs with
                  Pair l1 l2 -> g_1 x (quickSort l1) (quickSort l2)
-	     
+
 
 	

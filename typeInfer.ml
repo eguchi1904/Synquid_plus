@@ -118,7 +118,7 @@ let rec split_cons (c:cons) = match c with
            List.concat (List.map (fun ty -> split_cons (WF (env, ty))) tys)
          in
          let pas_simple_cons =
-           List.map (fun (args_sort, p) -> SWF((Id.valueVar_id, b_sort)::args_sort@senv, p)) pas
+           List.map (fun (args_sort, p) -> SWF(args_sort@senv, p)) pas
          in
          (SWF ((Id.valueVar_id, b_sort)::senv, phi))::(tys_simple_cons@pas_simple_cons)
        |Liq.TBool|Liq.TInt|Liq.TAny _ ->
@@ -382,6 +382,7 @@ and cons_gen_b dinfos env b =
          Sub (env_true, tmp2, new_tmp);
          Sub (env_false, tmp3, new_tmp)]@c1@c2@c3)
      | _ -> assert false
+
     )
   |TaSyn.PMatch (e1, case_list) ->
     let new_tmp = mk_tmp env b in
@@ -600,17 +601,26 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
   |SSub (env, e, ks) ->
     let k_list = Formula.list_and ks in
     let sita_pcandi = M.map (fun tlist -> Formula.and_list tlist) pcandi in
-    let new_k_predicate =
-      List.map
-        (function
-         |Formula.Unknown (sort_sita_i, sita_i, i) ->
-           let qs = M.find i pcandi in
-           let qs' = filter_qualifiers sita_pcandi env e (sort_sita_i, sita_i, qs) in
-           (i, qs')
-         | _ ->  raise (SolvingErr "can't refine"))
-        k_list
-    in
-    M.add_list new_k_predicate pcandi
+    List.fold_left
+      (fun acc e2 ->
+        match e2 with
+        |Formula.Unknown (sort_sita_i, sita_i, i) ->
+          let qs = M.find i pcandi in
+          let qs' = filter_qualifiers sita_pcandi env e (sort_sita_i, sita_i, qs) in
+          M.add i qs' acc
+        | e2 ->
+           let phi = Formula.substitution sita_pcandi
+                                          (Formula.Implies ((Formula.And (env, e), e2)))
+           in
+           let z3_phi, phi_s = UseZ3.convert phi in
+           if UseZ3.is_valid z3_phi then
+             acc
+           else
+             raise (SolvingErr "can't refine"))
+      pcandi
+      k_list
+
+
     
   |SWF (senv, Formula.Unknown (sort_sita_i, sita_i, i)) ->
     let qs = M.find i pcandi in
@@ -682,4 +692,33 @@ let f  z3_env dinfos qualifiers env t =
   liqInfer z3_env dinfos qualifiers env ta_t
   
   
-   
+(* -------------------------------------------------- *)
+(* inference of E-term *)
+(* -------------------------------------------------- *)
+  
+let liqInferEterm z3_env dinfos qualifiers env ta_e =
+  (* (print_string (TaSyn.syn2string Ml.string_of_sch ta_t)); *)
+  let (contextual_tmp, cs) = cons_gen_e dinfos env ta_e in
+  (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
+  (* (print_string (cons_list_to_string cs)); *)
+  let simple_cs = List.concat (List.map split_cons cs) in
+  (* (print_string (scons_list_to_string simple_cs)); *)
+  let const_var_sita = Liq.mk_subst_for_const_var env in
+  let p_candi = init_p_assignment const_var_sita qualifiers simple_cs in
+  
+  let p_candi_debug = M.bindings p_candi in
+  let p_assign = solve z3_env simple_cs p_candi in
+  let sita = M.map (fun tlist -> Formula.and_list tlist) p_assign in
+  match contextual_tmp with
+  |Liq.TLet (c_env, ty) ->
+    Liq.TLet ((Liq.env_substitute_F sita c_env), Liq.substitute_F sita ty)
+
+
+
+  
+let fEterm  z3_env dinfos qualifiers env e =
+  match Ml.infer (Ml.shape_env env) (Syntax.PE e) with
+  |(TaSyn.PE ta_e), ml_ty ->
+    liqInferEterm z3_env dinfos qualifiers env ta_e
+  | _ -> assert false
+

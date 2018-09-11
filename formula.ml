@@ -332,7 +332,12 @@ let genFvar s i = Var (s, (Id.genid i))
 (* input: r::a->a->Bool
    output:  \x.\y.r x y *)
 let id2pa_shape i ((arg_sorts,rets):pa_shape) :pa =
-  let args = List.mapi (fun n s -> (Id.genid (string_of_int n) , s)) arg_sorts in
+  (Id.init_pa_arg_counter ());
+  let args = List.fold_right
+               (fun  sort args -> args@[((Id.gen_pa_arg ()), sort)])
+               arg_sorts
+               []
+  in
   let uf_args = List.map (fun (x,s) ->Var(s,x)) args in
   let body = UF (rets, i, uf_args) in
   (args,body)

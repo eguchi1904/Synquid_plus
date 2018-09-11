@@ -265,9 +265,9 @@ let extract_list: t M.t -> PreSyntax.measureInfo list -> (t_list* t M.t * PreSyn
 let is_pair_cons data_name (_, _, t) =
   match t with
   (* 第１引数が再帰ならfalse *)
-  |TFun ((_,TScalar ( TVar(_,a), _)),
-         TFun ( (_,TScalar ( TVar(_,b), _)),
-               TScalar( TData(id,[TScalar ( TVar(_,c), _); TScalar ( TVar(_,d), _)],_), _)
+  |TFun ((_,TScalar ( TAny a, _)),
+         TFun ( (_,TScalar ( TAny b, _)),
+               TScalar( TData(id,[TScalar ( TAny c, _); TScalar ( TAny d, _)],_), _)
         ))
        when id = data_name && a = c && b = d ->
     true
@@ -299,7 +299,7 @@ let extract_pair: t M.t -> PreSyntax.measureInfo list -> (t_pair* t M.t * PreSyn
         None
     in
     match pair_cons with
-    |None -> raise (Data_List "there are no data type list")
+    |None -> raise (Data_List "there are no data type pair")
     |Some (data, pair_cons)->
       let fst_info =List.find PreSyntax.is_fst minfos in
       let snd_info = List.find PreSyntax.is_snd minfos in

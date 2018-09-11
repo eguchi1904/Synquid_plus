@@ -4,10 +4,11 @@ open Syntax
 （環境、テンプレート、合成する関数のスキーマ）=>
 　 補助関数のスキーマlist
  *)
-let g :(Type.env -> Syntax.t -> Type.schema -> (Id.t * Type.schema) list)  =
-  (fun env tmp (ts,ps,t) ->
+let g :(Data_info.t M.t -> Qualifier.t list ->
+        Type.env -> Syntax.t -> Type.schema -> (Id.t * Type.schema) list)  =
+  (fun  data_infos qualifiers env tmp (ts,ps,t) ->
     let z3_env = UseZ3.mk_z3_env () in
-    let g_list = Step2.f env tmp (ts,ps,t) z3_env in
+    let g_list = Step2.f z3_env data_infos qualifiers env tmp (ts,ps,t) in
     let g_ans_list =  List.map
                         (fun (g_name,g_env,g_t) ->
                           let closed_g_t =  Step3.f g_name g_env g_t in
@@ -48,7 +49,7 @@ let mk_data_cons_list :((Id.t * Type.schema) list ->  ((Id.t * Type.schema) list
  *)
 
   
-  let g' cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t * ((Id.t * Type.schema) list))
+let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t * ((Id.t * Type.schema) list))
   = (* cons_envにはコンストラクタの情報 *)
   (print_string (Syntax.syn2string tmp));
   (Printf.printf "cons_env\n%s" (Type.env2string (cons_env,[])));
@@ -59,7 +60,7 @@ let mk_data_cons_list :((Id.t * Type.schema) list ->  ((Id.t * Type.schema) list
                   "%s :: %s\n"
                   f_name
                   (Type.schema2string t));
-  f_name, tmp, (g env tmp t)
+  f_name, tmp, (g  data_infos qualifiers env tmp t)
   
 
 (* synquidに渡せる形式のファイルを出力する 
@@ -106,9 +107,9 @@ let rec infile_name_to_outfile_name:string -> string =
 (*   close_out outchan *)
 
 
-let output2file input_file  (data_info_map, minfos, fundecs, goals) =
-  let output_file = infile_name_to_outfile_name input_file in
-  let outchan = open_out  output_file in
+let output2file output_file  (data_info_map, minfos, fundecs, defs) =
+  let outchan =
+    (match output_file with  |None -> stdout |Some s -> open_out s) in
   let data_info_str = Data_info.data_info_map_2_string data_info_map in
   let minfos_str = PreSyntax.minfo_list_2_string minfos in
   let fundecs_str_list = List.map
@@ -117,10 +118,17 @@ let output2file input_file  (data_info_map, minfos, fundecs, goals) =
                            fundecs
   in
   let fundecs_str = String.concat "\n\n" fundecs_str_list in
-  (Printf.fprintf outchan "%s \n\n%s \n\n%s \n\n \n"
+  let defs_str_list = List.map
+                        (fun (id, prog) ->
+                          Printf.sprintf "%s = %s" id (Syntax.syn2string prog))
+                        defs
+  in
+  let defs_str =String.concat "\n\n" defs_str_list in
+  (Printf.fprintf outchan "%s \n\n%s \n\n%s \n\n%s \n"
                   data_info_str
                   minfos_str
-                  fundecs_str);
+                  fundecs_str
+                  defs_str);
   (* 以下で、入力ファイルを書き込み *)
   close_out outchan
 
@@ -168,13 +176,15 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   let mk_tmp = gen_mk_tmp data_info_map minfos in
   let syn_goals = Mk_tmp.f mk_tmp fundecs syn_goals in (* 各ゴールにtemplateを設定 *)
   let f_tmp_g_list:(Id.t * Syntax.t * ((Id.t * Type.schema) list)) list
-    = List.map (g' cons_env fundecs) syn_goals
+    = List.map (g' data_info_map qualifiers cons_env fundecs) syn_goals
   in
-  let new_fundecs = List.fold_left
-                   (fun acc (id, t, auxi_defs) ->
-                     acc@auxi_defs)
-                   fundecs
-                   f_tmp_g_list
+  let new_fundecs, new_syn_goals =
+    List.fold_left
+      (fun (acc_fundecs, acc_syn_goals) (id, t, auxi_defs) ->
+        let auxi_goals = List.map (fun (auxi_i, _) -> (auxi_i, Syntax.PHole)) auxi_defs in
+        (auxi_defs@acc_fundecs,  auxi_goals@acc_syn_goals))
+      (fundecs, syn_goals)
+      f_tmp_g_list
   in
   (* liquid type infer *)
   let init_env = ((cons_env@fundecs),[]) in
@@ -182,30 +192,37 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
     List.map
       (fun (x, t) ->
         let z3_env =  UseZ3.mk_z3_env () in
-        (x, TypeInfer.f z3_env data_info_map qualifiers init_env (rec_def x t)  ))
+        (x, TypeInfer.f z3_env data_info_map qualifiers init_env  t  ))
       infer_goals
   in
   let id_sch_list = List.map (fun (id, ty) -> (id, (([],[],ty):Type.schema))) id_type_list in
   let new_fundecs = new_fundecs@id_sch_list in
-  (data_info_map, minfos, new_fundecs, defs)
+  let new_defs = infer_goals@new_syn_goals in
+  (data_info_map, minfos, new_fundecs, new_defs)
 
 
   
 let _ =
   let file = ref "" in
+  let out_file = ref None in
   let mk_tmp_fun = ref Mk_tmp.fold in
   (Arg.parse
-     ["-tmp",
+     [("-tmp",
       (Arg.String
          (fun s ->
            match s with
            |"merge" -> mk_tmp_fun := Mk_tmp.merge
            |_ -> mk_tmp_fun := Mk_tmp.fold)
       ),
-      "tmplates"
-      ]
+      "tmplates");
+      ("-o",
+       (Arg.String
+          (fun s -> out_file := Some s)),
+        "output file name")
+      
+     ]
      (fun s -> file := s)
      "synquid+");
   let result = main !file !mk_tmp_fun in
-  output2file !file result
+  output2file !out_file result
 

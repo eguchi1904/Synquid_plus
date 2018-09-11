@@ -18,7 +18,7 @@ let rec pop_lst = function
  
 %}
 
-
+%token LET
 %token DATA
 %token WHERE
 %token MEASURE
@@ -113,7 +113,8 @@ toplevel:
 | m3 toplevel
  { match ($2) with
    (env, minfos, fundecs, l) -> (env, minfos, fundecs, $1::l)
-   }  
+   }
+
 | EOF
     { ([],[],[],[])}
 
@@ -134,6 +135,7 @@ m1: /*ユーザー定義型*/
 { List.map (fun (id,t) -> (id,($3,$4,t) ) ) $7
 
   }
+
 
 t_paras:
 | ID t_paras { $1 :: $2 }
@@ -183,24 +185,28 @@ cargs:
 
 
 m3:/* query */
-| ID EQUAL prg nl
-{ match $3 with
-  |PF f -> ($1, PF (PFix ($1, f) ) )
-  | _ ->($1, $3)
-
+| ID nl EQUAL nl prg nl
+{
+ match $5 with
+  |PF f -> ($1, PF (PFix ($1, f)))
+  | _ -> ($1, $5)
 }
 
 
 prg:
+| LPAREN prg RPAREN { $2 }
 | prg_e { PE $1 }
 | prg_b { PI $1 }
 | prg_f { PF $1 }
+| LET nl ID nl EQUAL nl prg nl IN nl prg { PLet ($3, $7, $11) }
 | QUESTION { PHole }
 
 prg_e:
 |prg_eatom { $1 }
 | prg_e prg_eatom  %prec prec_app
   { PAppFo( $1, $2 ) }
+| prg_e prg_f  %prec prec_app
+  { PAppHo( $1, $2 ) }  
   
 prg_eatom:
 | LPAREN prg_e RPAREN { $2 }
@@ -210,7 +216,7 @@ prg_eatom:
 
 prg_b:
 | LPAREN prg_b RPAREN { $2 }
-| IF prg_e  THEN nl prg ELSE prg { PIf ($2, $5, $7) }
+| IF nl prg_e nl THEN nl prg nl ELSE nl prg { PIf ($3, $7, $11) }
 | MATCH prg_e WITH nl prg_cases  { PMatch ($2, $5) }
 
 prg_cases:
@@ -221,7 +227,9 @@ prg_case:
 | CAPID cargs ALLOW prg nl { Syntax.mk_case $1 $2 $4 }
 
 prg_f:
-| BACKSLASH ID DOT nl  prg { PFun ($2, $5) } 
+|  LPAREN prg_f RPAREN { $2 }
+| BACKSLASH ID DOT nl  prg { PFun ($2, $5) }
+
 
 
 
@@ -269,7 +277,7 @@ basetype:
 | INTSYMBOL {TInt}
 | BOOLSYMBOL {TBool}
 | CAPID tatoms pas { TData($1, $2, $3) }
-| ID { TVar (M.empty, $1) }
+| ID { TAny $1 }
 
 tatoms:
 | tatom tatoms  { $1 :: $2 }
@@ -284,7 +292,7 @@ pa:
 | LESS LCURBRAC fexp RCURBRAC GREATER /* <{r _0 _1}> */
  { ([], $3) }
 | LESS ID GREATER /* <r> 略記*/
- { ([($2, sdummy)], Unknown(M.empty, $2) ) }  /*dummy*/
+ { ([($2, sdummy)], Unknown(M.empty, M.empty, $2) ) }  /*dummy*/
 
 
 

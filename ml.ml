@@ -215,7 +215,9 @@ let rec unify c sita = match c with
     let mess = Printf.sprintf "infer err:%s vs %s" (string_of_t ty1) (string_of_t ty2) in
     raise (ML_Inf_Err mess)
 
-let unify2 ty1 ty2 = unify [(ty1, ty2)] subst_empty                                          
+let unify2 ty1 ty2 = unify [(ty1, ty2)] subst_empty
+
+let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x)))
    
 let rec  infer_t env e = match e with
   |Syn.PLet (x, t1, t2) ->
@@ -247,6 +249,8 @@ let rec  infer_t env e = match e with
   |Syn.PI b -> let (ta_b, ty, c) = infer_b env b in
                (TaSyn.PI ta_b, ty, c)
 
+  |Syn.PF (Syn.PFix (id, f)) -> infer_t env (rec_def id (Syn.PF f))
+                              
   |Syn.PF f -> let (ta_f, ty, c) = infer_f env f in
                (TaSyn.PF ta_f, ty, c)
 
@@ -324,6 +328,7 @@ and infer_case env matching_ty {Syn.constructor = cons; Syn.argNames = xs; Syn.b
    ty1,
    (cons_ret_ty, matching_ty)::c1)
 
+  
 and infer_f env f = match f with
   |Syn.PFun (x, t1) ->
     let alpha = MLVar (Id.genid "a") in
@@ -331,7 +336,8 @@ and infer_f env f = match f with
     (TaSyn.PFun ((x, (ty_of_schema alpha)), ta_t1),
      MLFun (alpha, ty_t1),
      c1)
-  |Syn.PFix _ -> assert false
+  |Syn.PFix (f_name, t) ->
+    assert false
   
   
     
@@ -341,6 +347,7 @@ let infer env t =
   (subst_tasyn sita ta_t, subst_ty sita ty_t)
 
   
+
 (*****************************************)
 (* type inference of program with type annotation *)
 (*****************************************)  

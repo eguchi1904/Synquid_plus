@@ -433,7 +433,13 @@ let rec fill_pa_args ((arg_sort,rets):(Formula.pa_shape)) senv_param (pa:pa) =
     let r_shape = List.assoc r senv_param in
     id2pa_shape r r_shape
   |(_,p) ->                  (* pの中で、_0,_1が引数 *)
-    let args' = List.mapi (fun i s ->(Printf.sprintf "_%d" i),s) arg_sort in
+    (Id.init_pa_arg_counter ());
+    let args' = List.fold_right
+                 (fun  sort args -> args@[((Id.gen_pa_arg ()), sort)])
+                 arg_sort
+                 []
+    in
+    (* let args' = List.mapi (fun i s ->(Printf.sprintf "_%d" i),s) arg_sort in *)
     (args', p)
   
 

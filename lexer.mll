@@ -13,7 +13,9 @@ rule main = parse
 | space+
  { main lexbuf }
 | "\n"
-    { Lexing.new_line lexbuf;NEWLINE}     
+    { Lexing.new_line lexbuf;NEWLINE}
+| "--"
+   { comment lexbuf; main lexbuf }
 | "data"
  { DATA }
 | "where"
@@ -23,7 +25,8 @@ rule main = parse
 | "termination"
  { TERMINATION }
 
-
+| "let"
+ { LET }
 | "="
  {EQUAL }
 | "!="
@@ -120,3 +123,11 @@ rule main = parse
 	   ((Lexing.lexeme_start_p lexbuf).Lexing.pos_lnum)
 	   (Lexing.lexeme_start lexbuf)
 	   (Lexing.lexeme_end lexbuf)) }
+
+
+	   
+and comment = parse
+| "\n"
+    { Lexing.new_line lexbuf; () }
+| _
+    { comment lexbuf }

@@ -372,9 +372,25 @@ let rec sort_subst2type sita (t:t) =
   | _ -> t
 
 
+let rec alpha_fresh = function
+  |TFun ((x, ty1), ty2) ->
+    let new_x = Id.genid x in
+    let new_ty2 = replace_F x new_x ty2 in
+    TFun ((new_x, alpha_fresh ty1),
+          (alpha_fresh new_ty2))
+  |TScalar _ | TBot as ty -> ty
 
-(*　explicit だった。。 *)
+(*　explicit だった。。
+
+
+  x:a -> {a | }
+ a -> {int | _v > x}
+などとそのままinstantiateすると、
+xが衝突することに注意
+
+ *)
 let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
+  let t = alpha_fresh t in
   let sita_t = List.fold_left2
                  (fun sita i t' ->M.add i t' sita)
                  M.empty
@@ -398,12 +414,15 @@ let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
                     ts
                     ts'
   in
-  ( sort_subst2type sita_sort
-                    (substitute_pa sita_pa
-                                   ( substitute_T sita_t t)))  
+
+  (substitute_pa sita_pa
+                 ( substitute_T  sita_t
+                                 ( sort_subst2type sita_sort   
+                                                   t)))
   
 
 let instantiate ((ts,ps,t):schema) =
+  let t = alpha_fresh t in
   let ts' = List.map genTvar ts in
   let ps' = List.map (fun (i, shape) -> Formula.genUnknownPa_shape shape i) ps in
   instantiate_implicit (ts,ps,t) ts' ps'
@@ -487,6 +506,7 @@ let rec gen_constrain env e t :contextual * (subtype_constrain list) * (env *t) 
     (try
        (match env_find env i with
         |([],[],TScalar(b,_) ) ->
+          
           (match b2sort b with
            |Some sort ->
              let ti' = TScalar(b,Formula.Eq (Formula.Var(sort,Id.valueVar_id),
@@ -501,7 +521,9 @@ let rec gen_constrain env e t :contextual * (subtype_constrain list) * (env *t) 
           let constrain = (env, ti', t) in
           TLet (env_empty, ti'),[constrain], None)
      with
-       _ ->assert false)
+       _ ->
+       (Printf.printf "%s" i);
+       assert false)
   |Syntax.PAuxi _ ->
     TLet (env_empty, t),[], Some (env, t)
 
