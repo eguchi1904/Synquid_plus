@@ -25,8 +25,7 @@ measure elems :: List a -> Set a where
  Cons x xs -> [x] + elems xs
 
   
-leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
-neq :: x: a -> y: a -> {Bool | _v == (x != y)}
+
 
 
 binsub :: l:BST a -> r:BST a ->  {BST a |  keys _v == keys l - keys r}

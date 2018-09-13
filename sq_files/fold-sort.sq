@@ -12,10 +12,6 @@ measure elems :: RList a -> Set a where
   
 
 
-leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
-neq :: x: a -> y: a -> {Bool | _v == (x != y)}
-  
-
 sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}> | (elems _v == elems l) && (len _v == len l)}
 
 sort = ??

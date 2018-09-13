@@ -6,6 +6,8 @@ type t = (Id.t list) * Formula.t
 
 let formula_to_qualifier (e:Formula.t) = ([], e)
 
+let qualifier_to_formula (bvs, e) = (bvs, e)
+
 let mk_qualifier bvs e = (bvs, e)
                        
 
@@ -143,4 +145,4 @@ with
 
 let rec refine_qualifiers const_var_sita qs =
   let qs = List.map (substitution const_var_sita) qs in
-  List.uniq_f (fun (_, e1) (_, e2) -> Formula_eq.f e1 e2) qs
+  List.uniq  qs

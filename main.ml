@@ -138,11 +138,33 @@ let qualifiers =
   let valVar = Var (IntS, Id.valueVar_id) in
   let x_id =  Id.genid "x" in
   let x = Var (IntS, x_id) in
-  let qLe = Qualifier.mk_qualifier [x_id]  (Formula.Le (x, valVar)) in
-  let qGe = Qualifier.mk_qualifier [x_id]  (Formula.Ge (x, valVar)) in
-    [qLe; qLe]
+  let y_id =  Id.genid "y" in
+  let y = Var (IntS, x_id) in  
+  let qLe = Qualifier.mk_qualifier [x_id; y_id]  (Formula.Le (x, valVar)) in
+  let qNeq = Qualifier.mk_qualifier [x_id; y_id]  (Formula.Neq (x, valVar)) in
+  [qLe]
 
 
+let ope_defs =
+  let open Formula in
+  let open Type in
+  let x_id =  Id.genid "x" in
+  let x = Var (AnyS "a", x_id) in
+  let y_id =  Id.genid "y" in
+  let y = Var (AnyS "a", y_id) in
+  let valVar = Var (AnyS "a", Id.valueVar_id) in
+  let a_ty = TScalar (TAny "a", Bool true) in
+  ["leq", (["a"], [],TFun ((x_id, a_ty),
+                (TFun ((y_id, a_ty),
+                       TScalar (TBool, Eq (valVar, (Le (x, y))))))));
+   "neq", (["a"], [], TFun ((x_id, a_ty),
+                            (TFun ((y_id, a_ty),
+                                   TScalar (TBool, Eq (valVar, (Neq (x, y))))))));
+   "eq",  (["a"], [], TFun ((x_id, a_ty),
+                            (TFun ((y_id, a_ty),
+                                   TScalar (TBool, Eq (valVar, (Eq (x, y))))))));
+  ]
+  
 let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
                Id.t -> Type.schema -> Syntax.t ) = 
   let lexbuf = if file = "" then  Lexing.from_channel stdin
@@ -196,7 +218,7 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
       infer_goals
   in
   let id_sch_list = List.map (fun (id, ty) -> (id, (([],[],ty):Type.schema))) id_type_list in
-  let new_fundecs = new_fundecs@id_sch_list in
+  let new_fundecs = ope_defs@new_fundecs@id_sch_list in
   let new_defs = infer_goals@new_syn_goals in
   (data_info_map, minfos, new_fundecs, new_defs)
 

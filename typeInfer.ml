@@ -531,7 +531,9 @@ let rec k_positive_pos cs = match cs with
                                    
 
 let rec init_p_assignment const_var_sita (qualifiers: Qualifier.t list) (cs:simple_cons list) =
+  let debug_qulify = List.map (Qualifier.qualifier_to_formula) qualifiers in
   let qualifiers = Qualifier.refine_qualifiers const_var_sita (extend_qualifiers cs qualifiers) in
+  let debug_qulify = List.map (Qualifier.qualifier_to_formula) qualifiers in
   (* kset: set of all predicate unknowns in cs *)
   let k_set = List.fold_left
                 (fun acc scons -> S.union acc (unknown_p_in_simple_cons scons))

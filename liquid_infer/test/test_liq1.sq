@@ -32,12 +32,16 @@ mul :: x: Int -> y:Int -> {Int | _v == (x * y)}
 
 zero :: {Int | _v == 0 }
 one :: {Int | _v == 1 }
+hand :: {Int | _v == 100}
+nintyone :: {Int | _v == 91 }
+nintytwo :: {Int | _v == 92}
+ten :: {Int | _v == 10 }
 true ::{Bool | _v}
 false ::{Bool |!_v}
 
-split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }
+-- split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }
 
-partition :: p: a -> xs: RList a <{True}> -> {Pair (RList {a | _v <= p} <{True}>) (RList {a | _v > p} <{True}>) | (((len (fst _v)) + (len (snd _v))) == len xs) && (((elems (fst _v)) + (elems (snd _v))) == elems xs)}
+-- partition :: p: a -> xs: RList a <{True}> -> {Pair (RList {a | _v <= p} <{True}>) (RList {a | _v > p} <{True}>) | (((len (fst _v)) + (len (snd _v))) == len xs) && (((elems (fst _v)) + (elems (snd _v))) == elems xs)}
 
   
 sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}>|(len _v == len l) && (elems _v == elems l)}
@@ -50,49 +54,44 @@ id :: x:a -> a
 --test1 = id (id zero)
 test_list :: RList {Int| _v >= 0} <{True}>
 
-g1 ::y54:a 
-  ->  y53:RList ({a |  (_v  <= y54 ) && True}) <{(_0  <= _1 )}>
-  -> y49:RList ({a |  (_v  > y54 ) && True}) <{(_0  <= _1 )}>
-  -> {RList (a) <{(_0  <= _1 )}>  |  ((len _v ) == (1 + ((len y53 ) + (len y49 )))) && ((elems _v ) == ([y54 ] + ((elems y53 ) + (elems y49 ))))}
+
+max = \a. \b.
+   if geq a b then a else b
+
+myinc = \x. add x one
+   
+sum = \x.n
+      if leq x zero then
+        zero
+     else
+      add x (sum (dec x one))
+
+mac91 = \n.
+ if leq n hand then
+   mac91 (mac91 (add (add n ten) one)) 
+ else
+  dec n ten
 
 
-quickSort = \l.
-match l with 
- Nil  -> Nil
- Cons x xs -> match partition (x) (xs) with 
-  Pair l1 l2 -> g1 (x) (quickSort (l1)) (quickSort (l2))   
-
--- test = match partition zero test_list with
---        Pair l1 l2 -> l1
-
--- test = 
---  let append = \l1. \l2.
---   match l1 with
---    Nil -> l2
---    Cons y ys -> Cons y (append ys l2)
---   in  
---   let quickSort =  \l.
+-- sortTest =
+--  let insert = \x. \l.
+--   match l with
+--    Nil -> (Cons x Nil)
+--    Cons y ys -> if geq x  y then
+--                  Cons x l
+-- 	       else
+-- 	         Cons y (insert x ys)
+--  in
+--  let  sort = \l.
 --   match l with
 --    Nil -> Nil
---    Cons x xs -> match partition x xs with
---                  Pair l1 l2 -> append  (quickSort l1) (quickSort l2)
+--    Cons y ys -> insert y (sort ys)
 --  in
---  quickSort
-	     
-
-
--- max = \a. \b.
---    if geq a b then a else b
-
--- myadd = \x. add x one
-   
--- sum = \x.
---       if leq x zero then
---         zero
---      else
---       add x (sum (dec x one))
-
-
+--  sort
+  
+  
+           
+  
 --test7 = sort test_list
 -- test5 =
 --  let snoc = \x. \l. match l with
