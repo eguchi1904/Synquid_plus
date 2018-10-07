@@ -49,8 +49,13 @@ let rec string_of_t t :string= let open Printf in
   |MLFun (ty1, ty2) ->
     sprintf "(%s -> %s)" (string_of_t ty1) (string_of_t ty2)
 
-    
-    
+exception T2SORT
+let rec t2sort t = match t with
+  |MLBool -> Formula.BoolS
+  |MLInt -> Formula.IntS
+  |MLData (i, tys) -> Formula.DataS (i, (List.map t2sort tys))
+  |MLVar _ -> raise T2SORT
+  |MLFun _ -> raise T2SORT
                 
 (* -------------------------------------------------- *)
 (* schema *)

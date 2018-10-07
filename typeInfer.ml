@@ -201,7 +201,7 @@ let rec fresh (data_info_map: Data_info.t M.t) t =
                             (fun (s, shape) -> Formula.genUnknownPa_shape shape s)
                             pa_shape_list
     in
-
+    
     Liq.TScalar (Liq.TData (i, tys_tmp, unknown_pa_list), Formula.genUnkownP "k")
   |Ml.MLData (i, _) -> assert false
   |Ml.MLVar x -> Liq.TScalar ((Liq.TAny x), Formula.genUnkownP "k") (* TAny i　型 *)
@@ -242,10 +242,12 @@ let rec cons_gen dinfos env t =
                   Sub (env2, tmp2, new_tmp)]@c1@c2 in
     (new_tmp, new_c)    
   |TaSyn.PE e ->
-    let new_tmp = mk_tmp env t in
     let ((Liq.TLet (c_env, tmp_e)), c) = cons_gen_e dinfos env e in
-    (new_tmp, [WF (env, new_tmp); Sub ((Liq.env_append env c_env), tmp_e, new_tmp)]@c )
-
+    if c_env <> Liq.env_empty then
+      let new_tmp = mk_tmp env t in
+      (new_tmp, [WF (env, new_tmp); Sub ((Liq.env_append env c_env), tmp_e, new_tmp)]@c )
+    else
+      (tmp_e, c)
   |TaSyn.PI b -> cons_gen_b dinfos env b
   |TaSyn.PF f -> cons_gen_f dinfos env f
   |TaSyn.PHole -> assert false
@@ -315,10 +317,30 @@ and cons_gen_e dinfos env e =
         |None ->  raise (LiqErr "dont know what sort is this"))
        
      |(alist, plist, ty_x) ->
+       let a_sort_sita =
+         List.fold_left2
+           (fun acc_sita a sch ->
+             (try let sch_sort = Ml.t2sort (Ml.ty_in_schema sch) in
+                  M.add a sch_sort acc_sita
+              with _ -> acc_sita)
+           )
+           M.empty
+           alist
+           schs
+       in
+     (* p_sort_var = p中のsort variable *)
+     (* a_sch_dec = List.combine alist schs *)
+     (* a:sort_var -> alist, *)
+       let plist =              (* instantiate plist *)
+         List.map
+           (fun (p, shape) -> (p, (Formula.sort_subst_to_shape a_sort_sita shape )))
+           plist
+       in
        let unknown_pa_and_c_pa_list =
          List.map
            (fun (p, (arg_sort, rets)) ->
              let (args, p) = Formula.genUnknownPa_shape (arg_sort, rets) p in
+             (* この、(arg_sort, rets)は、schに合わせてinstantiateする必要があるな。 *)
              (* make well formedness constraints *)
              let arg_env= List.map (fun (x, sort) -> (x, Liq.sort2type sort))
                                    args
@@ -421,6 +443,12 @@ and cons_gen_case dinfos env new_tmp e_tmp  {TaSyn.constructor= con;
   | _ -> assert false
 
 and cons_gen_f dinfos env (TaSyn.PFun ((x, ty_x), t)) =
+  (* let tmp_in = fresh dinfos (Ml.ty_in_schema ty_x) in *)
+  (* let env' =  (Liq.env_add env (x, tmp_in)) in *)
+  (* let (tmp_t, c_t) = cons_gen dinfos env' t in *)
+  (* (Liq.TFun ((x, tmp_in), tmp_t), *)
+  (*  (WF (env, tmp_in))::c_t) *)
+  
   let mk_tmp env f =  fresh  dinfos (Ml.ta_infer_f (Ml.shape_env env) f)  in
   match mk_tmp env (TaSyn.PFun ((x, ty_x), t)) with
   |Liq.TFun ((new_x, tmp_in), tmp_out) as new_tmp-> (* tmp_outはまだ引数に依存していない *)
@@ -670,22 +698,27 @@ let rec scons_list_to_string scs = match scs with
   
     
 let liqInfer z3_env dinfos qualifiers env ta_t =
-  (* (print_string (TaSyn.syn2string Ml.string_of_sch ta_t)); *)
+  let st = Sys.time () in
+  (print_string (TaSyn.syn2string Ml.string_of_sch ta_t));
   let (tmp, cs) = cons_gen dinfos env ta_t in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
-  (print_string (cons_list_to_string cs));
+  (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs) in
-  (* (print_string (scons_list_to_string simple_cs)); *)
+  let () = (Printf.printf "cs_length:%d \n" (List.length cs)) in
+  let () =  (Printf.printf "simple_cs_length:%d \n" (List.length simple_cs)) in
+  (print_string (scons_list_to_string simple_cs));
   let const_var_sita = Liq.mk_subst_for_const_var env in
   
   let st = Sys.time () in
   let p_candi = init_p_assignment const_var_sita qualifiers simple_cs in
   let ed = Sys.time () in
-  (Printf.printf "end_init_p_candi:%f\n" (ed -. st ));
+  (Printf.printf "\n\nend_init_p_candi:%f\n\n" (ed -. st ));
   
   let p_candi_debug = M.bindings p_candi in
   let p_assign = solve z3_env simple_cs p_candi in
   let sita = M.map (fun tlist -> Formula.and_list tlist) p_assign in
+  let ed = Sys.time () in
+  let () = (Printf.printf "\n\nLiq_INfer:%f\n\n" (ed -. st )) in
   Liq.substitute_F sita tmp
 
 

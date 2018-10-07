@@ -164,6 +164,8 @@ let ope_defs =
                             (TFun ((y_id, a_ty),
                                    TScalar (TBool, Eq (valVar, (Eq (x, y))))))));
   ]
+
+let ope_defs=[]
   
 let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
                Id.t -> Type.schema -> Syntax.t ) = 
@@ -246,5 +248,6 @@ let _ =
      (fun s -> file := s)
      "synquid+");
   let result = main !file !mk_tmp_fun in
+  (Printf.printf "z3_time:%f" !UseZ3.z3_t);
   output2file !out_file result
 

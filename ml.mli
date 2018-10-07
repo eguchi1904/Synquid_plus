@@ -8,17 +8,28 @@ val shape: Type.t -> t
 
 val string_of_t: t -> string
 
+exception T2SORT
+val t2sort: t -> Formula.sort
+  
+(* -------------------------------------------------- *)
+(* schema *)
+(* -------------------------------------------------- *)
+  
 type schema =  (Id.t list) *  t
 
 val ty_of_schema: t -> schema
 
 val ty_in_schema: schema -> t
-  
+
 
 val shape_sch: Type.schema -> schema
 
 val string_of_sch: schema -> string
 
+
+(*--------------------------------------------------*)
+(* environment *)
+(*--------------------------------------------------*)
 type 'a env = (Id.t * 'a) list
             
 val shape_env: Type.env -> schema env

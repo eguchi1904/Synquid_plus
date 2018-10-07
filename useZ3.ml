@@ -273,8 +273,19 @@ let convert (e:Formula.t) =
   formula2z3 ctx smap emap fmap e
   
 exception CANT_SOLVE
-        
+let z3_t = ref 0.0
+let st = ref 0.0
+let start_z3_clock () = 
+ st := Sys.time ()
+
+let stop_z3_clock () =
+  let ed = Sys.time () in
+  (z3_t := !z3_t +. (ed -. !st))
+  
+
+         
 let is_valid (e:Expr.expr) =
+  (start_z3_clock ());
   (* (Printf.printf "\n\nis_valid:\n%s" (Z3.Expr.to_string e)); *)
   let solver = mk_solver ctx None in
   let not_e =  (Boolean.mk_not ctx e) in
@@ -283,6 +294,7 @@ let is_valid (e:Expr.expr) =
   (* let ed = Sys.time () in *)
   (* (Printf.printf "z3:end_solving:%f\n" (ed -. st )); *)
   let ret = Solver.check solver [] in
+  (stop_z3_clock ());
   if ret = UNSATISFIABLE then
     true
   else if ret = SATISFIABLE then
@@ -292,9 +304,11 @@ let is_valid (e:Expr.expr) =
   
 
 let satisfiable_but_not_valid (e:Expr.expr) =
+  (start_z3_clock ());
     let solver = mk_solver ctx None in
     (Solver.add solver [e]);
     let ret = Solver.check solver [] in
+    (stop_z3_clock ());
     if ret = UNSATISFIABLE then
       false
     else if ret = SATISFIABLE then

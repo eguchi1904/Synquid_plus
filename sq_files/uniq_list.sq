@@ -11,6 +11,7 @@ measure elems :: RList a -> Set a where
   Cons x xs -> [x] + elems xs
 
 
+eq :: x: a -> y: a -> {Bool | _v == (x == y)}
 
 uniq:: xs: RList a <{True}> -> {RList a <{_0 != _1}> | elems _v == elems xs}
 uniq = ??

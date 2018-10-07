@@ -19,6 +19,8 @@ measure elems :: RList a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs  
   
+leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
+
 
 split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }	
   
