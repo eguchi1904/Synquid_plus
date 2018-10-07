@@ -18,7 +18,7 @@ type cons = |WF of (Liq.env * Liq.t)           (* well formendness *)
 
 val fresh: Data_info.t M.t -> Ml.t -> Liq.t 
                   
-val cons_gen: Data_info.t M.t -> Liq.env -> Ml.schema TaSyn.t -> (Liq.t * cons list)
+val cons_gen: Data_info.t M.t -> Liq.env -> Ml.schema TaSyn.t -> Liq.t -> (Liq.t * cons list)
 
 
   
