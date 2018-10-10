@@ -18,6 +18,7 @@ let rec pop_lst = function
  
 %}
 
+%token QUALIFIER
 %token LET
 %token DATA
 %token WHERE
@@ -76,7 +77,7 @@ let rec pop_lst = function
 %left MINUS PLUS IN
 %left AST
 
-%type < PreSyntax.id_schemas * PreSyntax.measureInfo list * PreSyntax.id_schemas * ((Id.t * Syntax.t) list) > toplevel
+%type < PreSyntax.id_schemas * PreSyntax.measureInfo list * PreSyntax.id_schemas * ((Id.t * Syntax.t) list) * (Formula.t list) > toplevel
 %type <PreSyntax.id_schemas> m1 /*m1によってコンストラクタの型の環境を作成*/
 %type <Id.t list> t_paras
 %type <(Id.t * Formula.pa_shape) list> p_paras
@@ -100,23 +101,28 @@ toplevel:
   { $2 }
 | m1 toplevel
 { match ($2) with
-    (env, minfos, fundecs, l) -> ($1@env, minfos, fundecs, l)
+    (env, minfos, fundecs, l, q_formulas) -> ($1@env, minfos, fundecs, l, q_formulas)
 }
 | fun_dec toplevel
  { match ($2) with
-   (env, minfos, fundecs, l) -> (env, minfos, $1::fundecs, l)
+   (env, minfos, fundecs, l, q_formulas) -> (env, minfos, $1::fundecs, l, q_formulas)
    }
 | m2 toplevel
  { match ($2) with
-   (env, minfos, fundecs, l) -> (env, $1::minfos, fundecs, l)
+   (env, minfos, fundecs, l, q_formulas) -> (env, $1::minfos, fundecs, l, q_formulas)
    }
 | m3 toplevel
  { match ($2) with
-   (env, minfos, fundecs, l) -> (env, minfos, fundecs, $1::l)
+   (env, minfos, fundecs, l, q_formulas) -> (env, minfos, fundecs, $1::l, q_formulas)
+   }
+
+| m4 toplevel
+ { match ($2) with
+   (env, minfos, fundecs, l, q_formulas) -> (env, minfos, fundecs, l, $1@q_formulas)
    }
 
 | EOF
-    { ([],[],[],[])}
+    { ([],[],[],[],[])}
 
 | error
     { failwith
@@ -192,6 +198,9 @@ m3:/* query */
   | _ -> ($1, $5)
 }
 
+m4: /* qualifier */
+| QUALIFIER LCURBRAC fcommas RCURBRAC nl
+{ $3 }
 
 prg:
 | LPAREN prg RPAREN { $2 }

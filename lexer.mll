@@ -24,7 +24,8 @@ rule main = parse
  { MEASURE }
 | "termination"
  { TERMINATION }
-
+| "qualifier"
+ { QUALIFIER }
 | "let"
  { LET }
 | "="

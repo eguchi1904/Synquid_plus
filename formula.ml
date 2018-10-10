@@ -338,6 +338,7 @@ let id2pa_shape i ((arg_sorts,rets):pa_shape) :pa =
                arg_sorts
                []
   in
+
   let uf_args = List.map (fun (x,s) ->Var(s,x)) args in
   let body = UF (rets, i, uf_args) in
   (args,body)

@@ -133,16 +133,16 @@ let output2file output_file  (data_info_map, minfos, fundecs, defs) =
   close_out outchan
 
 let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x)))
-let qualifiers =
-  let open Formula in
-  let valVar = Var (IntS, Id.valueVar_id) in
-  let x_id =  Id.genid "x" in
-  let x = Var (IntS, x_id) in
-  let y_id =  Id.genid "y" in
-  let y = Var (IntS, x_id) in  
-  let qLe = Qualifier.mk_qualifier [x_id; y_id]  (Formula.Le (x, valVar)) in
-  let qNeq = Qualifier.mk_qualifier [x_id; y_id]  (Formula.Neq (x, valVar)) in
-  [qLe]
+(* let qualifiers = *)
+(*   let open Formula in *)
+(*   let valVar = Var (IntS, Id.valueVar_id) in *)
+(*   let x_id =  Id.genid "x" in *)
+(*   let x = Var (IntS, x_id) in *)
+(*   let y_id =  Id.genid "y" in *)
+(*   let y = Var (IntS, x_id) in   *)
+(*   let qLe = Qualifier.mk_qualifier [x_id; y_id]  (Formula.Le (x, valVar)) in *)
+(*   let qNeq = Qualifier.mk_qualifier [x_id; y_id]  (Formula.Neq (x, valVar)) in *)
+(*   [qLe] *)
 
 
 let ope_defs =
@@ -173,10 +173,21 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
                else let inchan = open_in (file) in
                     Lexing.from_channel inchan
   in
-  let  (cons_env, minfos, fundecs, defs)  = Parser.toplevel Lexer.main lexbuf in
+  let  (cons_env, minfos, fundecs, defs, q_formulas)  = Parser.toplevel Lexer.main lexbuf in
   (* (List.iter print_string (List.map PreSyntax.minfo2string minfos)); *)
   let cons_env,fundecs = Preprocess.f cons_env minfos fundecs in
   let data_info_map = Data_info.mk_data_info cons_env in
+  let q_formulas = List.map (Preprocess.fillsort_to_formula (cons_env@fundecs) minfos) q_formulas in
+  
+  let qualifiers = List.map
+                     (fun e ->
+                       let fv_e =S.elements (Formula.fv e) in
+                       Qualifier.mk_qualifier fv_e e)
+                     q_formulas
+  in
+  let () = Printf.printf "\nqualifier:\n%s\n\n"
+                    (String.concat "\n" (List.map Qualifier.qualifier_to_string qualifiers))
+  in
   (* 応急手当て、predicateパラメタのsortの整合性合わせ*)
   let cons_env =
     List.map

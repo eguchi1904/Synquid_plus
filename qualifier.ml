@@ -8,6 +8,10 @@ let formula_to_qualifier (e:Formula.t) = ([], e)
 
 let qualifier_to_formula (bvs, e) = (bvs, e)
 
+let qualifier_to_string (bvs, e) =
+  let bvs_str = String.concat "," bvs in
+  Printf.sprintf "%s. %s" bvs_str (Formula.p2string_with_sort e)
+
 let mk_qualifier bvs e = (bvs, e)
                        
 

@@ -209,6 +209,7 @@ let rec fillsort' senv senv_param senv_var = function
   |Var (_, i) when List.mem_assoc i senv_var->
     Var (List.assoc i senv_var, i), (List.assoc i senv_var, [])
 
+
   |Unknown _ -> assert false
 
   |Cons (_, i, []) when List.mem_assoc i senv->
@@ -379,7 +380,7 @@ let print_sort_subst sita =
 let fillsort senv senv_param senv_var e =
   let (e',(_,constrain)) = fillsort' senv senv_param senv_var e in
   (* (print_sort_constrain constrain ); *)
-  let sita = unify_sort constrain M.empty in (* unifyは適切か *)
+  let sita = Formula.unify_sort constrain M.empty in (* unifyは適切か *)
   (* (print_sort_subst sita); *)
   sort_subst2formula sita e'                 (* 代入は適切か *)
 
@@ -392,7 +393,12 @@ let fillsort2pa senv senv_param senv_var (pa:pa) =
   |(args,e) ->
     let e' = fillsort senv senv_param (args@senv_var) e in
     (args, e')
-    
+
+
+(* senv: sorts of variables in environment 
+   senv_param: sorts of predicate parameter <p:: a-> a-> Int>. T 's p
+   senv_var: sorts of functions' arguments
+ *)
 let rec fillsort2type  senv senv_param senv_var =function
   |TScalar (b,p) ->
     let vs = base2pashape b in
@@ -490,7 +496,7 @@ let rec mk_data_pas (env:(Id.t * schema) list) =
 
     
         
-(* まず、envにはコンストラクタが入っている。 *)
+(* この段階では、envにはコンストラクタのみ入っている。 *)
 let f env minfos fundecs =
   let senv_cons = List.map (fun (cons,(_,_,c_t)) -> (cons, type2pashape c_t) ) env in
   (* let senv_mes = List.map (fun (mes, (shape,_)) -> (mes, shape)) minfos in *)
@@ -512,4 +518,15 @@ let f env minfos fundecs =
   
   
   
+let fillsort_to_formula env minfos e=
+  let senv_cons = List.map (fun (cons,(_,_,c_t)) -> (cons, type2pashape c_t) ) env in
+  let senv_mes = List.map
+                   (fun minfo -> (minfo.name, PreSyntax.extend2shape minfo.shape))
+                   minfos
+  in
+  let senv =  senv_cons@senv_mes in
+  let fv_e = S.elements (Formula.fv_include_v e) in
+  let senv_var = List.map (fun x -> (x, Formula.UnknownS (Id.genid "qualifier"))) fv_e in
+  fillsort senv [] senv_var e
   
+               
