@@ -442,23 +442,50 @@ let instantiate ((ts,ps,t):schema) =
 (*   |_ :: tenv' -> env2formula' tenv' vset *)
 
 (*   |[] -> Formula.Bool true *)
-  
+let mk_valid x b =
+  match b2sort b with
+  |Some s ->  Formula.Eq (Formula.Var (s, x), Formula.Var (s, x))
+  |None -> raise (Invalid_argument "mk_valid")
+(* _v = vを追加するver *)
+(* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
+(*   match tenv with *)
+(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (\* schemaは無視して良いの? *\) *)
+(*     (Formula.And ((mk_valid x b),  *)
+(*      (env2formula' tenv' vset))) *)
+   
+(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (\* schemaは無視して良いの? *\) *)
+(*     if S.mem x vset then *)
+(*       (if S.mem Id.valueVar_id (Formula.fv p) *)
+(*         then *)
+(*           (Formula.And ((Formula.replace (Id.valueVar_id) x p), (\* [x/_v]p *\) *)
+(*                         (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p)  )) *)
+(*           )) *)
+(*        else *)
+(*          Formula.And ((mk_valid x b), (Formula.And (p, (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p)))))) *)
+(*       ) *)
+(*     else *)
+(*       env2formula' tenv' vset *)
+
+(*   |_ :: tenv' -> env2formula' tenv' vset *)
+
+(*   |[] -> Formula.Bool true *)
+
+       
 let rec env2formula' (tenv:((Id.t*schema) list)) vset =
   match tenv with
   |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (* schemaは無視して良いの? *)
     env2formula' tenv' vset
-   
   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (* schemaは無視して良いの? *)
     if S.mem x vset then
-      (Formula.And ((Formula.replace (Id.valueVar_id) x p), (* [x/_v]p *)
-                    (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p)  ))
-      ))
+          (Formula.And ((Formula.replace (Id.valueVar_id) x p), (* [x/_v]p *)
+                        (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p)  ))
+          ))
     else
       env2formula' tenv' vset
 
   |_ :: tenv' -> env2formula' tenv' vset
 
-  |[] -> Formula.Bool true       
+  |[] -> Formula.Bool true          
 (* 環境全ての条件を抜き出すver *)
 (* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
 (*   match tenv with *)

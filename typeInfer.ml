@@ -316,6 +316,7 @@ and cons_gen_e dinfos env e =
         |None ->  raise (LiqErr "dont know what sort is this"))
        
      |(alist, plist, ty_x) ->
+       let () = Printf.printf "\n env_sch\n%s::%s. %s" x (String.concat "," alist) (Liq.schema2string x_liq_sch) in
        let a_sort_sita =
          List.fold_left2
            (fun acc_sita a sch ->
@@ -367,11 +368,25 @@ and cons_gen_e dinfos env e =
        let tys_tmp = List.map (fresh dinfos) tys in
        let c_tys = List.map (fun ty -> WF (env, ty)) tys_tmp in
 
-       let ty_x' = Liq.instantiate_implicit (alist, plist, ty_x) tys_tmp unknown_pa_list in
+       let ty_x' = Liq.instantiate_implicit x_liq_sch tys_tmp unknown_pa_list in
        (* let sita_ty = M.add_list2 alist tys_tmp M.empty in *)
 
        (* let sita_pa = M.add_list2 (List.map fst plist) unknown_pa_list M.empty in *)
        (* let ty_x' = Liq.substitute_pa sita_pa (Liq.substitute_T sita_ty ty_x) in (\* [p'\p][ty\a]ty *\) *)
+       let  a_sort_sita_list = M.bindings a_sort_sita in
+       let () = Printf.printf "a_list_sort:%s"
+                              (String.concat ","
+                                             ((List.map
+                                                (fun (i, sort) -> Printf.sprintf "%s->%s"
+                                                                                i
+                                                                                (Formula.sort2string sort))
+                                                a_sort_sita_list)))
+       in
+       let () = Printf.printf "\nunknwon_pa:%s"
+                              (String.concat ""
+                                             ((List.map Formula.pa2string_detail) unknown_pa_list))
+       in
+       let () = Printf.printf "\nvar_instants:\n%s::%s" x (Liq.t2string ty_x') in
 
        (Liq.TLet (Liq.env_empty, ty_x'), c_pa_list@c_tys))
   |TaSyn.PAuxi _ -> assert false

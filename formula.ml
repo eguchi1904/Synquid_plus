@@ -708,3 +708,18 @@ let pa2string ((arg,p):pa) =
   let p' = substitution sita p in
   p2string p'
        
+
+
+
+     
+  
+
+let pa2string_detail ((arg,p):pa) =
+  let open Printf in
+  let arg_str = String.concat ","
+                              (List.map (fun (id, sort) ->
+                                   sprintf "%s:%s" id (sort2string sort))
+                              arg)
+  in
+  sprintf "%s. %s" arg_str (p2string p)
+       

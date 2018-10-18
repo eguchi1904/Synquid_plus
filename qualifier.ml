@@ -43,7 +43,15 @@ let any2unknown sort  =
 
   
   
+(* 
+一時的に、
+qualifier の、any sortは、
+IntSか、AnySにしかinstantiateされない。
 
+{ x:a < y:a } -> { x:List a < y:List a}
+等を防ぐため。
+
+ *)
 let rec gen_sita_q_list (senv: (Id.t * Formula.sort) list)
                         (q_var_sort: ((Id.t * Formula.sort) list))
                         sita_var     (* var subst for q_var_sort *)
@@ -68,9 +76,15 @@ let rec gen_sita_q_list (senv: (Id.t * Formula.sort) list)
         (fun (x, x_sort) ->
           try
             let sita_sort_x_v1 = Formula.unify_sort [(v1_sort, x_sort)] M.empty in
-            let sita_var' = M.add v1 (Formula.Var (x_sort, x)) sita_var  in
-            let sita_sort' = M.union (fun _ -> assert false) sita_sort_x_v1 sita_sort in
-            gen_sita_q_list senv left sita_var' sita_sort'
+            if M.for_all
+                 (fun  _  sort -> match sort with |Formula.IntS |Formula.AnyS _ -> true | _ -> false)
+                 sita_sort_x_v1
+            then
+              let sita_var' = M.add v1 (Formula.Var (x_sort, x)) sita_var  in
+              let sita_sort' = M.union (fun _ -> assert false) sita_sort_x_v1 sita_sort in
+              gen_sita_q_list senv left sita_var' sita_sort'
+            else
+              []
           with
             Formula.Unify_Err -> [])
         senv

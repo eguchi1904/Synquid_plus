@@ -2,7 +2,7 @@ OCAMLFLAGS +=  -linkpkg -bin-annot -g
 
 
 
-PACKS = Z3
+PACKS = z3
 
 
 

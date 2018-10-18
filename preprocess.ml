@@ -516,8 +516,185 @@ let f env minfos fundecs =
   let fundecs' = fillsort2env senv fundecs' in
   (env', fundecs')
   
+(* qualifyer *)
   
-  
+let rec fillsort_strict' senv senv_param senv_var = function
+  |Bool b -> Bool b, (BoolS, [])
+  |Int i-> Int i, (IntS, [])
+  |Set (_,[]) ->let unknown_s = UnknownS (Id.genid "emps") in
+                Set (unknown_s,[]), (SetS ( unknown_s), [])
+  |Set (_,es) ->
+    let es', sort_constrain =
+      List.split (List.map (fillsort' senv senv_param senv_var) es) in
+    let (s1::sorts),constrainlist = List.split sort_constrain in
+    let constrain = List.concat constrainlist in
+    let new_c = List.map (fun s -> (s1,s)) sorts in (* 各elemが同じ *)
+    Set (s1, es'), (SetS s1, new_c@constrain)
+
+  |Var (_, i) when List.mem_assoc i senv_var->
+    Var (List.assoc i senv_var, i), (List.assoc i senv_var, [])
+
+
+  |Unknown _ -> assert false
+
+  |Cons (_, i, []) when List.mem_assoc i senv->
+    let (argsort, rets) = List.assoc i senv in
+    let rets' = any2unknownsort rets in
+    Cons (rets', i, []), (rets', [])
+              
+  |Cons (_, i, es) when List.mem_assoc i senv->
+    let es', sort_constrain = List.split (List.map (fillsort' senv senv_param senv_var) es) in
+    let es_sorts, constrainlist = List.split sort_constrain in
+    let constrain = List.concat constrainlist in
+    let (argsort, rets) = any2unknownsort_pa (List.assoc i senv) in
+    let new_c = List.map2 (fun a b ->(a,b)) es_sorts argsort in
+    Cons (rets, i, es'), (rets, new_c@constrain)
+
+  |UF (_, i, es)  when List.mem_assoc i senv -> (* measureの適用 *)
+    let es', sort_constrain = List.split (List.map (fillsort' senv senv_param senv_var) es) in
+    let es_sorts, constrainlist = List.split sort_constrain in
+    let constrain = List.concat constrainlist in
+    let (argsort, rets) = any2unknownsort_pa (List.assoc i senv) in
+    (* (Printf.printf "\n\ninstans measure:%s as %s\n\n" i (pashape2string (argsort, rets))); *)
+    let new_c = List.map2 (fun a b ->(a,b)) es_sorts argsort in
+    UF (rets, i, es'), (rets, new_c@constrain)
+
+  |UF (sort, i, es) when List.mem_assoc i senv_param -> (* abstract refinmet *)
+    let es',sorts_constrain = List.split (List.map (fillsort' senv senv_param senv_var) es) in
+    let es_sorts, constrainlist = List.split sorts_constrain in
+    let constrain = List.concat constrainlist in    
+    let (argsort, rets) = List.assoc i senv_param in (* anyはそのまま *)
+    let new_c = List.map2 (fun a b ->(a,b)) es_sorts argsort in
+    UF (rets, i, es'), (rets, new_c@constrain)
+
+  |If (e1,e2,e3) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let e3',(s3,c3) = fillsort' senv senv_param senv_var e3 in
+    let new_c = [(s1,BoolS);(s2,s3)] in
+    If (e1', e2', e3'), (s2, new_c@c1@c2@c3)
+
+  |Times (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(c1@c2) in
+    (match s1 with 
+    |IntS -> Times (e1',e2'), (IntS, consrain')
+     |SetS s -> Intersect (e1',e2'), (SetS s, consrain')
+     |_ -> assert false)
+    
+  |Plus (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(c1@c2) in
+    (match s1 with
+     |IntS -> Plus (e1',e2'), (IntS, consrain')
+     |SetS s -> Union (e1',e2'), (SetS s, consrain')
+     |_ -> assert false)
+
+  |Minus (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(c1@c2) in
+    (match s1 with
+     |IntS -> Minus (e1',e2'), (IntS, consrain')
+     |SetS s -> Diff (e1',e2'), (SetS s, consrain')
+     |_ -> assert false)
+
+  |Eq (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(c1@c2) in
+    Eq (e1', e2'), (BoolS, consrain')
+
+  |Neq (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(c1@c2) in
+    Neq (e1', e2'), (BoolS, consrain')
+
+  |Lt (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(s1, IntS)::(c1@c2) in
+    Lt (e1', e2'), (BoolS, consrain')
+
+  |Le (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(s1, IntS)::(c1@c2) in
+    (match s1 with
+     |SetS s -> Subset (e1',e2'), (BoolS, consrain')
+     |_ -> Le (e1',e2'), (BoolS,consrain')
+    )
+
+  |Gt (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(s1, IntS)::(c1@c2) in
+    Gt (e1', e2'), (BoolS, consrain')
+
+  |Ge (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(s1, IntS)::(c1@c2) in
+    Ge (e1', e2'), (BoolS, consrain')
+
+  |And (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(s1,BoolS)::(c1@c2) in
+    And (e1', e2'), (BoolS, consrain')
+
+  |Or (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(s1,BoolS)::(c1@c2) in
+    Or (e1', e2'), (BoolS, consrain')
+
+  |Implies (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(s1,BoolS)::(c1@c2) in
+    Implies (e1', e2'), (BoolS, consrain')
+
+  |Iff (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (s1,s2)::(s1,BoolS)::(c1@c2) in
+    Iff (e1', e2'), (BoolS, consrain')
+
+  |Member (e1, e2) ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let e2',(s2,c2) = fillsort' senv senv_param senv_var e2 in
+    let consrain' = (SetS s1,s2)::(c1@c2) in
+    Member (e1', e2'), (BoolS, consrain')
+
+  |Neg e1 ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let consrain' = (s1,IntS)::c1 in
+    Neg e1', (IntS, consrain')
+
+  |Not e1 ->
+    let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in
+    let consrain' = (s1,BoolS)::c1 in
+    Not e1', (BoolS, consrain')
+
+  |Union _ | Intersect _ | Diff _ |Subset _ -> (* 構文解析時には、int演算に変換される *)
+    assert false
+
+  |e ->(Printf.printf "%s\n" (Formula.p2string e) );
+       assert false
+
+let fillsort_strict senv senv_param senv_var e =
+  let (e',(_,constrain)) = fillsort_strict' senv senv_param senv_var e in
+  (* (print_sort_constrain constrain ); *)
+  let sita = Formula.unify_sort constrain M.empty in (* unifyは適切か *)
+  (* (print_sort_subst sita); *)
+  sort_subst2formula sita e'                 (* 代入は適切か *)
+
+                 
+
 let fillsort_to_formula env minfos e=
   let senv_cons = List.map (fun (cons,(_,_,c_t)) -> (cons, type2pashape c_t) ) env in
   let senv_mes = List.map
@@ -528,5 +705,3 @@ let fillsort_to_formula env minfos e=
   let fv_e = S.elements (Formula.fv_include_v e) in
   let senv_var = List.map (fun x -> (x, Formula.UnknownS (Id.genid "qualifier"))) fv_e in
   fillsort senv [] senv_var e
-  
-               

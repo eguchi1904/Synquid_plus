@@ -53,8 +53,8 @@ exception T2SORT
 let rec t2sort t = match t with
   |MLBool -> Formula.BoolS
   |MLInt -> Formula.IntS
+  |MLVar i -> Formula.AnyS i
   |MLData (i, tys) -> Formula.DataS (i, (List.map t2sort tys))
-  |MLVar _ -> raise T2SORT
   |MLFun _ -> raise T2SORT
                 
 (* -------------------------------------------------- *)
