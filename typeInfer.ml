@@ -527,6 +527,16 @@ and cons_gen_e dinfos env e =
        let new_c =  c_pa_list@c_tys in
        let () = log_cons "" new_c in
        (Liq.TLet (Liq.env_empty, ty_x'),new_c))
+
+  |TaSyn.PInnerFun f_in ->
+     let tmp_f =  fresh  dinfos (Ml.ta_infer_f (Ml.shape_env env) f_in)  in
+     let (_, c_f) = cons_gen_f dinfos env f_in tmp_f in
+     let new_c = [WF (env, tmp_f)] in
+  (* logging *)
+     let () = log_place "inner function" (TaSyntax.PF f_in) in
+     let () = log_tmp "inner function" tmp_f in
+     let () = log_cons "" new_c in
+     (Liq.TLet (Liq.env_empty, tmp_f), new_c@c_f)
   |TaSyn.PAuxi _ -> assert false
 
 and cons_gen_b dinfos env b req_ty =
@@ -606,7 +616,7 @@ and cons_gen_f dinfos env f req_ty =
   (* (Liq.TFun ((x, tmp_in), tmp_t), *)
   (*  (WF (env, tmp_in))::c_t) *)
   match f with
-  |(TaSyn.PFun ((x, ty_x), t)) ->
+  |(TaSyn.PFun ((x, _), t)) ->
     (match req_ty with
      |Liq.TFun ((x', req_ty_in), req_ty_out) ->
        (match Liq.type2sort req_ty_in with
@@ -625,13 +635,19 @@ and cons_gen_f dinfos env f req_ty =
           (req_ty,(List.map (subst_cons x2x'_sita) c_t))
        )
      |_ -> assert false)
-  |TaSyn.PFix ((fname, sch_f), f_body) ->
-    
-    let bvs = Liq.free_tvar req_ty in
-    let bvs_in_anno =  Ml.param_in_schema sch_f in
+  |TaSyn.PFix ((fname, sch_f, inst_schs), f_body) ->
+    let mlty_of_fix = Ml.ta_infer_f (Ml.shape_env env) f in
+    assert (mlty_of_fix = Ml.shape req_ty);
+    let var_in_inst_schs = List.map (function Ml.MLVar i -> i|_ -> assert false)
+                                    (List.filter (function Ml.MLVar _ -> true |_->false)
+                                                 (List.map Ml.ty_in_schema inst_schs))
+    in
+
+    (* let bvs = Liq.free_tvar req_ty in *)
+    (* let bvs_in_anno =  Ml.param_in_schema sch_f in *)
     (*  応急処置*)
-    (assert ((List.length bvs_in_anno) = (List.length bvs)));
-    let req_sch = (bvs, [], req_ty) in
+    (* (assert ((List.length bvs_in_anno) = (List.length bvs))); (\*  *\) *)
+    let req_sch = (var_in_inst_schs, [], req_ty) in
     cons_gen_f dinfos (Liq.env_add_schema env (fname, req_sch)) f_body req_ty
 
       
@@ -941,7 +957,8 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
 
 
 let f  z3_env dinfos qualifiers env t =
-  let (ta_t, ml_ty) = Ml.infer (Ml.shape_env env) t in
+  let inlined_t = Syntax.inline_rec_fun M.empty t in
+  let (ta_t, ml_ty) = Ml.infer (Ml.shape_env env) inlined_t in
   liqInfer z3_env dinfos qualifiers env ta_t
   
 

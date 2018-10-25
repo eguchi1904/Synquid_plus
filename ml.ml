@@ -273,6 +273,9 @@ and infer_e env e = match e with
        Not_found -> raise (ML_Inf_Err (Printf.sprintf "%s is not in scope" x))
     )
   |Syn.PAuxi _ -> raise (ML_Inf_Err "encounter unknown auxiliary function")
+  |Syn.PInnerFun f_in ->
+    let (ta_f_in, ty_f_in, c) = infer_f env f_in in
+    (TaSyn.PInnerFun ta_f_in, ty_f_in, c)
   |Syn.PAppFo (e1, e2) ->
     let (ta_e1, ty1, c1) = infer_e env e1 in
     let (ta_e2, ty2, c2) = infer_e env e2 in
@@ -347,20 +350,31 @@ and infer_f env f = match f with
     let alpha = MLVar (Id.genid "alpha") in (* for recursive definition*)
     let alpha_sch = ty_of_schema alpha in
     let (ta_f, ty_f, c) = infer_f (add_env f_name  alpha_sch env) f_body  in
-    
+    (* generalization *)
     let sita = unify ((alpha, ty_f)::c) subst_empty in
     let ty_f' = subst_ty sita ty_f in
     let env' = subst_env sita env in
     let fv_ty_f = List.diff (fv ty_f') (fv_env env' ) in
     let sch_f =  generalize fv_ty_f ty_f' in
-    (* treat f_name as polimorphic type in the f_body *)
-    let fv_ty1_var = List.map (fun beta -> ty_of_schema (MLVar beta)) fv_ty_f in
-    let instantiate_f_name = TaSyn.PSymbol (f_name, fv_ty1_var) in
+    let fv_ty_f_var = List.map (fun beta -> ty_of_schema (MLVar beta)) fv_ty_f in
+    let instantiate_f_name = TaSyn.PSymbol (f_name, fv_ty_f_var) in
     let ta_f' = TaSyn.substitute_f f_name  instantiate_f_name ta_f in
+    (* instantiation *)
+    let (betas, inst_f_ty) = instantiate sch_f in
+    (* instantiate of annotation in ta_f' *)
+    let cons_from_inst =
+      List.map2 (fun alpha beta -> (MLVar alpha, MLVar beta)) fv_ty_f betas
+    in
+    (* let inst_sita_list = *)
+    (*   List.map2 (fun alpha beta -> (alpha, MLVar beta)) fv_ty_f betas *)
+    (* in *)
+    (* let inst_sita = M.add_list inst_sita_list M.empty in *)
+    (* let ta_f'' = subst_tasyn_f inst_sita ta_f' in *)
     
-    (TaSyn.PFix ((f_name, sch_f), ta_f'),
-     alpha,
-     (alpha, ty_f)::c)
+    let instans_type_list = List.map (fun i -> ty_of_schema (MLVar i)) betas in
+    (TaSyn.PFix ((f_name, sch_f, instans_type_list), ta_f'),
+     inst_f_ty,
+     (alpha, ty_f)::(cons_from_inst)@c)
 
 
 let infer env t =
@@ -387,6 +401,7 @@ and ta_infer_e env e = match e with
   |TaSyn.PSymbol (x, tys) ->
     let sch = find_env x env in
     instantiate_implicit (List.map ty_in_schema tys) sch
+  |TaSyn.PInnerFun f_in -> ta_infer_f env f_in
   |TaSyn.PAuxi _ -> raise (ML_Inf_Err "encounter auxi")
   |TaSyn.PAppFo (e1, _)| TaSyn.PAppHo (e1, _) ->
     (match ta_infer_e env e1 with
@@ -409,7 +424,8 @@ and ta_infer_f env f = match f with
     let x_ty = ty_in_schema sch in
     let t_ty = ta_infer (add_env x sch env) t in
     MLFun (x_ty, t_ty)
-  |TaSyn.PFix ((f_name, sch), f) -> ty_in_schema sch
+  |TaSyn.PFix ((f_name, sch, inst_tys), f) ->
+    instantiate_implicit (List.map ty_in_schema inst_tys) sch
                              
                              
                              

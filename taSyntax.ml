@@ -7,8 +7,9 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
  and 'a e =                        (* E-term *)
    |PSymbol of (Id.t *  'a list)     (* x[t1,t2, ... ] *)
    |PAuxi of Id.t               (* auxiliary function *)
+   |PInnerFun of 'a f
    |PAppFo of 'a e * 'a e
-   |PAppHo of 'a e * 'a f            
+   |PAppHo of 'a e * 'a f       (* redundant *)
                                  
  and 'a b =                        (* branching-term *)
    |PIf of 'a e * 'a t * 'a t
@@ -17,7 +18,7 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
  (* \x.t.(body) *)
  and 'a f =
    |PFun of (Id.t * 'a)  * 'a t
-   |PFix of (Id.t * 'a) * 'a f
+   |PFix of (Id.t * 'a * 'a list) * 'a f
 
 
  and 'a case = {constructor : Id.t ; argNames : (Id.t * 'a) list ; body : 'a t}
@@ -35,6 +36,7 @@ let rec access_annotation_t (f:'a -> 'a) (t:'a t) = match t with
 and access_annotation_e f e = match e with
   |PSymbol (x, ty_list) -> PSymbol (x, List.map f ty_list)
   |PAuxi i -> PAuxi i
+  |PInnerFun f_in -> PInnerFun (access_annotation_f f f_in)
   |PAppFo (e1, e2)-> PAppFo (access_annotation_e f  e1, access_annotation_e f e2)
   |PAppHo (e1, f2) -> PAppHo (access_annotation_e f e1, access_annotation_f f f2)
 
@@ -47,7 +49,8 @@ and access_annotation_b f b = match b with
 
 and access_annotation_f f = function
   |(PFun ((x, sch), t1)) -> PFun ((x, f sch), access_annotation_t f t1)
-  |(PFix ((fname, sch), f_body)) ->  (PFix ((fname, f sch), access_annotation_f f f_body))
+  |(PFix ((fname, sch, inst_tys), f_body)) ->  (PFix ((fname, f sch,
+                                                       List.map f inst_tys), access_annotation_f f f_body))
 
 and access_annotation_case f {constructor =  c; argNames = x_sch_list; body = t} =
   {constructor = c;
@@ -55,7 +58,7 @@ and access_annotation_case f {constructor =  c; argNames = x_sch_list; body = t}
    body = access_annotation_t f t}
 
   
-
+(* プログラへの代入 *)
 let rec substitute (x:Id.t) (dest:'a e) (t:'a t)  = match t with
   |PLet ((y, sch), t1, t2) when y = x ->  t
   |PLet ((y, sch), t1, t2) ->
@@ -68,6 +71,7 @@ let rec substitute (x:Id.t) (dest:'a e) (t:'a t)  = match t with
 and substitute_e (x:Id.t) (dest:'a e) (e:'a e) =  match e with
   |PSymbol (i, sch) when i = x ->  dest
   |PSymbol (i, sch) -> PSymbol (i, sch)
+  |PInnerFun f_in -> PInnerFun (substitute_f x dest f_in)
   |PAuxi i -> PAuxi i
   |PAppFo (e1, e2) -> PAppFo (substitute_e x dest e1, substitute_e x dest e2)
   |PAppHo (e1, f2) -> PAppHo (substitute_e x dest e1, substitute_f x dest f2)
@@ -83,11 +87,18 @@ and substitute_case x dest {constructor =  c; argNames = x_sch_list; body = t } 
   else
     {constructor =  c; argNames = x_sch_list; body = substitute x dest t }
 
-and substitute_f x dest  (PFun ((y, sch), t1)) =
-  if x = y then
-    (PFun ((y, sch), t1))
-  else
-    (PFun ((y, sch), substitute x dest t1))
+and substitute_f x dest f =
+  match f with
+  |PFun ((y, sch), t1) ->
+    if x = y then
+      (PFun ((y, sch), t1))
+    else
+      (PFun ((y, sch), substitute x dest t1))
+  |PFix ((f_name, sch, inst_tys), body) ->
+    if x = f_name then
+      f
+    else
+      PFix ((f_name, sch, inst_tys), substitute_f x dest body)
                      
 
   
@@ -109,6 +120,7 @@ and syn2string_e f = function
   |PSymbol (i, xs) -> Printf.sprintf "%s[%s]"
                                      i
                                      (String.concat "," (List.map f xs))
+  |PInnerFun f_in -> Printf.sprintf "(%s)" (syn2string_f f f_in)
   |PAuxi i -> i
   |PAppFo (e1,e2) -> Printf.sprintf "%s (%s)" (syn2string_e f e1) (syn2string_e f e2)
   |PAppHo (e1, fterm) -> Printf.sprintf "%s (%s)" (syn2string_e f e1) (syn2string_f f fterm)
@@ -127,10 +139,12 @@ and syn2string_b f = function
 and syn2string_f f = function
   |PFun ((x, anno), t) ->
     Printf.sprintf "\\%s:%s.%s" x  (f anno) (syn2string f t)
-  |PFix ((fname, anno), f_body) ->
-    Printf.sprintf "fix %s:%s\n%s"
+  |PFix ((fname, anno, inst_tys), f_body) ->
+    let inst_tys_str = String.concat "; " (List.map f inst_tys) in
+    Printf.sprintf "fix %s:%s; inst_tys:[%s]\n%s"
                    fname
                    (f anno)
+                   inst_tys_str
                    (syn2string_f f f_body)
 
 
@@ -155,6 +169,7 @@ let rec fv t = match t with
 and fv_e  = function
   |PSymbol (i, xs) -> S.singleton i
   |PAuxi i -> S.singleton i
+  |PInnerFun f_in -> fv_f f_in
   |PAppFo (e1,e2) -> (S.union (fv_e e1) (fv_e e2))
   |PAppHo (e1, fterm) -> (S.union (fv_e e1) (fv_f fterm))
 
@@ -172,6 +187,8 @@ and fv_b  = function
 and fv_f  = function
   |PFun ((x, anno), t) ->
     S.remove x (fv t)
+  |PFix ((f_name, sch, inst_tys), body) ->
+    S.remove f_name (fv_f body)
 
 and fv_case  {constructor = cons; argNames = xs; body = t} =
   S.diff (fv t) (S.of_list (List.map fst xs))

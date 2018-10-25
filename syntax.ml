@@ -3,8 +3,9 @@ type t = PLet of Id.t * t * t |PE of e | PI of b | PF of f | PHole
  and e =                        (* E-term *)
    |PSymbol of Id.t             (* Symbol - variable , constract *)
    |PAuxi of Id.t               (* auxiliary function *)
+   |PInnerFun of f
    |PAppFo of e * e
-   |PAppHo of e * f  
+   |PAppHo of e * f             (* redundant *)
                                  
  and b =                        (* branching-term *)
    |PIf of e * t * t
@@ -16,6 +17,44 @@ type t = PLet of Id.t * t * t |PE of e | PI of b | PF of f | PHole
 
  and case = {constructor : Id.t ; argNames : Id.t list ; body : t}
 
+  
+let rec fv t = match t with
+  |PLet (x, t1, t2) ->
+    S.remove x (S.union (fv t1) (fv t2))
+  |PE e -> fv_e  e
+  |PI b -> fv_b  b
+  |PF fundec -> fv_f  fundec
+  |PHole -> S.empty
+
+and fv_e  = function
+  |PSymbol i -> S.singleton i
+  |PAuxi i -> S.singleton i
+  |PInnerFun f_in -> fv_f f_in
+  |PAppFo (e1,e2) -> (S.union (fv_e e1) (fv_e e2))
+  |PAppHo (e1, fterm) -> (S.union (fv_e e1) (fv_f fterm))
+
+and fv_b  = function
+  |PIf (e,t1,t2) ->
+    (S.union (fv_e e) (S.union (fv t1) (fv t2)))
+  |PMatch (e, cases) ->
+    S.union (fv_e e)
+            (List.fold_left
+               (fun acc case -> S.union acc (fv_case case))
+               S.empty
+               cases
+            )
+   
+and fv_f  = function
+  |PFun (x, t) ->
+    S.remove x (fv t)
+  |PFix (f_name, body) ->
+    S.remove f_name (fv_f body)
+
+and fv_case  {constructor = cons; argNames = xs; body = t} =
+  S.diff (fv t) (S.of_list xs)
+
+
+  
 
 
 
@@ -23,6 +62,7 @@ let rec auxi_exist (e:e) =
   match e with
   |PSymbol _ -> false
   |PAuxi _ -> true
+  |PInnerFun f -> auxi_exist_f f
   |PAppFo (e1, e2) ->(auxi_exist e1)||(auxi_exist e2)
   |PAppHo (e1, f2) ->(auxi_exist e1)||(auxi_exist_f f2)
 
@@ -51,6 +91,7 @@ and auxi_exist_case case = auxi_exist_t case.body
 let rec auxi_name (e:e) =
   match e with
   |PSymbol _ -> raise (Invalid_argument "auxi_function not found")
+  |PInnerFun _ ->raise (Invalid_argument "auxi_function not found")
   |PAuxi i ->  i
   |PAppFo (e1,e2) -> auxi_name e1
   |PAppHo (e1, f) -> auxi_name e1
@@ -71,6 +112,7 @@ let rec syn2string = function
 and syn2string_e = function
   |PSymbol i -> i
   |PAuxi i -> i
+  |PInnerFun f -> (syn2string_f f)
   |PAppFo (e1,e2) -> Printf.sprintf "%s (%s)" (syn2string_e e1) (syn2string_e e2)
   |PAppHo (e1, f2) -> Printf.sprintf "%s (%s)" (syn2string_e e1) (syn2string_f f2)
 
@@ -110,3 +152,44 @@ let let_rec: Id.t -> Id.t list -> t -> t=
     |PF body -> PF (PFix (f, body))
     |_ -> assert false
   )
+
+
+(* inline recurisive fuctnion *)
+let rec inline_rec_fun env e =
+  match e with
+  |PLet (x, t1, t2) when not (S.mem x (fv t1)) -> (* not recusion *)
+    let t1' = inline_rec_fun env t1 in
+    PLet (x, t1', inline_rec_fun (M.remove x env) t2)
+  |PLet (f_rec, (PF f_body), t2) -> (* recurisive function *)
+    let f_body' = inline_rec_fun_f env f_body in
+    let fix_val = PInnerFun (PFix (f_rec, f_body')) in
+    inline_rec_fun (M.add f_rec fix_val env) t2
+  |PLet _ -> assert false
+  |PE e -> PE (inline_rec_fun_e env e)
+  |PI b -> PI (inline_rec_fun_b env b)
+  |PF f -> PF (inline_rec_fun_f env f)
+  |PHole -> PHole
+
+and inline_rec_fun_e env = function
+  |PSymbol i when (M.mem i env) -> M.find i env
+  |PSymbol i|PAuxi i as e -> e
+  |PInnerFun f -> PInnerFun (inline_rec_fun_f env f)
+  |PAppFo (e1,e2) -> PAppFo (inline_rec_fun_e env e1, inline_rec_fun_e env e2)
+  |PAppHo (e1, f2) -> PAppHo (inline_rec_fun_e env e1, inline_rec_fun_f env f2)
+
+and inline_rec_fun_b env = function
+  |PIf (e,t1,t2) ->
+    PIf (inline_rec_fun_e env e, inline_rec_fun env t1, inline_rec_fun env t2)
+  |PMatch (e, cases) ->    
+    PMatch (inline_rec_fun_e env e, List.map (inline_rec_fun_case env) cases)
+
+and inline_rec_fun_case env  {constructor = cons; argNames = xs; body = t} =
+  {constructor = cons; argNames = xs; body = inline_rec_fun env t}
+
+and inline_rec_fun_f env = function
+  |PFun (x, t) ->
+    let t' = inline_rec_fun (M.remove x env) t in
+    PFun (x, t')
+  |PFix (f_name, body) ->
+    let body' = inline_rec_fun_f (M.remove f_name env) body in
+    PFix (f_name, body')

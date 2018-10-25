@@ -6,6 +6,7 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
  and 'a e =                        (* E-term *)
    |PSymbol of (Id.t *  'a list)     (* x[t1,t2, ... ] *)
    |PAuxi of Id.t               (* auxiliary function *)
+   |PInnerFun of 'a f           
    |PAppFo of 'a e * 'a e
    |PAppHo of 'a e * 'a f
                                  
@@ -16,7 +17,7 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
  (* \x.t.(body) *)
  and 'a f =
    |PFun of (Id.t * 'a)  * 'a t
-   |PFix of (Id.t * 'a) * 'a f
+   |PFix of (Id.t * 'a * 'a list) * 'a f
 
 
  and 'a case = {constructor : Id.t ; argNames : (Id.t * 'a) list ; body : 'a t}
