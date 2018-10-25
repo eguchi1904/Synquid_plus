@@ -233,7 +233,7 @@ prg_cases:
 | prg_case { [$1] }
 
 prg_case:
-| CAPID cargs ALLOW prg nl { Syntax.mk_case $1 $2 $4 }
+| CAPID cargs ALLOW nl prg nl { Syntax.mk_case $1 $2 $5 }
 
 prg_f:
 |  LPAREN prg_f RPAREN { $2 }

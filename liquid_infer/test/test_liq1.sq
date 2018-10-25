@@ -25,28 +25,29 @@ measure elems :: RList a -> Set a where
 
 leq :: x: a -> y: a -> {Bool | _v <==> (x <= y)}
 geq :: x: a -> y: a  -> {Bool | _v <==> (x >= y)}
-neq :: x: a -> y: a -> {Bool | _v  <==> (x != y)}
-not :: x:Bool -> {Bool | _v == (!x)}
-eq :: x: a -> y: a -> {Bool | _v  <==> (x == y)}
-add :: x: Int -> y:Int -> {Int | _v == (x + y)}
-dec :: x: Int -> y:Int -> {Int | _v == (x - y)}
-mul :: x: Int -> y:Int -> {Int | _v == (x * y)}
 
-zero :: {Int | _v == 0 }
-one :: {Int | _v == 1 }
-hand :: {Int | _v == 100}
-nintyone :: {Int | _v == 91 }
-nintytwo :: {Int | _v == 92}
-ten :: {Int | _v == 10 }
-true ::{Bool | _v}
-false ::{Bool |!_v}
+
+-- neq :: x: a -> y: a -> {Bool | _v  <==> (x != y)}
+-- not :: x:Bool -> {Bool | _v == (!x)}
+-- eq :: x: a -> y: a -> {Bool | _v  <==> (x == y)}
+-- add :: x: Int -> y:Int -> {Int | _v == (x + y)}
+-- dec :: x: Int -> y:Int -> {Int | _v == (x - y)}
+-- mul :: x: Int -> y:Int -> {Int | _v == (x * y)}
+-- zero :: {Int | _v == 0 }
+-- one :: {Int | _v == 1 }
+-- hand :: {Int | _v == 100}
+-- nintyone :: {Int | _v == 91 }
+-- nintytwo :: {Int | _v == 92}
+-- ten :: {Int | _v == 10 }
+-- true ::{Bool | _v}
+-- false ::{Bool |!_v}
 
 -- split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }
 
 -- partition :: p: a -> xs: RList a <{True}> -> {Pair (RList {a | _v <= p} <{True}>) (RList {a | _v > p} <{True}>) | (((len (fst _v)) + (len (snd _v))) == len xs) && (((elems (fst _v)) + (elems (snd _v))) == elems xs)}
 
   
-sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}>|(len _v == len l) && (elems _v == elems l)}
+--sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}>|(len _v == len l) && (elems _v == elems l)}
 
 -- idの型は以下で十分。
 id :: x:a -> a
@@ -57,39 +58,84 @@ id :: x:a -> a
 test_list :: RList {Int| _v >= 0} <{True}>
 
 
-max = \a. \b.
-   if geq a b then a else b
+-- max = \a. \b.
+--    if geq a b then a else b
 
-myinc = \x. add x one
+-- myinc = \x. add x one
    
-sum = \x.
-      if leq x zero then
-        zero
-     else
-      add x (sum (dec x one))
+-- sum = \x.
+--       if leq x zero then
+--         zero
+--      else
+--       add x (sum (dec x one))
 
-mac91 = \n.
- if leq n hand then
-   mac91 (mac91 (add (add n ten) one)) 
- else
-  dec n ten
+-- mac91 = \n.
+--  if leq n hand then
+--    mac91 (mac91 (add (add n ten) one)) 
+--  else
+--   dec n ten
 
 
-sortTest =
- let insert = \x. \l.
-  match l with
-   Nil -> (Cons x Nil)
-   Cons y ys -> if geq x  y then
-                 Cons x l
-	       else
-	         Cons y (insert x ys)
- in
- let  sort = \l.
-  match l with
-   Nil -> Nil
-   Cons y ys -> insert y (sort ys)
- in
- sort	
+-- sortTest =
+--  let insert = \x. \l.
+--   match l with
+--    Nil -> (Cons x Nil)
+--    Cons y ys -> if geq x  y then
+--                  Cons x l
+-- 	       else
+-- 	         Cons y (insert x ys)
+--  in
+--  let  sort = \l.
+--   match l with
+--    Nil -> Nil
+--    Cons y ys -> insert y (sort ys)
+--  in
+--  sort
+
+--
+--sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}> | len _v == len l && elems _v == elems l}
+
+-- insert :: x:a -> l:RList a <{_0 <= _1}> -> {RList a <{_0 <= _1}>|(len _v == len l + 1) && (elems _v == elems l + [x])}
+
+
+-- insert = \x. \l.
+--   match l with
+--    Nil -> (Cons x Nil)
+--    Cons y ys -> if leq y x then
+--             Cons y (insert x ys)
+--            else
+--             Cons x (Cons y ys)
+
+
+ -- sort = \l.
+ --  match l with
+ --   Nil -> Nil
+ --   Cons y ys ->
+ --   (let insert = \x. \l.
+ --    match l with
+ --     Nil -> (Cons x Nil)
+ --     Cons y ys -> if geq x  y then
+ --                   Cons x (Cons y ys)
+ --      	       else
+ -- 	         Cons y (insert x ys)
+ --    in
+ --     insert y (sort ys))
+
+
+ sort =\ll.
+  let insert = \x. \l.
+    match l with
+     Nil -> (Cons x Nil)
+     Cons y ys -> if geq y x then
+                  Cons x (Cons y ys)
+                 else
+                  Cons y (insert x ys)
+  in
+    match ll with
+     Nil -> Nil
+     Cons y ys -> insert y (sort ys)
+
+
   
   
            

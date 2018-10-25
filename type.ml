@@ -33,6 +33,31 @@ and free_tvar_base = function
 let free_tvar t =  List.uniq (free_tvar' t)
 
 
+let rec extract_unknown_p = function
+  |TScalar (b, p) -> S.union (extract_unknown_p_base b) (Formula.extract_unknown_p p)
+  |TFun((x,t1), t2) -> S.union (extract_unknown_p t1) (extract_unknown_p t2) 
+  |TBot -> S.empty
+
+and extract_unknown_p_base = function
+  |TAny  i -> S.empty
+  |TVar _ -> assert false
+  |TData (_, ts, ps) ->
+    let ts_set =
+      List.fold_left
+        (fun acc t -> S.union (extract_unknown_p t) acc)
+        S.empty
+        ts
+    in
+    let ps_set =
+      List.fold_left
+        (fun acc (_, body) -> S.union (Formula.extract_unknown_p body) acc)
+        S.empty
+        ps
+    in
+    S.union ts_set ps_set
+  |TInt|TBool -> S.empty
+
+          
 
 
 let rec t2string = function
@@ -216,6 +241,10 @@ let env_find env v =
 
 let env_append ((its1, p1):env) ((its2, p2):env):env =
   (its1@its2, p1@p2)
+
+let env_bindings (env,_) =
+  List.map fst env
+  
 
   
 (* freshな型変数で、 {a True} を返す *)

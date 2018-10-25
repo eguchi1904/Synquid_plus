@@ -5,7 +5,11 @@ module Liq = Type
 module TaSyn = TaSyntax
 
 exception LiqErr of string
-                  
+(* log file *)
+let cons_och = open_out "constraints.log"
+
+let solving_och = open_out "solving.log"
+             
 
 (* -------------------------------------------------- *)
 (* constraint: well formedness / subtyping  *)
@@ -24,6 +28,16 @@ let cons2string = function
   |Sub (env, ty1, ty2) ->
     Printf.sprintf "Sub\n %s\n%s <: %s\n"
                    (Liq.env2string env) (Liq.t2string ty1)  (Liq.t2string ty2)
+
+let cons2string_human = function
+  |WF (env, ty) ->
+    let bindings = String.concat "; " (Liq.env_bindings env) in
+        Printf.sprintf "WF\n %s\n%s" bindings (Liq.t2string ty)
+  |Sub (env, ty1, ty2) ->
+    Printf.sprintf "Sub\n%s \n<:\n %s"
+                   (Liq.t2string ty1)  (Liq.t2string ty2)
+
+   
 
 let scons2string = function
   |SWF (senv, e1)->
@@ -169,8 +183,114 @@ let rec split_cons (c:cons) = match c with
     assert false        (* shape miss match *)
        
        
+(* -------------------------------------------------- *)
+(* pp *)
+(* -------------------------------------------------- *)  
+
+let rec cons_list_to_string cs = match cs with
+  |cons::left -> Printf.sprintf "%s\n\n\n%s" (cons2string cons)
+                               (cons_list_to_string left)
+  |[] -> ""
+
+       
+let rec cons_list_to_string_human cs = match cs with
+  |cons::left -> Printf.sprintf "%s%s" (cons2string_human cons)
+                               (cons_list_to_string_human left)
+  |[] -> ""
+
+
+let rec scons_list_to_string scs = match scs with
+  |scons::left ->  Printf.sprintf "%s\n\n\n%s" (scons2string scons)
+                                  (scons_list_to_string left)
+  |[] -> ""
+
+       
+  
+let log_tmp mes tmp =
+  Printf.fprintf cons_och
+                 "%s\n--------------------------------------------------\n%s\n--------------------------------------------------\n"
+                 mes (Liq.t2string tmp)
+
+let log_pa_tmp mes ((args, p):Formula.pa) =
+  Printf.fprintf cons_och
+                 "%s\n--------------------------------------------------\n\..%s\n--------------------------------------------------\n"
+                 mes (Formula.p2string p)
+  
+  
+  
+let log_cons mes cs =
+  Printf.fprintf cons_och "\n\n%s\n" (cons_list_to_string_human cs)
+
+let log_place mes t =
+  Printf.fprintf cons_och "\n\n\n\n%s\n|||||||||||||||||||||||||||||||||||||\n%s\n|||||||||||||||||||||||||||||||||||||\n"
+                 mes (TaSyntax.syn2string Ml.string_of_sch t)
+
+let log_assingment mes pcandi =
+  let pcandi_list = M.bindings pcandi in
+  let pcandi_str =
+        String.concat "\n"
+                  (List.map (fun (k_i, e_list) ->
+                       let e_list_str = String.concat
+                                      "; "
+                                      (List.map Formula.p2string e_list)
+                       in
+                       Printf.sprintf
+                         "  %s -> [ %s ]"
+                         k_i
+                         e_list_str
+                     )
+                            pcandi_list
+                  )
+  in
+  Printf.fprintf
+    solving_och
+    "%s:\n\n%s\n\n\n\n\n\n\n\n"
+    mes
+    pcandi_str
+
+let log_refine mes k_list before_pcandi after_pcandi c =
+  let related_unknown_p =
+    match c with
+    |SSub (env, e, ks) ->      
+      S.union (Formula.extract_unknown_p ks)
+              (S.union (Formula.extract_unknown_p e)
+                       (Formula.extract_unknown_p env))
+    |SWF (senv, e1) ->
+      Formula.extract_unknown_p e1
+  in
+  let mk_related_assingment pcandi =
+    List.map
+      (fun k_i -> (k_i, M.find k_i pcandi))
+      (S.elements related_unknown_p)
+  in
+  let mk_related_assingment_str related_assingment =
+    String.concat "\n"
+                  (List.map (fun (k_i, e_list) ->
+                       let e_list_str = String.concat
+                                      "; "
+                                      (List.map Formula.p2string e_list)
+                       in
+                       Printf.sprintf
+                         "  %s -> [ %s ]"
+                         k_i
+                         e_list_str
+                     )
+                            related_assingment
+                  )
+  in
+  let before_related_assingment_str = mk_related_assingment_str (mk_related_assingment before_pcandi) in
+  let after_related_assingment_str =  mk_related_assingment_str (mk_related_assingment after_pcandi) in
+  
+  Printf.fprintf
+    solving_och
+    "\n%s\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nbefore:\n%s\nconstraint:\n%s\nafter:\n%s\n\n"
+    mes
+    before_related_assingment_str
+    (scons2string c)
+    after_related_assingment_str
+
     
-    
+
 (* -------------------------------------------------- *)
 (* auxiliary function  *)
 (* -------------------------------------------------- *)
@@ -216,34 +336,46 @@ let rec fresh (data_info_map: Data_info.t M.t) t =
     Liq.TFun ((x, (fresh data_info_map ty1)), (fresh data_info_map ty2))
       
 
-let mk_tmp dinfos env t =  fresh  dinfos (Ml.ta_infer (Ml.shape_env env) t) 
-        
-                  
+let mk_tmp dinfos env t =
+  let tmp = fresh  dinfos (Ml.ta_infer (Ml.shape_env env) t) in
+  tmp
+
+            
 let rec cons_gen dinfos env t req_ty =
   match t with
-  |TaSyn.PLet ((x, (alist, ty)), t1, t2) when S.mem x (TaSyn.fv t1)->
+  |TaSyn.PLet ((x, (alist, ty)), t1, t2) when S.mem x (TaSyn.fv t1)-> (* recursive def *)
     let new_tmp_x =  fresh dinfos ty in
     let new_tmp_x_sch = (alist, [], new_tmp_x) in
+    let new_c =  [WF (env, new_tmp_x)] in
+    (* logging *)
+    let () = log_cons "" new_c in
+    let () = log_tmp x new_tmp_x in
     (* disable let polimorphism for predicate *)
     let env2 =  (Liq.env_add_schema env (x, new_tmp_x_sch)) in
     let (_, c1) = cons_gen dinfos env2 t1 new_tmp_x in
     (* let env2 =  (Liq.env_add env (x, tmp1)) in *)
     let (_, c2) = cons_gen dinfos env2 t2 req_ty in
-    let new_c =  [WF (env, new_tmp_x)]@c1@c2 in
-    (req_ty, new_c)
+    (req_ty, new_c@c1@c2)
  |TaSyn.PLet ((x, (alist, ty)), t1, t2) ->
    let new_tmp_x = fresh dinfos ty in
    let (_, c1) = cons_gen dinfos env t1 new_tmp_x in
     (* disable let polimorphism for predicate *)
    let new_tmp_x_sch = (alist, [], new_tmp_x) in
+   let new_c =  [WF (env, new_tmp_x)] in
+   (* logging *)
+   let () = log_cons "" new_c in
+   let () = log_tmp x new_tmp_x in
+   
     let env2 =  (Liq.env_add_schema env (x, new_tmp_x_sch )) in
     (* let env2 =  (Liq.env_add env (x, tmp1)) in *)
     let (_, c2) = cons_gen dinfos env2 t2 req_ty in
-    let new_c =  [WF (env, new_tmp_x)]@c1@c2 in
-    (req_ty, new_c)    
+
+    (req_ty, new_c@c1@c2)    
   |TaSyn.PE e ->
     let ((Liq.TLet (c_env, tmp_e)), c) = cons_gen_e dinfos env e in
-    (req_ty, [Sub ((Liq.env_append env c_env), tmp_e, req_ty)]@c )
+    let new_c = [Sub ((Liq.env_append env c_env), tmp_e, req_ty)] in
+    let () = log_cons "" new_c in
+    (req_ty, new_c@c )
   |TaSyn.PI b -> cons_gen_b dinfos env b req_ty
   |TaSyn.PF f -> cons_gen_f dinfos env f req_ty
   |TaSyn.PHole -> assert false
@@ -262,23 +394,35 @@ and cons_gen_e dinfos env e =
              when  valvar = Id.valueVar_id ->
            let tmp_out' = Liq.substitute_F (M.singleton x e2_value) tmp_out in
            let c_env = (Liq.env_append c_env1 c_env2)  in
+           let new_c = [(Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in))] in
+           (* logging *)
+           let () = log_place "application" (TaSyntax.PE e) in 
+           let () = log_cons "" new_c in
            ((Liq.TLet (c_env, tmp_out')),
-            (Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in))::(c1@c2)
+            new_c@(c1@c2)
            )
         | Liq.TScalar (b, Eq (e2_value, (Var (_, valvar))))
              when  valvar = Id.valueVar_id ->
            let tmp_out' = Liq.substitute_F (M.singleton x e2_value) tmp_out in
            let c_env = (Liq.env_append c_env1 c_env2)  in
+           let new_c = [(Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in))] in
+           (* logging *)
+           let () = log_place "application" (TaSyntax.PE e) in 
+           let () = log_cons "" new_c in
            ((Liq.TLet (c_env, tmp_out')),
-            (Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in))::(c1@c2)
+            new_c@(c1@c2)
            )
         |_ -> 
           (* 引数をフレッシュ *)
           let x' = Id.genid x in
           let tmp_out' = Liq.replace_F x x' tmp_out in (* [x'/x]t1_out *)
           let c_env =  (Liq.env_add (Liq.env_append c_env1 c_env2) (x',tmp2)) in
+          let new_c =[Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in)] in
+          (* logging *)
+          let () = log_place "application" (TaSyntax.PE e) in 
+          let () = log_cons "" new_c in
           ((Liq.TLet (c_env, tmp_out')),
-           (Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in))::(c1@c2)
+           new_c@(c1@c2)
           )
        )
        
@@ -291,9 +435,15 @@ and cons_gen_e dinfos env e =
     let (_, c_f1) = cons_gen_f dinfos env f1 tmp_f1 in
     (match cons_gen_e dinfos env e1 with
      |((Liq.TLet (c_env1, Liq.TFun ((x, tmp_in), tmp_out) )), c_e1) ->
+       let new_c =    [(Sub (Liq.env_append env c_env1, tmp_f1, tmp_in));
+                       WF (env, tmp_f1)]
+       in
+       (* logging *)
+       let () = log_place "application(higher order)" (TaSyntax.PE e) in 
+       let () = log_tmp "appHO arg" tmp_f1 in
+       let () = log_cons "" new_c in
        (Liq.TLet (c_env1, tmp_out),
-        [(Sub (Liq.env_append env c_env1, tmp_f1, tmp_in));
-        WF (env, tmp_f1)]@(c_f1@c_e1)
+        new_c@(c_f1@c_e1)
        )
      |_ -> assert false
     )
@@ -340,7 +490,6 @@ and cons_gen_e dinfos env e =
          List.map
            (fun (p, (arg_sort, rets)) ->
              let (args, p) = Formula.genUnknownPa_shape (arg_sort, rets) p in
-             (* この、(arg_sort, rets)は、schに合わせてinstantiateする必要があるな。 *)
              (* make well formedness constraints *)
              let arg_env= List.map (fun (x, sort) -> (x, Liq.sort2type sort))
                                    args
@@ -352,27 +501,12 @@ and cons_gen_e dinfos env e =
            plist
        in
        let unknown_pa_list, c_pa_list = List.split unknown_pa_and_c_pa_list in
-       (* plistのwell formedness が必要 *)
-       (* let c_pa_list = List.map *)
-       (*                   (fun (args_sort, p) -> *)
 
-       (*                     let arg_env= List.map (fun (x, sort) -> (x, Liq.sort2type sort)) *)
-       (*                                            args_sort *)
-       (*                     in *)
-       (*                     let env' = Liq.env_add_list env arg_env in *)
-       (*                     WF (env', Liq.TScalar (Liq.TBool, p)) *)
-       (*                   ) *)
-       (*                   unknown_pa_list *)
-       (* in *)
-                           
+       (* typeのinstantiate *)
        let tys_tmp = List.map (fresh dinfos) tys in
        let c_tys = List.map (fun ty -> WF (env, ty)) tys_tmp in
 
        let ty_x' = Liq.instantiate_implicit x_liq_sch tys_tmp unknown_pa_list in
-       (* let sita_ty = M.add_list2 alist tys_tmp M.empty in *)
-
-       (* let sita_pa = M.add_list2 (List.map fst plist) unknown_pa_list M.empty in *)
-       (* let ty_x' = Liq.substitute_pa sita_pa (Liq.substitute_T sita_ty ty_x) in (\* [p'\p][ty\a]ty *\) *)
        let  a_sort_sita_list = M.bindings a_sort_sita in
        let () = Printf.printf "a_list_sort:%s"
                               (String.concat ","
@@ -387,13 +521,19 @@ and cons_gen_e dinfos env e =
                                              ((List.map Formula.pa2string_detail) unknown_pa_list))
        in
        let () = Printf.printf "\nvar_instants:\n%s::%s" x (Liq.t2string ty_x') in
-
-       (Liq.TLet (Liq.env_empty, ty_x'), c_pa_list@c_tys))
+       (* logging *)
+       let () = List.iter (log_pa_tmp ("instantiate:"^x)) unknown_pa_list in
+       let () = List.iter (log_tmp ("instantiate:"^x)) tys_tmp in
+       let new_c =  c_pa_list@c_tys in
+       let () = log_cons "" new_c in
+       (Liq.TLet (Liq.env_empty, ty_x'),new_c))
   |TaSyn.PAuxi _ -> assert false
 
 and cons_gen_b dinfos env b req_ty =
   match b with
   |TaSyn.PIf (e1, t2, t3) ->
+    (* logging *)
+    let () = log_place "if judgement" (TaSyntax.PE e1) in 
     let ((Liq.TLet (c_env1, tmp1)), c1) = cons_gen_e dinfos env e1 in
     (match tmp1 with
      |Liq.TScalar (Liq.TBool, phi) ->
@@ -409,7 +549,11 @@ and cons_gen_b dinfos env b req_ty =
        in       
        let env_true = Liq.env_add_F (Liq.env_append c_env1 env) phi_true in
        let env_false = Liq.env_add_F (Liq.env_append c_env1 env) phi_false in
+       (* logging *)
+       let () = log_place "if true" t2 in 
        let (_, c2) = cons_gen dinfos env_true t2 req_ty in
+       (* logging *)
+       let () = log_place "if false" t3 in 
        let (_, c3) = cons_gen dinfos env_false t3 req_ty in
        (req_ty,
         c1@c2@c3)
@@ -418,6 +562,8 @@ and cons_gen_b dinfos env b req_ty =
     )
   |TaSyn.PMatch (e1, case_list) ->
     (Printf.printf "match temp:\n%s\n" (Liq.t2string req_ty));
+    (* logging *)
+    let () = log_place "match scru" (TaSyntax.PE e1) in 
     let (e1_tmp, c1) = cons_gen_e dinfos env e1 in
     let case_list_c = List.map (cons_gen_case dinfos env req_ty e1_tmp) case_list in
     (req_ty,
@@ -430,6 +576,8 @@ and cons_gen_case dinfos env req_ty e_tmp  {TaSyn.constructor= con;
   match e_tmp with
   |Liq.TLet (c_env1, (Liq.TScalar (Liq.TData (i, tys, pas), phi))) ->
     (* case固有の環境を作成 *)
+    (* logging *)
+    let () = log_place (Printf.sprintf "case:%s" con) t in
     let xs = List.map fst x_sch_list in
     let con_sch = (try Liq.env_find env con with _ -> assert false) in
     let con_ty = Liq.instantiate_implicit con_sch tys pas in
@@ -451,30 +599,40 @@ and cons_gen_case dinfos env req_ty e_tmp  {TaSyn.constructor= con;
     c_t
   | _ -> assert false
 
-and cons_gen_f dinfos env (TaSyn.PFun ((x, ty_x), t)) req_ty =
+and cons_gen_f dinfos env f req_ty =
   (* let tmp_in = fresh dinfos (Ml.ty_in_schema ty_x) in *)
   (* let env' =  (Liq.env_add env (x, tmp_in)) in *)
   (* let (tmp_t, c_t) = cons_gen dinfos env' t in *)
   (* (Liq.TFun ((x, tmp_in), tmp_t), *)
   (*  (WF (env, tmp_in))::c_t) *)
-  match req_ty with
-  |Liq.TFun ((x', req_ty_in), req_ty_out) ->
-    (match Liq.type2sort req_ty_in with
-     |None ->                   (* x' and x do not occur in req_ty_out  *)
-       let env' =  (Liq.env_add env (x, req_ty_in)) in
-       let (_, c_t) = cons_gen dinfos env' t req_ty_out in
-       (req_ty, c_t)
-     |Some x_sort -> 
-       let env' =  (Liq.env_add env (x, req_ty_in)) in
-       let x_var = Formula.Var (x_sort, x) in
-       let x'_var = Formula.Var (x_sort, x') in
-       let x2x'_sita = M.singleton  x x'_var in
-       let x'2x_sita = M.singleton  x' x_var in
-       (* [x' -> x]req_ty_out *)
-       let (_, c_t) = cons_gen dinfos env' t (Liq.substitute_F x'2x_sita req_ty_out) in
-       (req_ty,(List.map (subst_cons x2x'_sita) c_t))
-    )
-  |_ -> assert false
+  match f with
+  |(TaSyn.PFun ((x, ty_x), t)) ->
+    (match req_ty with
+     |Liq.TFun ((x', req_ty_in), req_ty_out) ->
+       (match Liq.type2sort req_ty_in with
+        |None ->                   (* x' and x do not occur in req_ty_out  *)
+          let env' =  (Liq.env_add env (x, req_ty_in)) in
+          let (_, c_t) = cons_gen dinfos env' t req_ty_out in
+          (req_ty, c_t)
+        |Some x_sort -> 
+          let env' =  (Liq.env_add env (x, req_ty_in)) in
+          let x_var = Formula.Var (x_sort, x) in
+          let x'_var = Formula.Var (x_sort, x') in
+          let x2x'_sita = M.singleton  x x'_var in
+          let x'2x_sita = M.singleton  x' x_var in
+          (* [x' -> x]req_ty_out *)
+          let (_, c_t) = cons_gen dinfos env' t (Liq.substitute_F x'2x_sita req_ty_out) in
+          (req_ty,(List.map (subst_cons x2x'_sita) c_t))
+       )
+     |_ -> assert false)
+  |TaSyn.PFix ((fname, sch_f), f_body) ->
+    
+    let bvs = Liq.free_tvar req_ty in
+    let bvs_in_anno =  Ml.param_in_schema sch_f in
+    (*  応急処置*)
+    (assert ((List.length bvs_in_anno) = (List.length bvs)));
+    let req_sch = (bvs, [], req_ty) in
+    cons_gen_f dinfos (Liq.env_add_schema env (fname, req_sch)) f_body req_ty
 
       
 (* -------------------------------------------------- *)
@@ -571,8 +729,11 @@ let rec k_positive_pos cs = match cs with
   |[] -> S.empty
     
                                    
+(* 
+supported_ks: this predicate will be assigned "true" if it occurs negatively
 
-let rec init_p_assignment const_var_sita (qualifiers: Qualifier.t list) (cs:simple_cons list) =
+ *)
+let rec init_p_assignment const_var_sita (qualifiers: Qualifier.t list) (cs:simple_cons list) supported_ks =
   let debug_qulify = List.map (Qualifier.qualifier_to_formula) qualifiers in
   let qualifiers = Qualifier.refine_qualifiers const_var_sita (extend_qualifiers cs qualifiers) in
   let debug_qulify = List.map (Qualifier.qualifier_to_formula) qualifiers in
@@ -586,12 +747,14 @@ let rec init_p_assignment const_var_sita (qualifiers: Qualifier.t list) (cs:simp
                    (fun acc c ->
                      match c with
                      |SWF (senv, Formula.Unknown (sort_sita, sita, k)) ->
-                       let p_list = List.concat (List.map (gen_p_candidate const_var_sita senv) qualifiers) in
+                       let p_list = List.concat (List.map (gen_p_candidate const_var_sita senv k) qualifiers) in
+                       let () = log_assingment ("in fold:"^k) acc in 
                        M.add k p_list acc
                      |_ -> acc)
                    M.empty
                    cs
   in
+  let () = log_assingment "line756" p_assign in
   let k_set_list = S.elements k_set in
   let p_assign_list = M.bindings p_assign in
   (assert (S.for_all (fun k -> M.mem k p_assign) k_set));
@@ -602,13 +765,19 @@ let rec init_p_assignment const_var_sita (qualifiers: Qualifier.t list) (cs:simp
   in
   let k_negative_set = S.diff k_set (k_positive_pos cs) in
   S.fold
-    (fun  k_negative acc -> M.add k_negative [] acc)
+    (fun  k_negative acc ->
+      if S.mem k_negative supported_ks then
+        M.add k_negative [] acc
+      else
+        M.add k_negative [Formula.Bool false] acc
+    )
     k_negative_set
     p_assign
 
 (* -------------------------------------------------- *)
 (* constraints solving *)
 (* -------------------------------------------------- *)
+exception RefineErr of (Formula.t list) * string
 exception SolvingErr of string
                       
 let rec isnt_valid z3_env cs p_candi =
@@ -645,27 +814,29 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
   |SSub (env, e, ks) ->
     let k_list = Formula.list_and ks in
     let sita_pcandi = M.map (fun tlist -> Formula.and_list tlist) pcandi in
-    List.fold_left
-      (fun acc e2 ->
-        match e2 with
-        |Formula.Unknown (sort_sita_i, sita_i, i) ->
-          let qs = M.find i pcandi in
-          let qs' = filter_qualifiers sita_pcandi env e (sort_sita_i, sita_i, qs) in
-          M.add i qs' acc
-        | e2 ->
-           let phi = Formula.substitution sita_pcandi
-                                          (Formula.Implies ((Formula.And (env, e), e2)))
-           in
-           let z3_phi, phi_s = UseZ3.convert phi in
-           if UseZ3.is_valid z3_phi then
-             acc
-           else
-             raise (SolvingErr "can't refine"))
-      pcandi
-      k_list
-
-
-    
+    let new_pcandi = 
+      List.fold_left
+        (fun acc e2 ->
+          match e2 with
+          |Formula.Unknown (sort_sita_i, sita_i, i) ->
+            let qs = M.find i pcandi in
+            let qs' = filter_qualifiers sita_pcandi env e (sort_sita_i, sita_i, qs) in
+            M.add i qs' acc
+          | e2 ->
+             let phi = Formula.substitution sita_pcandi
+                                            (Formula.Implies ((Formula.And (env, e), e2)))
+             in
+             let z3_phi, phi_s = UseZ3.convert phi in
+             if UseZ3.is_valid z3_phi then
+               acc
+             else
+               raise (RefineErr (k_list, "can't refine" ))
+        )
+        pcandi
+        k_list
+    in
+    let () = log_refine "successfly refined" k_list pcandi new_pcandi c in
+    new_pcandi
   |SWF (senv, Formula.Unknown (sort_sita_i, sita_i, i)) ->
     let qs = M.find i pcandi in
     let qs' = List.filter
@@ -674,36 +845,29 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
                 qs
     in
     M.add i qs' pcandi
-  |_ -> raise (SolvingErr "can't refine")
+  |_ -> raise (RefineErr ([],"can't refine"))
     
         
 let rec solve' z3_env (cs:simple_cons list) (p_candi:p_assign) =
   match isnt_valid z3_env cs p_candi with
   |None -> p_candi
-  |Some scons -> solve' z3_env cs (refine z3_env p_candi scons)
+  |Some scons ->
+    (try
+       solve' z3_env cs (refine z3_env p_candi scons)
+     with
+       RefineErr (k_list,mes) ->
+       let () =  log_refine "refinement fail" k_list p_candi p_candi scons in
+       let () = close_out solving_och in
+       raise (SolvingErr mes)
+    )
 
 let rec solve z3_env (cs:simple_cons list) (p_candi:p_assign) =
-  let wf_cs,sub_cs = List.partition (function |SWF _ -> true|SSub _ -> false) cs in
+  let wf_cs,sub_cs = List.partition (function |SWF _ -> true |SSub _ -> false) cs in
   (* first solve well formedness constraint and then subtyping constraints *)
   let p_candi' = solve' z3_env wf_cs p_candi in
   let p_candi'' = solve' z3_env sub_cs p_candi' in
   p_candi''
 
-
-(* -------------------------------------------------- *)
-(* pp *)
-(* -------------------------------------------------- *)  
-
-let rec cons_list_to_string cs = match cs with
-  |cons::left -> Printf.sprintf "%s\n\n\n%s" (cons2string cons)
-                               (cons_list_to_string left)
-  |[] -> ""
-
-
-let rec scons_list_to_string scs = match scs with
-  |scons::left ->  Printf.sprintf "%s\n\n\n%s" (scons2string scons)
-                                  (scons_list_to_string left)
-  |[] -> ""
 
 (* -------------------------------------------------- *)
 (* main *)
@@ -715,20 +879,25 @@ let liqInfer z3_env dinfos qualifiers env ta_t =
   let st_infer = Sys.time () in
   (print_string (TaSyn.syn2string Ml.string_of_sch ta_t));
   let tmp = mk_tmp dinfos env ta_t in
+  let new_c =  (WF (env, tmp)) in
+  let () = log_tmp "toplevel" tmp in
+  let () = log_cons "" [new_c] in
   let (_, cs) = cons_gen dinfos env ta_t tmp in
-  let cs = (WF (env, tmp))::cs in
+  let cs = new_c::cs in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs) in
   let () = (Printf.printf "cs_length:%d \n" (List.length cs)) in
   let () =  (Printf.printf "simple_cs_length:%d \n" (List.length simple_cs)) in
-  (print_string (scons_list_to_string simple_cs));
+  (* (print_string (scons_list_to_string simple_cs)); *)
   let const_var_sita = Liq.mk_subst_for_const_var env in
-  
+  let toplevel_ks = Liq.extract_unknown_p tmp in
   let st = Sys.time () in
-  let p_candi = init_p_assignment const_var_sita qualifiers simple_cs in
+  let p_candi = init_p_assignment const_var_sita qualifiers simple_cs toplevel_ks in
   let ed = Sys.time () in
   (Printf.printf "\n\nend_init_p_candi:%f\n\n" (ed -. st ));
+    (* logging *)
+  let () = log_assingment "initial assignment" p_candi in
   
   let p_candi_debug = M.bindings p_candi in
   let p_assign = solve z3_env simple_cs p_candi in
@@ -736,13 +905,51 @@ let liqInfer z3_env dinfos qualifiers env ta_t =
   let ed_infer = Sys.time () in
   let () = (Printf.printf "\n\nLiq_INfer:%f\n\n" (ed_infer -. st_infer )) in
   Liq.substitute_F sita tmp
+  
+  
+let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
+  let st_infer = Sys.time () in
+  (print_string (TaSyn.syn2string Ml.string_of_sch ta_t));
+  let (_, cs) = cons_gen dinfos env ta_t req_ty in
+  (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
+  (* (print_string (cons_list_to_string cs)); *)
+  let simple_cs = List.concat (List.map split_cons cs) in
+  let () = (Printf.printf "cs_length:%d \n" (List.length cs)) in
+  let () =  (Printf.printf "simple_cs_length:%d \n" (List.length simple_cs)) in
+  (* (print_string (scons_list_to_string simple_cs)); *)
+  let const_var_sita = Liq.mk_subst_for_const_var env in
+  
+  let st = Sys.time () in
+  let p_candi = init_p_assignment const_var_sita qualifiers simple_cs S.empty in
+  let ed = Sys.time () in
+  (Printf.printf "\n\nend_init_p_candi:%f\n\n" (ed -. st ));
+  (* logging *)
+  let () = log_assingment "initial assignment" p_candi in
+  
+  let p_candi_debug = M.bindings p_candi in
+  try
+    let p_assign = solve z3_env simple_cs p_candi in
+    let sita = M.map (fun tlist -> Formula.and_list tlist) p_assign in
+    let ed_infer = Sys.time () in
+    let () = (Printf.printf "\n\nLiq_check:%f\n\n" (ed_infer -. st_infer )) in
+    true
+  with
+    SolvingErr mes ->
+    let ed_infer = Sys.time () in
+    let () = (Printf.printf "\n\n%s Liq_check:%f\n\n" mes (ed_infer -. st_infer )) in
+    raise (SolvingErr mes)
 
 
 let f  z3_env dinfos qualifiers env t =
   let (ta_t, ml_ty) = Ml.infer (Ml.shape_env env) t in
   liqInfer z3_env dinfos qualifiers env ta_t
   
-  
+
+let f_check z3_env dinfos qualifiers env t (_,_,req_ty)=
+  let ta_t = Ml.check (Ml.shape_env env) t (Ml.shape req_ty) in
+  (* req_ty を、ml_tyに合わせる必要があるな *)
+  (* それか要求を通せる何か、これは辛いな。 *)
+  liqCheck z3_env dinfos qualifiers env ta_t req_ty
 (* -------------------------------------------------- *)
 (* inference of E-term *)
 (* -------------------------------------------------- *)
@@ -755,7 +962,7 @@ let liqInferEterm z3_env dinfos qualifiers env ta_e =
   let simple_cs = List.concat (List.map split_cons cs) in
   (* (print_string (scons_list_to_string simple_cs)); *)
   let const_var_sita = Liq.mk_subst_for_const_var env in
-  let p_candi = init_p_assignment const_var_sita qualifiers simple_cs in
+  let p_candi = init_p_assignment const_var_sita qualifiers simple_cs S.empty in
   
   let p_candi_debug = M.bindings p_candi in
   let p_assign = solve z3_env simple_cs p_candi in

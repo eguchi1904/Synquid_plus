@@ -16,12 +16,13 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
  (* \x.t.(body) *)
  and 'a f =
    |PFun of (Id.t * 'a)  * 'a t
+   |PFix of (Id.t * 'a) * 'a f
 
 
  and 'a case = {constructor : Id.t ; argNames : (Id.t * 'a) list ; body : 'a t}
 
-val substitute: Id.t -> 'a e -> 'a t -> 'a t
-
+val substitute:   Id.t -> 'a e -> 'a t -> 'a t
+val substitute_f: Id.t -> 'a e -> 'a f -> 'a f
 val syn2string: ('a -> string) -> 'a t -> string
              
 val access_annotation_t: ('a -> 'a) ->('a t) -> ('a t)

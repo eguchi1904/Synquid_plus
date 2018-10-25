@@ -21,6 +21,7 @@ val ty_of_schema: t -> schema
 
 val ty_in_schema: schema -> t
 
+val param_in_schema: schema -> Id.t list
 
 val shape_sch: Type.schema -> schema
 
@@ -55,6 +56,7 @@ val subst_compose: t subst -> t subst -> t subst
 
   
 val infer: schema env -> Syntax.t -> (schema TaSyntax.t * t)
+val check: schema env -> Syntax.t -> t -> schema TaSyntax.t 
 
 val ta_infer: schema env -> schema TaSyntax.t -> t
 val ta_infer_e: schema env -> schema TaSyntax.e -> t

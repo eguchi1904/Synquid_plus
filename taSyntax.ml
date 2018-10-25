@@ -17,6 +17,7 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
  (* \x.t.(body) *)
  and 'a f =
    |PFun of (Id.t * 'a)  * 'a t
+   |PFix of (Id.t * 'a) * 'a f
 
 
  and 'a case = {constructor : Id.t ; argNames : (Id.t * 'a) list ; body : 'a t}
@@ -44,7 +45,9 @@ and access_annotation_b f b = match b with
   |PMatch (e, case_list) -> PMatch( access_annotation_e f e,
                                     List.map (access_annotation_case f) case_list)
 
-and access_annotation_f f (PFun ((x, sch), t1)) = PFun ((x, f sch), access_annotation_t f t1)
+and access_annotation_f f = function
+  |(PFun ((x, sch), t1)) -> PFun ((x, f sch), access_annotation_t f t1)
+  |(PFix ((fname, sch), f_body)) ->  (PFix ((fname, f sch), access_annotation_f f f_body))
 
 and access_annotation_case f {constructor =  c; argNames = x_sch_list; body = t} =
   {constructor = c;
@@ -124,6 +127,11 @@ and syn2string_b f = function
 and syn2string_f f = function
   |PFun ((x, anno), t) ->
     Printf.sprintf "\\%s:%s.%s" x  (f anno) (syn2string f t)
+  |PFix ((fname, anno), f_body) ->
+    Printf.sprintf "fix %s:%s\n%s"
+                   fname
+                   (f anno)
+                   (syn2string_f f f_body)
 
 
 and syn2string_case f {constructor = cons; argNames = xs; body = t} =

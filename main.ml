@@ -203,10 +203,17 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   in
 
 
-  let syn_goals, infer_goals = List.partition
+  let syn_check_goals, infer_goals = List.partition
                                  (fun (id, _) -> List.mem_assoc id fundecs)
                                  defs
   in
+  let syn_goals, check_goal = List.partition
+                                (fun (id, prg) -> Syntax.auxi_exist_t prg)
+                                syn_check_goals
+  in
+
+
+  
   (* synthesith *)
   let mk_tmp = gen_mk_tmp data_info_map minfos in
   let syn_goals = Mk_tmp.f mk_tmp fundecs syn_goals in (* 各ゴールにtemplateを設定 *)
@@ -221,8 +228,19 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
       (fundecs, syn_goals)
       f_tmp_g_list
   in
-  (* liquid type infer *)
+  
   let init_env = ((cons_env@fundecs),[]) in
+  (* liquid type checking *)
+  let id_check_result_list =
+    List.map
+      (fun (x, t) ->
+        let z3_env =  UseZ3.mk_z3_env () in
+        let x_ty = Type.env_find init_env x in
+        (x, TypeInfer.f_check z3_env data_info_map qualifiers init_env t  x_ty ))
+      check_goal
+  in
+  (* liquid type infer *)
+  
   let id_type_list =
     List.map
       (fun (x, t) ->

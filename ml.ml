@@ -66,6 +66,8 @@ let ty_of_schema (ty:t) = ([], ty)
 
 let ty_in_schema ((bvs, ty):schema) = ty
 
+let param_in_schema ((bvs, ty)) = bvs
+
 let shape_sch ((bvs, pas, ty):Type.schema) =
   (bvs, shape ty)
 
@@ -254,7 +256,7 @@ let rec  infer_t env e = match e with
   |Syn.PI b -> let (ta_b, ty, c) = infer_b env b in
                (TaSyn.PI ta_b, ty, c)
 
-  |Syn.PF (Syn.PFix (id, f)) -> infer_t env (rec_def id (Syn.PF f))
+  (* |Syn.PF (Syn.PFix (id, f)) -> infer_t env (rec_def id (Syn.PF f)) *)
                               
   |Syn.PF f -> let (ta_f, ty, c) = infer_f env f in
                (TaSyn.PF ta_f, ty, c)
@@ -341,21 +343,40 @@ and infer_f env f = match f with
     (TaSyn.PFun ((x, (ty_of_schema alpha)), ta_t1),
      MLFun (alpha, ty_t1),
      c1)
-  |Syn.PFix (f_name, t) ->
-    assert false
-  
-  
+  |Syn.PFix (f_name, f_body) ->
+    let alpha = MLVar (Id.genid "alpha") in (* for recursive definition*)
+    let alpha_sch = ty_of_schema alpha in
+    let (ta_f, ty_f, c) = infer_f (add_env f_name  alpha_sch env) f_body  in
     
+    let sita = unify ((alpha, ty_f)::c) subst_empty in
+    let ty_f' = subst_ty sita ty_f in
+    let env' = subst_env sita env in
+    let fv_ty_f = List.diff (fv ty_f') (fv_env env' ) in
+    let sch_f =  generalize fv_ty_f ty_f' in
+    (* treat f_name as polimorphic type in the f_body *)
+    let fv_ty1_var = List.map (fun beta -> ty_of_schema (MLVar beta)) fv_ty_f in
+    let instantiate_f_name = TaSyn.PSymbol (f_name, fv_ty1_var) in
+    let ta_f' = TaSyn.substitute_f f_name  instantiate_f_name ta_f in
+    
+    (TaSyn.PFix ((f_name, sch_f), ta_f'),
+     alpha,
+     (alpha, ty_f)::c)
+
+
 let infer env t =
   let (ta_t, ty_t, c) = infer_t env t in
   let sita = unify c subst_empty in
   (subst_tasyn sita ta_t, subst_ty sita ty_t)
 
-  
+let check env t req_ty =
+  let (ta_t, ty) = infer env t in
+  let sita = unify [(ty, req_ty)] subst_empty in
+  subst_tasyn sita ta_t
 
-(*****************************************)
+
+(*******************************************)
 (* type inference of program with type annotation *)
-(*****************************************)  
+(*******************************************)  
 let rec ta_infer env (t:schema TaSyntax.t) = match t with
   |TaSyn.PLet ((x, sch), t1, t2) -> ta_infer (add_env x sch env) t2
   |TaSyn.PE e -> ta_infer_e env e
@@ -388,6 +409,7 @@ and ta_infer_f env f = match f with
     let x_ty = ty_in_schema sch in
     let t_ty = ta_infer (add_env x sch env) t in
     MLFun (x_ty, t_ty)
+  |TaSyn.PFix ((f_name, sch), f) -> ty_in_schema sch
                              
                              
                              
