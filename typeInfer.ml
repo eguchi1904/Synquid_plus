@@ -18,9 +18,11 @@ type cons = |WF of (Liq.env * Liq.t)
             |Sub of (Liq.env * Liq.t * Liq.t )
 
 type simple_cons = |SWF of ((Id.t * Formula.sort) list * Formula.t) 
-                   |SSub of (Formula.t * Formula.t * Formula.t)
-
-
+                   |SSub of (Liq.env * Formula.t * Formula.t)
+(* unknown predicate が入ると、envからformulaの抽出の仕方が定まらないので、
+simple_consでも、type envを持つ必要がある *)
+type inst_simple_cons = |InstSWF of ((Id.t * Formula.sort) list * Formula.t) 
+                        |InstSSub of (Formula.t * Formula.t * Formula.t)
 
 
 let cons2string = function
@@ -54,18 +56,42 @@ let scons2string = function
                    (Formula.p2string_with_sort e1)
     
   |SSub (env, e1, e2) ->
-    let env_list = Formula.list_and env in
     Printf.sprintf "--------------------------------------------------\n%s\n--------------------------------------------------\n%s <:%s\n"
-                   (String.concat "\n" (List.map Formula.p2string_with_sort env_list))
+                   (Liq.env2string env)
                    (Formula.p2string_with_sort e1)
                    (Formula.p2string_with_sort e2)
+
+ 
+let inst_scons sita = function
+  |SSub (env, e1, e2) ->
+    let e1' = Formula.substitution sita e1 in
+    let e2' = Formula.substitution sita e2 in    
+    let env_formula = Liq.env2formula env (S.union (Formula.fv e1') (Formula.fv e2')) in
+    (env_formula, e1, e2)
+  |SWF (env, p) -> assert false    
+   
+ let scons2string_human sita sc=
+  match sc with
+  |SWF _ -> scons2string  sc
+  |SSub (env, e1, e2) ->
+    let (env_fomula, e1, e2) = inst_scons sita sc in
+    let env_fomula_list = Formula.list_and env_fomula in
+    let env_fomula_list_str =
+      String.concat ";\n"
+                    (List.map Formula.p2string env_fomula_list)
+    in
+    Printf.sprintf "--------------------------------------------------\n%s\n--------------------------------------------------\n%s <:%s\n"
+                   env_fomula_list_str
+                   (Formula.p2string e1)
+                   (Formula.p2string e2)
     
     
-   
-   
+                          
+     
 let is_valid_simple_cons z3_env = function
- |SSub (env, e1, e2 ) -> (* env/\e => sita*P *)
-   let p = (Formula.Implies ( (Formula.And (env,e1)), e2)) in
+  |SSub (env, e1, e2 ) -> (* env/\e => sita*P *)
+    let env_formula = Liq.env2formula env (S.union (Formula.fv e1) (Formula.fv e2)) in
+   let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
    let z3_p,p_s = UseZ3.convert p in
    UseZ3.is_valid z3_p
  |SWF (senv, e) ->
@@ -81,7 +107,7 @@ let subst_cons sita = function
 
 let subst_simple_cons sita = function
   |SSub (env, e1, e2) ->
-    SSub (Formula.substitution sita env,
+    SSub (Liq.env_substitute_F sita env,
           Formula.substitution sita e1,
           Formula.substitution sita e2)
   |SWF (senv, e) ->
@@ -92,7 +118,7 @@ let subst_simple_cons sita = function
 let unknown_p_in_simple_cons = function
   |SWF (senv, e) -> Formula.extract_unknown_p e
   |SSub (e_env, e1, e2) -> (S.union
-                             (Formula.extract_unknown_p e_env)
+                             (Liq.env_extract_unknown_p e_env)
                              (S.union
                                 (Formula.extract_unknown_p e1)
                                 (Formula.extract_unknown_p e2)))
@@ -118,8 +144,8 @@ let pa_subtyping_to_simple_cons env (args1, p1) (args2, p2) =
   in
   let sita2 =mk_subst args1 args2  in
   let p2' = Formula.substitution sita2 p2 in
-  let env_f = Liq.env2formula env (S.union (Formula.fv p1) (Formula.fv p2')) in
-  (SSub (env_f, p1, p2'))
+  (* let env_f = Liq.env2formula env (S.union (Formula.fv p1) (Formula.fv p2')) in *)
+  (SSub (env, p1, p2'))
   
                           
 (* spit cons to simple_cons list *)
@@ -163,7 +189,7 @@ let rec split_cons (c:cons) = match c with
   |Sub (env,
         Liq.TScalar (b1, phi1),
         Liq.TScalar (b2, phi2) ) ->
-    let phi_env = Liq.env2formula env (S.union (Formula.fv phi1) (Formula.fv phi2)) in
+    (* let phi_env = Liq.env2formula env (S.union (Formula.fv phi1) (Formula.fv phi2)) in *)
     (match b1,b2 with
      |(Liq.TData (data, tys1, pas1)),(Liq.TData (data', tys2, pas2)) when data = data' ->
        let tys_simple_cons =
@@ -172,11 +198,11 @@ let rec split_cons (c:cons) = match c with
        let pas_simple_cons =
          List.map2 (pa_subtyping_to_simple_cons env) pas1 pas2
        in
-       (SSub (phi_env, phi1, phi2))::(tys_simple_cons@pas_simple_cons)
+       (SSub (env, phi1, phi2))::(tys_simple_cons@pas_simple_cons)
      |(Liq.TBool,Liq.TBool)  |(Liq.TInt,Liq.TInt) ->
-       [SSub (phi_env, phi1, phi2)]
+       [SSub (env, phi1, phi2)]
      |(Liq.TAny i, Liq.TAny i') when i = i' ->
-       [SSub (phi_env, phi1, phi2)]
+       [SSub (env, phi1, phi2)]
      |(Liq.TVar _, Liq.TVar _) -> assert false  (* becase TVar will be unused *)
 
      |(_, _) ->
@@ -255,12 +281,15 @@ let log_assingment mes pcandi =
     pcandi_str
 
 let log_refine mes k_list before_pcandi after_pcandi c =
+  let before_pcandi_sita =
+    M.map Formula.and_list before_pcandi
+  in
   let related_unknown_p =
     match c with
     |SSub (env, e, ks) ->      
       S.union (Formula.extract_unknown_p ks)
               (S.union (Formula.extract_unknown_p e)
-                       (Formula.extract_unknown_p env))
+                       (Liq.env_extract_unknown_p env))
     |SWF (senv, e1) ->
       Formula.extract_unknown_p e1
   in
@@ -292,7 +321,7 @@ let log_refine mes k_list before_pcandi after_pcandi c =
     "\n%s\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nbefore:\n%s\nconstraint:\n%s\nafter:\n%s\n\n"
     mes
     before_related_assingment_str
-    (scons2string c)
+    (scons2string_human before_pcandi_sita c)
     after_related_assingment_str
 
 let log_simple_cons mes cs =
@@ -424,20 +453,22 @@ and cons_gen_e dinfos env e =
         | Liq.TScalar (b, tmp2_phi) ->   
            (* 引数をフレッシュ *)
            let b_sort = (match Liq.b2sort b with Some s -> s|_ -> assert false) in
-           let x' = Formula.Var (b_sort, Id.genid x) in
-          let tmp_out' = Liq.substitute_F (M.singleton x x') tmp_out in (* [x'/x]t1_out *)
+           let x' =  Id.genid x in
+           let x'_var = Formula.Var (b_sort, x') in
+          let tmp_out' = Liq.substitute_F (M.singleton x x'_var) tmp_out in (* [x'/x]t1_out *)
           (* たすver *)
           (* let c_env =  (Liq.env_add (Liq.env_append c_env1 c_env2) (x',tmp2)) in *)
+          let c_env =  (Liq.env_add (Liq.env_append c_env1 c_env2) (x',tmp2)) in
           (* ad hook extractしたときに、必ずx'が引き抜かれるように *)
-          let c_env = (Liq.env_add_F  (Liq.env_append c_env1 c_env2)
-                                      (Formula.substitution
-                                         (M.singleton Id.valueVar_id x') tmp2_phi))
-          in
+          (* let c_env = (Liq.env_add  (Liq.env_append c_env1 c_env2) *)
+          (*                             (Formula.substitution *)
+          (*                                (M.singleton Id.valueVar_id x') tmp2_phi)) *)
+          (* in *)
           let new_c =[Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in)] in
           
           (* logging *)
           let e1_ty_str =  (Liq.t2string_sort (Liq.TFun ((x, tmp_in), tmp_out) )) in           
-          let () = log_place (Printf.sprintf "application:%s" e1_ty_str)  (TaSyntax.PE e) in           
+           let () = log_place (Printf.sprintf "application:%s" e1_ty_str)  (TaSyntax.PE e) in           
           let () = log_cons "" new_c in
           ((Liq.TLet (c_env, tmp_out')),
            new_c@(c1@c2)
@@ -750,6 +781,7 @@ let rec extend_qualifiers cs (qs: Qualifier.t list) =
 
 let rec k_positive_pos cs = match cs with
   |SSub (env, e1, e2) :: cs' ->
+    let env_formula = Liq.env2formula env (S.union (Formula.fv e1) (Formula.fv e2)) in
     let e2_list = Formula.list_and e2 in
     let k_set_e2 = List.fold_left
                   (fun acc e -> match e with
@@ -758,7 +790,7 @@ let rec k_positive_pos cs = match cs with
                    S.empty
                    e2_list
     in
-    let premise_list = (Formula.list_and env)@(Formula.list_and e1) in
+    let premise_list = (Formula.list_and env_formula)@(Formula.list_and e1) in
     let k_set_premise = List.fold_left
                           (fun acc e -> match e with
                                         |Formula.Unknown (_,_, i) -> S.add i acc
@@ -822,7 +854,10 @@ let rec init_p_assignment const_var_sita (qualifiers: Qualifier.t list) (cs:simp
 (* -------------------------------------------------- *)
 exception RefineErr of (Formula.t list) * string
 exception SolvingErr of string
-                      
+
+
+
+    
 let rec isnt_valid z3_env cs p_candi =
   match cs with
   |scons::cs' ->
@@ -851,23 +886,26 @@ let filter_qualifiers sita_pcandi env e (sort_sita_i, sita_i, qs) =
               let z3_p,p_s = UseZ3.convert  p in
               UseZ3.is_valid z3_p)
      qs
-       
+  
+(* filterしても、自由変数の出現がへり、invalidのままということがありえる *)     
 let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *)
   match c with
   |SSub (env, e, ks) ->
     let k_list = Formula.list_and ks in
     let sita_pcandi = M.map (fun tlist -> Formula.and_list tlist) pcandi in
+    let (env_phi,_,_) = inst_scons sita_pcandi c in
+  
     let new_pcandi = 
       List.fold_left
         (fun acc e2 ->
           match e2 with
           |Formula.Unknown (sort_sita_i, sita_i, i) ->
             let qs = M.find i pcandi in
-            let qs' = filter_qualifiers sita_pcandi env e (sort_sita_i, sita_i, qs) in
+            let qs' = filter_qualifiers sita_pcandi env_phi e (sort_sita_i, sita_i, qs) in
             M.add i qs' acc
           | e2 ->
              let phi = Formula.substitution sita_pcandi
-                                            (Formula.Implies ((Formula.And (env, e), e2)))
+                                            (Formula.Implies ((Formula.And (env_phi, e), e2)))
              in
              let z3_phi, phi_s = UseZ3.convert phi in
              if UseZ3.is_valid z3_phi then

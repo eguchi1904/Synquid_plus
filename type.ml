@@ -247,7 +247,21 @@ let env_append ((its1, p1):env) ((its2, p2):env):env =
 
 let env_bindings (env,_) =
   List.map fst env
-  
+
+let env_extract_unknown_p ((l, p):env) =
+  let l_unknown_p_set =
+    List.fold_left
+      (fun acc (_, (_, pas, ty)) ->
+        S.union
+          (S.diff (extract_unknown_p ty)
+                  (S.of_list (List.map fst pas)))
+          acc)
+      S.empty
+      l
+  in
+  S.union
+    l_unknown_p_set
+    (Formula.extract_unknown_p (Formula.and_list p))
 
   
 (* freshな型変数で、 {a True} を返す *)
