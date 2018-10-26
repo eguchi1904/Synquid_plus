@@ -85,7 +85,7 @@ let log_sitas mes sita_var_sita_sort_list =
 
   
 let formula_to_qualifier (e:Formula.t) =([], e)
-  (* let bvs = S.Formula.fv e in *)
+  (* let bvs = S.elements (Formula.fv e) in *)
   (* (bvs, e) *)
 
 let qualifier_to_formula (bvs, e) = (bvs, e)

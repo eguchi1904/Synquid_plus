@@ -151,7 +151,13 @@ let rec split_cons (c:cons) = match c with
         Liq.TFun ((y, ty2_in), ty2_out)  ) -> (* ty1_in -> ty1_out <: ty2_in -> ty2_out *)
     let simple_cons_in = split_cons (Sub (env, ty2_in, ty1_in)) in
     let env2 = Liq.env_add env (y, ty2_in) in
-    let ty1_out' = Liq.replace_F x y ty1_out in (* [y/x]ty1_out *)
+    let ty1_out' =
+      if x = y then
+        ty1_out
+      else
+        let y_sort = (match Liq.type2sort ty2_in with Some s -> s| _ -> assert false) in
+        let y_var = Formula.Var (y_sort, y) in
+        Liq.substitute_F (M.singleton x y_var) ty1_out in (* [y/x]ty1_out *)
     let simple_cons_out = split_cons (Sub (env2, ty1_out', ty2_out)) in
     simple_cons_in@simple_cons_out
   |Sub (env,
@@ -289,7 +295,8 @@ let log_refine mes k_list before_pcandi after_pcandi c =
     (scons2string c)
     after_related_assingment_str
 
-    
+let log_simple_cons mes cs =
+  Printf.fprintf cons_och "%s:**************************************************\n\n%s\n" mes (scons_list_to_string cs)
 
 (* -------------------------------------------------- *)
 (* auxiliary function  *)
@@ -386,7 +393,7 @@ and cons_gen_e dinfos env e =
   |TaSyn.PAppFo (e1, e2) ->
     (match cons_gen_e dinfos env e1 with
      (* e1 :: x:tmp_in -> tmp_out *)
-     |((Liq.TLet (c_env1, Liq.TFun ((x, tmp_in), tmp_out) )), c1) ->
+     |((Liq.TLet (c_env1, (Liq.TFun ((x, tmp_in), tmp_out) ) )), c1) ->
        let open Formula in
        let Liq.TLet (c_env2, tmp2), c2 = cons_gen_e dinfos env e2 in
        (match tmp2 with
@@ -396,7 +403,8 @@ and cons_gen_e dinfos env e =
            let c_env = (Liq.env_append c_env1 c_env2)  in
            let new_c = [(Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in))] in
            (* logging *)
-           let () = log_place "application" (TaSyntax.PE e) in 
+           let e1_ty_str =  (Liq.t2string_sort (Liq.TFun ((x, tmp_in), tmp_out) )) in
+           let () = log_place(Printf.sprintf "application:%s" e1_ty_str) (TaSyntax.PE e) in 
            let () = log_cons "" new_c in
            ((Liq.TLet (c_env, tmp_out')),
             new_c@(c1@c2)
@@ -407,23 +415,35 @@ and cons_gen_e dinfos env e =
            let c_env = (Liq.env_append c_env1 c_env2)  in
            let new_c = [(Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in))] in
            (* logging *)
-           let () = log_place "application" (TaSyntax.PE e) in 
+           let e1_ty_str =  (Liq.t2string_sort (Liq.TFun ((x, tmp_in), tmp_out) )) in           
+           let () = log_place (Printf.sprintf "application:%s" e1_ty_str)  (TaSyntax.PE e) in 
            let () = log_cons "" new_c in
            ((Liq.TLet (c_env, tmp_out')),
             new_c@(c1@c2)
            )
-        |_ -> 
-          (* 引数をフレッシュ *)
-          let x' = Id.genid x in
-          let tmp_out' = Liq.replace_F x x' tmp_out in (* [x'/x]t1_out *)
-          let c_env =  (Liq.env_add (Liq.env_append c_env1 c_env2) (x',tmp2)) in
+        | Liq.TScalar (b, tmp2_phi) ->   
+           (* 引数をフレッシュ *)
+           let b_sort = (match Liq.b2sort b with Some s -> s|_ -> assert false) in
+           let x' = Formula.Var (b_sort, Id.genid x) in
+          let tmp_out' = Liq.substitute_F (M.singleton x x') tmp_out in (* [x'/x]t1_out *)
+          (* たすver *)
+          (* let c_env =  (Liq.env_add (Liq.env_append c_env1 c_env2) (x',tmp2)) in *)
+          (* ad hook extractしたときに、必ずx'が引き抜かれるように *)
+          let c_env = (Liq.env_add_F  (Liq.env_append c_env1 c_env2)
+                                      (Formula.substitution
+                                         (M.singleton Id.valueVar_id x') tmp2_phi))
+          in
           let new_c =[Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in)] in
+          
           (* logging *)
-          let () = log_place "application" (TaSyntax.PE e) in 
+          let e1_ty_str =  (Liq.t2string_sort (Liq.TFun ((x, tmp_in), tmp_out) )) in           
+          let () = log_place (Printf.sprintf "application:%s" e1_ty_str)  (TaSyntax.PE e) in           
           let () = log_cons "" new_c in
           ((Liq.TLet (c_env, tmp_out')),
            new_c@(c1@c2)
           )
+        | Liq.TFun _ -> assert false
+        | Liq.TBot -> assert false
        )
        
      |((Liq.TLet (_, ty)), _) ->
@@ -594,15 +614,21 @@ and cons_gen_case dinfos env req_ty e_tmp  {TaSyn.constructor= con;
     let con_ty' = Liq.t_alpha_convert con_ty xs in
     let x_t_list, phi' = constructor_shape con_ty' in
     let z = Id.genid "z" in
+    let z_sort = (match Liq.b2sort (Liq.TData (i, tys, pas)) with Some s ->s
+                                                                 |_ -> assert false)
+    in
+    let z_var = Formula.Var (z_sort, z) in
     (* arg_env = x1:t1...,[z\_v]phi' *)
     let arg_env = Liq.env_add_F
                     (Liq.env_add_list  Liq.env_empty  x_t_list)
-                    (Formula.replace Id.valueVar_id z phi')
+                    (Formula.substitution
+                       (M.singleton Id.valueVar_id z_var) phi')
     in
     let env' = Liq.env_add_F
                  (Liq.env_append arg_env
                                  (Liq.env_append c_env1 env))
-                 (Formula.replace Id.valueVar_id z phi)
+                 (Formula.substitution
+                    (M.singleton Id.valueVar_id z_var) phi)
     in
     
     let (tmp_t, c_t) = cons_gen dinfos env' t req_ty in
@@ -630,9 +656,10 @@ and cons_gen_f dinfos env f req_ty =
           let x'_var = Formula.Var (x_sort, x') in
           let x2x'_sita = M.singleton  x x'_var in
           let x'2x_sita = M.singleton  x' x_var in
+          let req_ty_out' = (Liq.substitute_F x'2x_sita req_ty_out) in
           (* [x' -> x]req_ty_out *)
-          let (_, c_t) = cons_gen dinfos env' t (Liq.substitute_F x'2x_sita req_ty_out) in
-          (req_ty,(List.map (subst_cons x2x'_sita) c_t))
+          let (_, c_t) = cons_gen dinfos env' t req_ty_out' in
+          (req_ty,((* List.map (subst_cons x2x'_sita) *) c_t))
        )
      |_ -> assert false)
   |TaSyn.PFix ((fname, sch_f, inst_schs), f_body) ->
@@ -917,6 +944,9 @@ let liqInfer z3_env dinfos qualifiers env ta_t =
   
   let p_candi_debug = M.bindings p_candi in
   let p_assign = solve z3_env simple_cs p_candi in
+  (* logging *)
+  let () = log_assingment "solved assignment" p_assign in
+  let () = log_simple_cons "solved constraint" simple_cs in
   let sita = M.map (fun tlist -> Formula.and_list tlist) p_assign in
   let ed_infer = Sys.time () in
   let () = (Printf.printf "\n\nLiq_INfer:%f\n\n" (ed_infer -. st_infer )) in
@@ -934,17 +964,18 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   let () =  (Printf.printf "simple_cs_length:%d \n" (List.length simple_cs)) in
   (* (print_string (scons_list_to_string simple_cs)); *)
   let const_var_sita = Liq.mk_subst_for_const_var env in
-  
   let st = Sys.time () in
   let p_candi = init_p_assignment const_var_sita qualifiers simple_cs S.empty in
   let ed = Sys.time () in
   (Printf.printf "\n\nend_init_p_candi:%f\n\n" (ed -. st ));
   (* logging *)
   let () = log_assingment "initial assignment" p_candi in
-  
-  let p_candi_debug = M.bindings p_candi in
+    let p_candi_debug = M.bindings p_candi in
   try
     let p_assign = solve z3_env simple_cs p_candi in
+    (* logging *)
+    let () = log_assingment "solved assignment" p_assign in
+    let () = log_simple_cons "solved constraint" simple_cs in
     let sita = M.map (fun tlist -> Formula.and_list tlist) p_assign in
     let ed_infer = Sys.time () in
     let () = (Printf.printf "\n\nLiq_check:%f\n\n" (ed_infer -. st_infer )) in

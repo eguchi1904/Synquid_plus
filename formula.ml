@@ -676,9 +676,9 @@ let rec pa_substitution (pa_sita:pa M.t) (t:t) =
   |t' ->t'
 
 
-(* 単縦に変数の置換 *)
+(* 単縦に変数の置換, replace廃止すべきだな。 *)
 let rec replace (x:Id.t) (y:Id.t) (t:t) =
-  let y_v = Var (BoolS,y) in    (* BoolSはダミー *)
+  let y_v = Var (BoolS,y) in    (* BoolSはダミー -> これ結構問題あるな*)
   substitution (M.singleton x y_v) t
 
 

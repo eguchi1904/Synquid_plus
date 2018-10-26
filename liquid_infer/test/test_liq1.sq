@@ -29,16 +29,16 @@ geq :: x: a -> y: a  -> {Bool | _v <==> (x >= y)}
 
 -- neq :: x: a -> y: a -> {Bool | _v  <==> (x != y)}
 -- not :: x:Bool -> {Bool | _v == (!x)}
--- eq :: x: a -> y: a -> {Bool | _v  <==> (x == y)}
--- add :: x: Int -> y:Int -> {Int | _v == (x + y)}
--- dec :: x: Int -> y:Int -> {Int | _v == (x - y)}
--- mul :: x: Int -> y:Int -> {Int | _v == (x * y)}
--- zero :: {Int | _v == 0 }
--- one :: {Int | _v == 1 }
--- hand :: {Int | _v == 100}
--- nintyone :: {Int | _v == 91 }
--- nintytwo :: {Int | _v == 92}
--- ten :: {Int | _v == 10 }
+ eq :: x: a -> y: a -> {Bool | _v  <==> (x == y)}
+ add :: x: Int -> y:Int -> {Int | _v == (x + y)}
+ dec :: x: Int -> y:Int -> {Int | _v == (x - y)}
+ mul :: x: Int -> y:Int -> {Int | _v == (x * y)}
+ zero :: {Int | _v == 0 }
+ one :: {Int | _v == 1 }
+ hand :: {Int | _v == 100}
+ nintyone :: {Int | _v == 91 }
+ nintytwo :: {Int | _v == 92}
+ ten :: {Int | _v == 10 }
 -- true ::{Bool | _v}
 -- false ::{Bool |!_v}
 
@@ -50,30 +50,30 @@ geq :: x: a -> y: a  -> {Bool | _v <==> (x >= y)}
 --sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}>|(len _v == len l) && (elems _v == elems l)}
 
 -- idの型は以下で十分。
-id :: x:a -> a
+-- id :: x:a -> a
 
 
 
---test1 = id (id zero)
-test_list :: RList {Int| _v >= 0} <{True}>
+-- --test1 = id (id zero)
+-- test_list :: RList {Int| _v >= 0} <{True}>
 
 
--- max = \a. \b.
---    if geq a b then a else b
+max = \a. \b.
+   if geq a b then a else b
 
--- myinc = \x. add x one
+myinc = \x. add x one
    
--- sum = \x.
---       if leq x zero then
---         zero
---      else
---       add x (sum (dec x one))
+sum = \x.
+      if leq x zero then
+        zero
+     else
+      add x (sum (dec x one))
 
--- mac91 = \n.
---  if leq n hand then
---    mac91 (mac91 (add (add n ten) one)) 
---  else
---   dec n ten
+mac91 = \n.
+ if leq n hand then
+   mac91 (mac91 (add (add n ten) one)) 
+ else
+  dec n ten
 
 
 -- sortTest =
@@ -122,18 +122,18 @@ test_list :: RList {Int| _v >= 0} <{True}>
  --     insert y (sort ys))
 
 
- sort =\ll.
-  let insert = \x. \l.
-    match l with
-     Nil -> (Cons x Nil)
-     Cons y ys -> if geq y x then
-                  Cons x (Cons y ys)
-                 else
-                  Cons y (insert x ys)
-  in
-    match ll with
-     Nil -> Nil
-     Cons y ys -> insert y (sort ys)
+ -- sort =\ll.
+ --  let insert = \x. \l.
+ --    match l with
+ --     Nil -> (Cons x Nil)
+ --     Cons y ys -> if geq y x then
+ --                  Cons x (Cons y ys)
+ --                 else
+ --                  Cons y (insert x ys)
+ --  in
+ --    match ll with
+ --     Nil -> Nil
+ --     Cons y ys -> insert y (sort ys)
 
 
   

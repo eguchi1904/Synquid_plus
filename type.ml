@@ -199,6 +199,9 @@ let rec env2string ((xts,ps):env) =
     (ps2string ps)
 
 type contextual = TLet of env * t
+
+
+  
                         
 type subtype_constrain = env * t * t (* env|= t1 <: t2 *)
 
@@ -405,7 +408,9 @@ let rec sort_subst2type sita (t:t) =
 let rec alpha_fresh = function
   |TFun ((x, ty1), ty2) ->
     let new_x = Id.genid x in
-    let new_ty2 = replace_F x new_x ty2 in
+    let x_sort = (match type2sort ty1 with Some s -> s| _ -> assert false) in
+    let new_x_var = Formula.Var (x_sort, new_x) in
+    let new_ty2 = substitute_F (M.singleton x new_x_var) ty2 in
     TFun ((new_x, alpha_fresh ty1),
           (alpha_fresh new_ty2))
   |TScalar _ | TBot as ty -> ty
@@ -506,9 +511,13 @@ let rec env2formula' (tenv:((Id.t*schema) list)) vset =
     env2formula' tenv' vset
   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (* schemaは無視して良いの? *)
     if S.mem x vset then
-          (Formula.And ((Formula.replace (Id.valueVar_id) x p), (* [x/_v]p *)
+      match b2sort b with
+      |Some x_sort ->
+        let x_var = Formula.Var (x_sort, x) in
+        (Formula.And ((Formula.substitution (M.singleton Id.valueVar_id x_var) p), (* [x/_v]p *)
                         (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p)  ))
-          ))
+        ))
+      |None ->assert false (* env2formula' tenv' vset *)
     else
       env2formula' tenv' vset
 
@@ -578,7 +587,9 @@ let rec t_alpha_convert t ys =
   |[] -> t
   |y::ys' -> (match t with
               |TFun ((x,t1),t2) ->
-                let t2' = replace_F x y t2 in (* [y/x]t2 *)
+                let x_sort = (match type2sort t1 with Some s -> s |None -> assert false) in
+                let y_var = Formula.Var (x_sort, y) in
+                let t2' = substitute_F (M.singleton x y_var) t2 in (* [y/x]t2 *)
                 TFun ((y,t1),(t_alpha_convert t2' ys'))
               |_ -> assert false)
 
