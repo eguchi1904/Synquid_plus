@@ -30,5 +30,12 @@ val access_annotation_t: ('a -> 'a) ->('a t) -> ('a t)
 val access_annotation_e: ('a -> 'a) ->('a e) -> ('a e)
 val access_annotation_b: ('a -> 'a) ->('a b) -> ('a b)
 val access_annotation_f: ('a -> 'a) ->('a f) -> ('a f)
+
+val replace:  Id.t M.t ->('a t) -> ('a t)
+val replace_e: Id.t M.t ->('a e) -> ('a e)
+val replace_b: Id.t M.t ->('a b) -> ('a b)
+val replace_f: Id.t M.t  ->('a f) -> ('a f)  
+
+  
                
 val fv: 'a t -> S.t

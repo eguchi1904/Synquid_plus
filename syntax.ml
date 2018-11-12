@@ -193,3 +193,41 @@ and inline_rec_fun_f env = function
   |PFix (f_name, body) ->
     let body' = inline_rec_fun_f (M.remove f_name env) body in
     PFix (f_name, body')
+
+    
+let rec alpha env = function
+  |PLet (y, t1, t2) ->
+    let y' = Id.genid y in
+    let env' = M.add y y' env in
+    PLet (y', (alpha env' t1), (alpha env' t2))
+  |PE e -> PE (alpha_e env e)
+  |PI b -> PI (alpha_b env b)
+  |PF f -> PF (alpha_f env f)
+  |PHole -> PHole
+
+and alpha_e env  = function
+  |PSymbol i when M.mem i env -> PSymbol (M.find i env)
+  |PSymbol i -> PSymbol i
+  |PInnerFun f_in -> PInnerFun (alpha_f env f_in)
+  |PAuxi i -> PAuxi i
+  |PAppFo (e1, e2) -> PAppFo (alpha_e env e1, alpha_e env e2)
+  |PAppHo (e1, f2) -> PAppHo (alpha_e env e1, alpha_f env f2)
+
+and alpha_b env b = match b with
+  |PIf (e1, t2, t3) -> PIf (alpha_e env e1, alpha env  t2, alpha env t3)
+  |PMatch (e, case_list) ->
+    PMatch (alpha_e env e, List.map (alpha_case env) case_list)
+
+and alpha_case env {constructor =  c; argNames = xs; body = t } =
+  let xs' = (List.map Id.genid xs) in
+  let env' = M.add_list2 xs xs' env in
+  {constructor =  c; argNames = xs'; body = alpha env' t }
+
+and alpha_f env  =function
+  |PFun (y, t1) ->
+    let y' = Id.genid y in
+    let env' = M.add y y' env in
+    (PFun (y', alpha env' t1))
+  |PFix (f_name, body) ->
+    PFix (f_name, alpha_f env body)
+                     

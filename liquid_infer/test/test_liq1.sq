@@ -39,8 +39,8 @@ geq :: x: a -> y: a  -> {Bool | _v <==> (x >= y)}
  nintyone :: {Int | _v == 91 }
  nintytwo :: {Int | _v == 92}
  ten :: {Int | _v == 10 }
--- true ::{Bool | _v}
--- false ::{Bool |!_v}
+ true ::{Bool | _v}
+ false ::{Bool |!_v}
 
 -- split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }
 
@@ -50,7 +50,7 @@ geq :: x: a -> y: a  -> {Bool | _v <==> (x >= y)}
 --sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}>|(len _v == len l) && (elems _v == elems l)}
 
 -- idの型は以下で十分。
--- id :: x:a -> a
+q-- id :: x:a -> a
 
 
 
@@ -58,22 +58,46 @@ geq :: x: a -> y: a  -> {Bool | _v <==> (x >= y)}
 -- test_list :: RList {Int| _v >= 0} <{True}>
 
 
-max = \a. \b.
-   if geq a b then a else b
+-- max = \a. \b.
+--    if geq a b then a else b
 
-myinc = \x. add x one
+-- myinc = \x. add x one
    
-sum = \x.
-      if leq x zero then
-        zero
-     else
-      add x (sum (dec x one))
+-- sum = \x.
+--       if leq x zero then
+--         zero
+--      else
+--       add x (sum (dec x one))
 
-mac91 = \n.
- if leq n hand then
-   mac91 (mac91 (add (add n ten) one)) 
+-- mac91 = \n.
+--  if leq n hand then
+--    mac91 (mac91 (add (add n ten) one)) 
+--  else
+--   dec n ten
+
+
+id:: x:{Int | _v > 0}  -> {Int | False}
+
+
+id = \x.
+ let id2 = \y. if false then id2 y else y
+ in
+  if leq zero x then
+   id2 (id  x )
+  else
+   zero
+
+idn = \x.\n.
+ if leq zero n then
+  idn x (dec n one)
  else
-  dec n ten
+  x
+   
+-- id = \x.
+--  let id2 = \y. if false then id2 y else y
+--  in
+  
+--    id2 (id x)
 
 
 -- sortTest =

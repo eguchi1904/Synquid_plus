@@ -194,9 +194,51 @@ and fv_case  {constructor = cons; argNames = xs; body = t} =
   S.diff (fv t) (S.of_list (List.map fst xs))
 
 
+
+let rec replace env = function
+  |PLet ((y,sch), t1, t2) ->
+    if M.mem y env then
+      let env' = M.remove y env in
+      PLet ((y, sch), replace env t1, replace env' t2)
+    else
+      PLet ((y, sch), (replace env t1), (replace env t2))
+  |PE e -> PE (replace_e env e)
+  |PI b -> PI (replace_b env b)
+  |PF f -> PF (replace_f env f)
+  |PHole -> PHole
+
+and replace_e env  = function
+  |PSymbol (i, sch) when M.mem i env -> PSymbol ((M.find i env), sch)
+  |PSymbol i_sch -> PSymbol i_sch
+  |PInnerFun f_in -> PInnerFun (replace_f env f_in)
+  |PAuxi i -> PAuxi i
+  |PAppFo (e1, e2) -> PAppFo (replace_e env e1, replace_e env e2)
+  |PAppHo (e1, f2) -> PAppHo (replace_e env e1, replace_f env f2)
+
+and replace_b env b = match b with
+  |PIf (e1, t2, t3) -> PIf (replace_e env e1, replace env  t2, replace env t3)
+  |PMatch (e, case_list) ->
+    PMatch (replace_e env e, List.map (replace_case env) case_list)
+
+and replace_case env {constructor =  c; argNames = xs; body = t } =
+  let env' = M.filter (fun x _ -> not (List.mem_assoc x xs)) env in
+  {constructor =  c; argNames = xs; body = replace env' t }
+
+and replace_f env  =function
+  |PFun ((y, sch), t1) ->
+    if M.mem y env then
+      let env' = M.remove y env in
+      (PFun ((y, sch), replace env' t1))
+    else
+      (PFun ((y, sch), replace env t1))
+  |PFix ((f_name, sch, alist), body) ->
+    if M.mem f_name env then
+      let env' = M.remove f_name env in
+      PFix ((f_name, sch, alist), replace_f env' body)
+    else
+      PFix ((f_name, sch, alist), replace_f env body)
+                     
   
-
-
   
 
     

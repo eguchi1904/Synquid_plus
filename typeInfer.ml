@@ -673,7 +673,7 @@ and cons_gen_f dinfos env f req_ty =
   (* (Liq.TFun ((x, tmp_in), tmp_t), *)
   (*  (WF (env, tmp_in))::c_t) *)
   match f with
-  |(TaSyn.PFun ((x, _), t)) ->
+  |(TaSyn.PFun ((x, x_sch), t)) ->
     (match req_ty with
      |Liq.TFun ((x', req_ty_in), req_ty_out) ->
        (match Liq.type2sort req_ty_in with
@@ -682,14 +682,17 @@ and cons_gen_f dinfos env f req_ty =
           let (_, c_t) = cons_gen dinfos env' t req_ty_out in
           (req_ty, c_t)
         |Some x_sort -> 
-          let env' =  (Liq.env_add env (x, req_ty_in)) in
-          let x_var = Formula.Var (x_sort, x) in
-          let x'_var = Formula.Var (x_sort, x') in
-          let x2x'_sita = M.singleton  x x'_var in
-          let x'2x_sita = M.singleton  x' x_var in
-          let req_ty_out' = (Liq.substitute_F x'2x_sita req_ty_out) in
+          (* let x_var = Formula.Var (x_sort, x) in *)
+          (* let x'_var = Formula.Var (x_sort, x') in *)
+
+          let env' =  (Liq.env_add env (x', req_ty_in)) in
+          (* adjust argument variable to require type *)
+          let t' = TaSyn.replace (M.singleton x x') t in (* [x->x'] *)
+          (* let x2x'_sita = M.singleton  x x'_var in *)
+          (* let x'2x_sita = M.singleton  x' x_var in *)
+          (* let req_ty_out' = (Liq.substitute_F x'2x_sita req_ty_out) in *)
           (* [x' -> x]req_ty_out *)
-          let (_, c_t) = cons_gen dinfos env' t req_ty_out' in
+          let (_, c_t) = cons_gen dinfos env' t' req_ty_out in
           (req_ty,((* List.map (subst_cons x2x'_sita) *) c_t))
        )
      |_ -> assert false)
@@ -1032,7 +1035,9 @@ let f  z3_env dinfos qualifiers env t =
   
 
 let f_check z3_env dinfos qualifiers env t (_,_,req_ty)=
-  let ta_t = Ml.check (Ml.shape_env env) t (Ml.shape req_ty) in
+  let inlined_t = Syntax.inline_rec_fun M.empty t in
+  (* let t = Syntax.alpha M.empty t in *)
+  let ta_t = Ml.check (Ml.shape_env env) inlined_t (Ml.shape req_ty) in
   (* req_ty を、ml_tyに合わせる必要があるな *)
   (* それか要求を通せる何か、これは辛いな。 *)
   liqCheck z3_env dinfos qualifiers env ta_t req_ty
