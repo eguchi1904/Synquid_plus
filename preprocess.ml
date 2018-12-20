@@ -193,6 +193,8 @@ and type2pashape = function
 len: List a -> Int 
 などの,各出現に対するaを具体化するためにもconstrainが必要。
 一旦、aをunknown_aに変換する。 *)
+exception FillSort of string
+                    
 let rec fillsort' senv senv_param senv_var = function
   |Bool b -> Bool b, (BoolS, [])
   |Int i-> Int i, (IntS, [])
@@ -231,16 +233,22 @@ let rec fillsort' senv senv_param senv_var = function
     let constrain = List.concat constrainlist in
     let (argsort, rets) = any2unknownsort_pa (List.assoc i senv) in
     (* (Printf.printf "\n\ninstans measure:%s as %s\n\n" i (pashape2string (argsort, rets))); *)
-    let new_c = List.map2 (fun a b ->(a,b)) es_sorts argsort in
-    UF (rets, i, es'), (rets, new_c@constrain)
+    if List.length argsort = List.length es_sorts then
+      let new_c = List.map2 (fun a b ->(a,b)) es_sorts argsort in
+      UF (rets, i, es'), (rets, new_c@constrain)
+    else
+      raise (FillSort ("argument missmatch in uninterpreted function:"^i) )
 
   |UF (sort, i, es) when List.mem_assoc i senv_param -> (* abstract refinmet *)
     let es',sorts_constrain = List.split (List.map (fillsort' senv senv_param senv_var) es) in
     let es_sorts, constrainlist = List.split sorts_constrain in
     let constrain = List.concat constrainlist in    
     let (argsort, rets) = List.assoc i senv_param in (* anyはそのまま *)
-    let new_c = List.map2 (fun a b ->(a,b)) es_sorts argsort in
-    UF (rets, i, es'), (rets, new_c@constrain)
+    if List.length argsort = List.length es_sorts then
+      let new_c = List.map2 (fun a b ->(a,b)) es_sorts argsort in
+      UF (rets, i, es'), (rets, new_c@constrain)
+    else
+      raise (FillSort ("argument missmatch in uninterpreted function:"^i) )
 
   |If (e1,e2,e3) ->
     let e1',(s1,c1) = fillsort' senv senv_param senv_var e1 in

@@ -19,7 +19,8 @@ type cons = |WF of (Liq.env * Liq.t)
 
 type simple_cons = |SWF of ((Id.t * Formula.sort) list * Formula.t) 
                    |SSub of (Liq.env * Formula.t * Formula.t)
-(* unknown predicate が入ると、envからformulaの抽出の仕方が定まらないので、
+                          
+(* synquidの型systemではunknown predicate が入ると、envからformulaの抽出の仕方が定まらないので、
 simple_consでも、type envを持つ必要がある *)
 type inst_simple_cons = |InstSWF of ((Id.t * Formula.sort) list * Formula.t) 
                         |InstSSub of (Formula.t * Formula.t * Formula.t)

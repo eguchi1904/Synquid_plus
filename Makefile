@@ -1,4 +1,4 @@
-OCAMLFLAGS +=  -linkpkg -bin-annot -g -dllpath ~/.opam/4.06.1/lib/z3/
+OCAMLFLAGS +=  -linkpkg -bin-annot -g 
 #EXTLIBDIRS =  ~/.opam/4.06.1/lib/z3/
 
 PACKS = z3
