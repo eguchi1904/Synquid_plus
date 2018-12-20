@@ -79,21 +79,21 @@ mac91 = \n.
 -- id:: x:{Int | _v > 0}  -> {Int | False}
 
 
-id = \x.
- let id2 = \y. if false then id2 y else y
- in
-  if leq zero x then
-   id2 (id  x )
-  else
-   zero
+-- id = \x.
+--  let id2 = \y. if false then id2 y else y
+--  in
+--   if leq zero x then
+--    id2 (id  x )
+--   else
+--    zero
 
-idn = \x.\n.
- if leq zero n then
-  idn x (dec n one)
- else
-  x
+-- idn = \x.\n.
+--  if leq zero n then
+--   idn x (dec n one)
+--  else
+--   x
 
---id = \x.x
+id = \x.x
 
 sortTest =
  let insert = \x. \l.
