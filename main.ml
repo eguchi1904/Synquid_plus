@@ -52,9 +52,9 @@ let mk_data_cons_list :((Id.t * Type.schema) list ->  ((Id.t * Type.schema) list
 let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t * ((Id.t * Type.schema) list))
   = (* cons_envにはコンストラクタの情報 *)
   (print_string (Syntax.syn2string tmp));
-  (Printf.printf "cons_env\n%s" (Type.env2string (cons_env,[])));
+  (Printf.printf "cons_env\n%s" (Type.env2string (Type.env_add_schema_list Type.env_empty cons_env)));
   let fundecs'  = until_assoc f_name fundecs in
-  let env :Type.env = (fundecs'@cons_env , []) in
+  let env :Type.env = Type.env_add_schema_list Type.env_empty (fundecs'@cons_env)  in
   let t = List.assoc f_name fundecs in
   (Printf.fprintf stderr
                   "%s :: %s\n"
@@ -229,7 +229,7 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
       f_tmp_g_list
   in
   
-  let init_env = ((cons_env@fundecs),[]) in
+  let init_env = (Type.env_add_schema_list Type.env_empty (cons_env@fundecs)) in
   (* liquid type checking *)
   let id_check_result_list =
     List.map

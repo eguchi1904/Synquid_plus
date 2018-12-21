@@ -200,30 +200,7 @@ let rec env2string ((xts,ps):env) =
 
 type contextual = TLet of env * t
 
-
-  
-                        
-type subtype_constrain = env * t * t (* env|= t1 <: t2 *)
-
-let constrain2string ((env,t1,t2):subtype_constrain) =
-  Printf.sprintf "%s%s\n<:\n%s\n"
-                 (env2string env)
-                 (t2string t1)
-                 (t2string t2)
-
-let constrain2string_F (p1,p2,p3) =
-  Printf.sprintf
-    "------------------------------------------------------------\
-     \n%s\
-     \n============================================================\
-     \n%s\n==>\n%s\
-     \n------------------------------------------------------------\n"
-    (Formula.p2string p1)
-    (Formula.p2string p2)
-    (Formula.p2string p3)  
-
-  
-  
+(* env manupulation *)
 let env_empty:env = ([],[])
 
 let env_add ((l, p):env) ((x,t):Id.t * t) =
@@ -236,6 +213,9 @@ let env_add_list ((l, p):env) (xts: (Id.t * t) list) =
 let env_add_schema ((l,p):env) (x,s) =
   ((x,s)::l, p)
 
+let env_add_schema_list ((l,p):env) shc_list =((shc_list@l, p))
+  
+
 let env_add_F ((l, ps):env)  (p:Formula.t) = (l, p::ps)
 
 let env_find env v =
@@ -245,8 +225,12 @@ let env_find env v =
 let env_append ((its1, p1):env) ((its2, p2):env):env =
   (its1@its2, p1@p2)
 
+
+  
 let env_bindings (env,_) =
   List.map fst env
+
+let env_extract_bindings (env,_) = env
 
 let env_extract_unknown_p ((l, p):env) =
   let l_unknown_p_set =

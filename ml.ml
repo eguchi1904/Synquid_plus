@@ -106,8 +106,8 @@ let access_type_in_schema (f:t-> t) ((bvs, ty):schema) = (bvs, (f ty))
 (*--------------------------------------------------*)
 type 'a env = (Id.t * 'a) list
 
-let rec shape_env ((table, _):Type.env) : schema env= 
-  List.map (fun (x, sch) -> (x, shape_sch sch)) table
+let rec shape_env (env:Type.env) : schema env=
+  List.map (fun (x, sch) -> (x, shape_sch sch)) (Type.env_extract_bindings env)
   
 
 let empty_env = []

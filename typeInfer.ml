@@ -22,12 +22,6 @@ exception LiqErr of string
 let liqInfer z3_env dinfos qualifiers env ta_t =
   let st_infer = Sys.time () in
   (print_string (TaSyn.syn2string Ml.string_of_sch ta_t));
-  (* let tmp = mk_tmp dinfos env ta_t in *)
-  (* let new_c =  (WF (env, tmp)) in *)
-  (* let () = log_tmp "toplevel" tmp in *)
-  (* let () = log_cons "" [new_c] in *)
-  (* let (_, cs) = cons_gen dinfos env ta_t tmp in *)
-  (* let cs = new_c::cs in *)
   let tmp, cs = ConsGen.cons_gen_infer dinfos env ta_t in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
@@ -35,21 +29,7 @@ let liqInfer z3_env dinfos qualifiers env ta_t =
   let () = (Printf.printf "cs_length:%d \n" (List.length cs)) in
   let () =  (Printf.printf "simple_cs_length:%d \n" (List.length simple_cs)) in
   (* (print_string (scons_list_to_string simple_cs)); *)
-  
-  (* let const_var_sita = Liq.mk_subst_for_const_var env in *)
-  (* let toplevel_ks = Liq.extract_unknown_p tmp in *)
-  (* let st = Sys.time () in *)
-  (* let p_candi = init_p_assignment const_var_sita qualifiers simple_cs toplevel_ks in *)
-  (* let ed = Sys.time () in *)
-  (* (Printf.printf "\n\nend_init_p_candi:%f\n\n" (ed -. st )); *)
-  (*   (\* logging *\) *)
-  (* let () = log_assingment "initial assignment" p_candi in *)
-  
-  (* let p_candi_debug = M.bindings p_candi in *)
   let p_assign = ConsSolver.find_predicate z3_env qualifiers simple_cs env tmp in
-  (* logging *)
-  (* let () = log_assingment "solved assignment" p_assign in *)
-  (* let () = log_simple_cons "solved constraint" simple_cs in *)
   let sita = M.map (fun tlist -> Formula.and_list tlist) p_assign in
   let ed_infer = Sys.time () in
   let () = (Printf.printf "\n\nLiq_INfer:%f\n\n" (ed_infer -. st_infer )) in

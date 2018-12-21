@@ -520,7 +520,7 @@ let f env minfos fundecs =
   let fundecs' = fill_pa_args2env data_pas fundecs in
   
   let env' = fillsort2env senv env' in
-  (Printf.printf "env\n%s\n\n" (Type.env2string (env',[])));
+  (Printf.printf "env\n%s\n\n" (Type.env2string (env_add_schema_list env_empty env' )));
   let fundecs' = fillsort2env senv fundecs' in
   (env', fundecs')
   

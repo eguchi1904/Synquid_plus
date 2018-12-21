@@ -8,6 +8,7 @@ val fresh : Data_info.t M.t -> Ml.t -> Constraint.Liq.t
 val mk_tmp :
   Data_info.t M.t -> Type.env -> Ml.schema TaSyntax.t -> Liq.t
 
+(* generate refinement type template from ML type *)
 val fresh: Data_info.t M.t -> Ml.t -> Liq.t 
 
 (* 
@@ -43,10 +44,7 @@ val cons_gen_f :
 (* logging  *)
 (* -------------------------------------------------- *)
 
-val log_tmp : string -> Constraint.Liq.t -> unit
-val log_pa_tmp : string -> Formula.pa -> unit
-val log_cons : 'a -> Constraint.cons list -> unit
-val log_place : string -> Ml.schema TaSyntax.t -> unit
+
 val log_simple_cons : string -> Constraint.simple_cons list -> unit
 
   
