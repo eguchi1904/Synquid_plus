@@ -14,7 +14,7 @@ OUR_METHOD="main"
 input_file=$1
 
 tmp=$2
-input_file=$SCRIPT_DIR$input_file
+input_file=$SCRIPT_DIR$input_file 
 output_file=$input_file$INTERMEDIATE_SUFFIX
 echo "\n\n\n----------------------------------------------------------------------"
 time $SCRIPT_DIR$OUR_METHOD $input_file$SQ_EXTENSION "-tmp" $tmp -o $output_file > /dev/null # our method part

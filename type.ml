@@ -16,7 +16,6 @@ type t =
 type schema =  (Id.t list) * ((Id.t * Formula.pa_shape) list) * t
 
 
-             
 let rec free_tvar' = function
   |TScalar (b,_) -> free_tvar_base b
   |TFun((x,t1), t2) -> (free_tvar' t1)@(free_tvar' t2) 
@@ -31,6 +30,17 @@ and free_tvar_base = function
 
       
 let free_tvar t =  List.uniq (free_tvar' t)
+
+
+  
+(* freshな型変数で、 {a True} を返す *)
+let genTvar s = TScalar (TVar (M.empty,(Id.genid s)), (Formula.Bool true) )
+
+(* Id.t型に対する、　{a true}を返す *)
+let id2Tvar s =  TScalar (TVar (M.empty,s), (Formula.Bool true) )
+
+let id2TAny s =  TScalar (TAny s, (Formula.Bool true) )
+                 
 
 
 let rec extract_unknown_p = function
@@ -222,6 +232,10 @@ let env_find env v =
   match env with
     (l , p) -> List.assoc v l
 
+let env_mem env v =
+  match env with
+    (l , p) -> List.mem_assoc v l             
+
 let env_append ((its1, p1):env) ((its2, p2):env):env =
   (its1@its2, p1@p2)
 
@@ -247,15 +261,6 @@ let env_extract_unknown_p ((l, p):env) =
     l_unknown_p_set
     (Formula.extract_unknown_p (Formula.and_list p))
 
-  
-(* freshな型変数で、 {a True} を返す *)
-let genTvar s = TScalar (TVar (M.empty,(Id.genid s)), (Formula.Bool true) )
-
-(* Id.t型に対する、　{a true}を返す *)
-let id2Tvar s =  TScalar (TVar (M.empty,s), (Formula.Bool true) )
-
-let id2TAny s =  TScalar (TAny s, (Formula.Bool true) )
-
 let rec mk_sort_env ((x_tys, _):env) = match x_tys with
   |(x, ty)::left ->
     (match schema2sort ty with
@@ -265,10 +270,9 @@ let rec mk_sort_env ((x_tys, _):env) = match x_tys with
 
   
                
-exception InferErr of string
-exception SubstErr of string
-
-
+(* -------------------------------------------------- *)
+(* substitution *)
+(* -------------------------------------------------- *)        
 
 (* 述語変数への代入 *)
 let rec substitute_F (sita:Formula.subst) (t:t) =

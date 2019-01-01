@@ -27,6 +27,7 @@ val split_cons : cons -> simple_cons list
 
   
 val is_valid_simple_cons : UseZ3.z3_env -> simple_cons -> bool
+(* unknown p に対するsubst *)
 val subst_simple_cons : Formula.subst -> simple_cons -> simple_cons
 val unknown_p_in_simple_cons : simple_cons -> S.t
 

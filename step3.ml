@@ -3,14 +3,14 @@ open Formula
 
 let mk_all argv env p =
   let env_f = env2formula env (S.union argv (Formula.fv p)) in
-  let bv = fv_sort' (And (env_f, p)) in
+  let bv = Formula.fv_sort (And (env_f, p)) in
   let bv = List.filter (fun (x,s) -> not (S.mem x argv)) bv in
   let env_f_list = list_and env_f in
   QAll (bv, env_f_list, p)
 
 let mk_exist argv env p = 
   let env_f = env2formula env  (S.union argv (Formula.fv p)) in
-  let bv = fv_sort' (And (env_f, p)) in
+  let bv = Formula.fv_sort (And (env_f, p)) in
   let bv = List.filter (fun (x,s) -> not (S.mem x argv)) bv in
   let env_f_list = list_and env_f in
   QExist (bv, p::env_f_list)

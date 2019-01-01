@@ -5,10 +5,23 @@ and basetype =
   | TData of Id.t * t list * Formula.pa list
   | TVar of Formula.subst * Id.t
   | TAny of Id.t
+          
 type schema = Id.t list * (Id.t * Formula.pa_shape) list * t
-val free_tvar' : t -> Id.t list
+
+type env
+   
+type contextual = TLet of env * t
+
+type subst = t M.t                        
+
+            
+
 val free_tvar_base : basetype -> Id.t list
 val free_tvar : t -> Id.t list
+val genTvar : string -> t
+val id2Tvar : Id.t -> t
+val id2TAny : Id.t -> t
+  
 val extract_unknown_p : t -> S.t
 val extract_unknown_p_base : basetype -> S.t
 val t2string : t -> string
@@ -22,14 +35,13 @@ val sort2type : Formula.sort -> t
 val sort2type_base : Formula.sort -> basetype
 val mk_mono_schmea : t -> schema
 val schema2string : schema -> string
-type subst = t M.t
+
            
-
+(* -------------------------------------------------- *)
+(* environment *)
+(* -------------------------------------------------- *)        
   
-
-
-type env
-type contextual = TLet of env * t   
+  
 (* manupulation *)
 val env2string :  env -> string
 val env_empty : env
@@ -41,17 +53,17 @@ val env_add_F : env -> Formula.t -> env
 val env_append : env -> env -> env
 (* investigation *)
 val env_find : env-> Id.t -> schema
+  val env_mem : env -> Id.t -> bool
 val env_bindings : env-> Id.t list (* 名前変えたいな *)
 val env_extract_bindings : env -> (Id.t * schema) list
 val env_extract_unknown_p : env -> S.t
 val env2formula : env -> S.t -> Formula.t
-  
-val genTvar : string -> t
-val id2Tvar : Id.t -> t
-val id2TAny : Id.t -> t
 val mk_sort_env : env -> (Id.t * Formula.sort) list
-exception InferErr of string
-exception SubstErr of string
+  
+(* -------------------------------------------------- *)
+(* substitution *)
+(* -------------------------------------------------- *)        
+
 val substitute_F : Formula.subst -> t -> t
 val substitute_T : subst -> t -> t
 val substitute_pa : Formula.pa M.t -> t -> t

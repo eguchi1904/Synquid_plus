@@ -1,4 +1,4 @@
-OCAMLFLAGS +=  -linkpkg -bin-annot -g 
+OCAMLFLAGS +=  -linkpkg -bin-annot -g  -ccopt "-rpath  /home/eguchi/.lib/"
 #EXTLIBDIRS =  ~/.opam/4.06.1/lib/z3/
 
 PACKS = z3
@@ -12,7 +12,7 @@ PACKS = z3
 # RESULT = liquid_infer
 
 
-SOURCES = extensions.ml m.ml list_map.ml s.ml id.ml syntax.ml formula.ml formula_eq.ml \
+SOURCES = extensions.ml m.ml list_map.ml s.ml id.ml syntax.ml formula.mli formula.ml formula_eq.ml \
 deformation.ml useZ3.ml find_unknownP.ml \
 type.mli type.ml  preSyntax.ml data_info.mli data_info.ml  mk_tmp.ml parser.mly lexer.mll preprocess.mli preprocess.ml\
 taSyntax.mli taSyntax.ml ml.mli ml.ml qualifier.mli qualifier.ml constraint.mli constraint.ml\

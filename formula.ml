@@ -19,9 +19,13 @@ type sort_subst = sort M.t
 type t =
   |Bool of bool
   |Int of int
-  |Set of sort * (t list)         (* set literal [1, 2, 3] *)
-  |Var of sort * Id.t             (* input variable *)
-  |Unknown of sort_subst * subst * Id.t        (* predicate unknown with pending substitution *)
+  (* set literal [1, 2, 3] *)
+  |Set of sort * (t list) 
+  (* input variable *)        
+  |Var of sort * Id.t   
+  (* unknown predicate *)
+  (* これは相互再帰だからだめだ *)
+  |Unknown of sort_subst * subst * Id.t
   |Cons of sort * Id.t * (t list) (* datatype constructor *)
   |UF of sort * Id.t * (t list)   (* uninterpreted function *)
   |All of (Id.t * sort) list * t  (* 使わない *)
