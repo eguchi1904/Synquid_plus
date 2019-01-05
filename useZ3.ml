@@ -290,10 +290,10 @@ let is_valid (e:Expr.expr) =
   let solver = mk_solver ctx None in
   let not_e =  (Boolean.mk_not ctx e) in
   (* let st = Sys.time () in *)
-  (Solver.add solver [not_e]);
+  (Z3.Solver.add solver [not_e]);
   (* let ed = Sys.time () in *)
   (* (Printf.printf "z3:end_solving:%f\n" (ed -. st )); *)
-  let ret = Solver.check solver [] in
+  let ret = Z3.Solver.check solver [] in
   (stop_z3_clock ());
   if ret = UNSATISFIABLE then
     true
@@ -306,8 +306,8 @@ let is_valid (e:Expr.expr) =
 let satisfiable_but_not_valid (e:Expr.expr) =
   (start_z3_clock ());
     let solver = mk_solver ctx None in
-    (Solver.add solver [e]);
-    let ret = Solver.check solver [] in
+    (Z3.Solver.add solver [e]);
+    let ret = Z3.Solver.check solver [] in
     (stop_z3_clock ());
     if ret = UNSATISFIABLE then
       false

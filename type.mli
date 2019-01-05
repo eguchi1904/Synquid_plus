@@ -53,11 +53,12 @@ val env_add_F : env -> Formula.t -> env
 val env_append : env -> env -> env
 (* investigation *)
 val env_find : env-> Id.t -> schema
-  val env_mem : env -> Id.t -> bool
+val env_mem : env -> Id.t -> bool
 val env_bindings : env-> Id.t list (* 名前変えたいな *)
 val env_extract_bindings : env -> (Id.t * schema) list
 val env_extract_unknown_p : env -> S.t
 val env2formula : env -> S.t -> Formula.t
+val env2formula_all : env -> Formula.t
 val mk_sort_env : env -> (Id.t * Formula.sort) list
   
 (* -------------------------------------------------- *)

@@ -14,9 +14,6 @@ module TaSyn = TaSyntax
 let solving_och = open_out "solving.log"
              
 
-
-       
-
 let log_assingment mes pcandi =
   let pcandi_list = M.bindings pcandi in
   let pcandi_str =
@@ -50,7 +47,7 @@ let log_refine mes k_list before_pcandi after_pcandi c =
       S.union (Formula.extract_unknown_p ks)
               (S.union (Formula.extract_unknown_p e)
                        (Liq.env_extract_unknown_p env))
-    |SWF (senv, e1) ->
+    |SWF (_, (senv, e1)) ->
       Formula.extract_unknown_p e1
   in
   let mk_related_assingment pcandi =
@@ -196,7 +193,7 @@ let rec init_p_assignment const_var_sita (qualifiers: Qualifier.t list) (cs:simp
   let p_assign = List.fold_left
                    (fun acc c ->
                      match c with
-                     |SWF (senv, Formula.Unknown (sort_sita, sita, k)) ->
+                     |SWF (_, (senv, Formula.Unknown (sort_sita, sita, k))) ->
                        let p_list = List.concat (List.map (gen_p_candidate const_var_sita senv k) qualifiers) in
                        let () = log_assingment ("in fold:"^k) acc in 
                        M.add k p_list acc
@@ -293,11 +290,11 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
     in
     let () = log_refine "successfly refined" k_list pcandi new_pcandi c in
     new_pcandi
-  |SWF (senv, Formula.Unknown (sort_sita_i, sita_i, i)) ->
+  |SWF (env, (senv, Formula.Unknown (sort_sita_i, sita_i, i))) ->
     let qs = M.find i pcandi in
     let qs' = List.filter
                 (fun q -> let q' = (Formula.sort_subst2formula sort_sita_i (Formula.substitution sita_i q)) in
-                          is_valid_simple_cons z3_env (SWF (senv, q')))
+                          is_valid_simple_cons z3_env (SWF (env,(senv, q'))))
                 qs
     in
     M.add i qs' pcandi

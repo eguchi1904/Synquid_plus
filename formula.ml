@@ -16,6 +16,7 @@ type sort_subst = sort M.t
 (*     Member | Subset                (\* Int/Set -> Set -> Bool *\) *)
 
 (* formula -- predicate unknownはなくて良いかも、let C in Tなので *)
+(* term と formuala 分けたほうがよかったかな *)
 type t =
   |Bool of bool
   |Int of int
@@ -309,7 +310,70 @@ let rec extract_unknown_p = function               (* 自由変数、 *)
   |Neg t1 |Not t1 ->extract_unknown_p t1
   |All (args,t1) |Exist (args,t1) ->
     S.diff (extract_unknown_p t1) (S.of_list (List.map fst args))
-   
+
+
+let union_positive_negative_unknown_p_sets (pos_ps1, nega_ps1, othere_ps1)
+                                           (pos_ps2, nega_ps2, othere_ps2)
+  =
+  let new_pos_ps1 = S.diff pos_ps1 (S.union nega_ps2 othere_ps2) in
+  let new_nega_ps1 = S.diff nega_ps1 (S.union pos_ps2 othere_ps2) in
+  let new_pos_ps2 = S.diff pos_ps2 (S.union nega_ps1 othere_ps1) in
+  let new_nega_ps2 = S.diff nega_ps2 (S.union pos_ps2 othere_ps1) in
+  let new_othere = S.diff
+                     (S.list_union [pos_ps1; nega_ps1; pos_ps2; nega_ps2])
+                     (S.list_union [new_pos_ps1; new_nega_ps1; new_pos_ps2; new_nega_ps2])
+                   |> S.union othere_ps1
+                   |> S.union othere_ps2
+  in
+  ((S.union new_pos_ps1 new_pos_ps2),
+   (S.union new_nega_ps1 new_nega_ps2),
+   new_othere)
+
+(* 
+formula -> (positve, negative, othrers)
+
+positve: 単調増加
+negative: 単調減少
+othere: それ以外
+
+
+それぞれ3つの集合は直行している
+ *)
+let rec positive_negative_unknown_p  = function
+  |All _ | Exist _ -> invalid_arg "formula.positive_unknown_p: quantifiyers "
+  |Unknown (_, _, p) -> (S.singleton p, S.empty, S.empty)
+  |Implies (t1, t2) ->
+    let nega_ps1, pos_ps1, othere_ps1 = positive_negative_unknown_p t1 in
+    let pos_ps2, nega_ps2, othere_ps2 = positive_negative_unknown_p t2 in
+    union_positive_negative_unknown_p_sets
+      (pos_ps1, nega_ps1, othere_ps1)
+      (pos_ps2, nega_ps2, othere_ps2)    
+    
+  |And(t1,t2)|Or(t1,t2) ->
+    let pos_ps1, nega_ps1, othere_ps1 = positive_negative_unknown_p t1 in
+    let pos_ps2, nega_ps2, othere_ps2 = positive_negative_unknown_p t2 in
+    union_positive_negative_unknown_p_sets
+      (pos_ps1, nega_ps1, othere_ps1)
+      (pos_ps2, nega_ps2, othere_ps2)        
+
+  |Iff (t1, t2) ->
+    positive_negative_unknown_p (And ((Implies (t1, t2)), (Implies (t2, t1))))    
+
+  |If (t1, t2, t3) ->
+    positive_negative_unknown_p (And ((Implies (t1, t2)), (Implies (Not t2, t1)))) 
+
+  |Not t ->
+    let nega_ps, pos_ps, othere_ps = positive_negative_unknown_p t in
+    (pos_ps, nega_ps, othere_ps)
+    
+  |Bool _ |Int _ |Var _ 
+   |Set _ | Cons _ | UF _ 
+   |Times _ |Plus _ |Minus  _ |Eq _ | Neq _|Lt _ |Neg _
+   |Le _|Gt _|Ge _
+   |Union _ |Intersect _ |Diff _ |Member _ |Subset _
+   ->  (S.empty, S.empty, S.empty)
+
+    
 
 
 

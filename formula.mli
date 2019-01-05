@@ -57,6 +57,8 @@ val fv_sort : t -> (Id.t * sort) list
 
 val fv_sort_include_v : t -> (Id.t * sort) list
 val extract_unknown_p : t -> S.t
+val positive_negative_unknown_p : t -> (S.t * S.t * S.t)
+  
 val and_list : t list -> t
 val list_and : t -> t list
 val genFvar : sort -> string -> t

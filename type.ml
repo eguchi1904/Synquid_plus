@@ -526,21 +526,6 @@ let rec env2formula' (tenv:((Id.t*schema) list)) vset =
   |_ :: tenv' -> env2formula' tenv' vset
 
   |[] -> Formula.Bool true          
-(* 環境全ての条件を抜き出すver *)
-(* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
-(*   match tenv with *)
-(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (\* schemaは無視して良いの? *\) *)
-(*     env2formula' tenv' S.empty   *)
-   
-(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (\* schemaは無視して良いの? *\) *)
-(*     (Formula.And ((Formula.replace (Id.valueVar_id) x p), (\* [x/_v]p *\) *)
-(*                   (env2formula' tenv' S.empty  ) *)
-(*     )) *)
-
-(*   |_ :: tenv' -> env2formula' tenv' vset *)
-
-(*   |[] -> Formula.Bool true        *)
-       
 
 let env2formula ((tenv,ps):env) free_v =
   let p = List.fold_right (fun p acc -> Formula.And (p,acc))
@@ -549,6 +534,38 @@ let env2formula ((tenv,ps):env) free_v =
   in
   let tenv_p = env2formula' tenv (S.union free_v (Formula.fv p)) in
   Formula.And (tenv_p, p)
+
+(* 環境全ての条件を抜き出すver *)
+let rec env2formula_all' (tenv:((Id.t*schema) list))  =
+  match tenv with
+  |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (* schemaは無視して良いの? *)
+    env2formula_all' tenv' 
+   
+  |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (* schemaは無視して良いの? *)
+    (match b2sort b with
+     |Some x_sort ->
+       let x_var = Formula.Var (x_sort, x) in    
+       (Formula.And ((Formula.substitution (M.singleton Id.valueVar_id x_var) p), (* [x/_v]p *)
+                     (env2formula_all' tenv'   )
+    ))
+     |None -> assert false
+    )
+
+  |_ :: tenv' -> env2formula_all' tenv' 
+
+  |[] -> Formula.Bool true
+       
+  
+
+let env2formula_all  ((tenv,ps):env) =
+  let p = List.fold_right (fun p acc -> Formula.And (p,acc))
+                          ps
+                          (Formula.Bool true)
+  in
+  let tenv_p = env2formula_all' tenv  in
+  Formula.And (tenv_p, p)
+
+  
 
 let rec mk_subst_for_const_var ((tenv, ps):env) =
   match tenv with

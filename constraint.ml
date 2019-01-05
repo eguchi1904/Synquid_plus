@@ -10,8 +10,8 @@ type simple_cons = |SWF of Liq.env * ((Id.t * Formula.sort) list * Formula.t)
                    |SSub of (Liq.env * Formula.t * Formula.t)
                           
 
-type pure_simple_cons = |InstSWF of ((Id.t * Formula.sort) list * Formula.t) 
-                        |InstSSub of (Formula.t * Formula.t * Formula.t)
+type pure_simple_cons = |PSWF of ((Id.t * Formula.sort) list * Formula.t)
+                        |PSSub of (Formula.t * Formula.t * Formula.t)
 
 
 let cons2string = function
@@ -31,7 +31,7 @@ let cons2string_human = function
    
 
 let scons2string = function
-  |SWF (senv, e1)->
+  |SWF (_, (senv, e1))->
     let senv_str =
       String.concat
         "\n"
@@ -83,7 +83,7 @@ let is_valid_simple_cons z3_env = function
    let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
    let z3_p,p_s = UseZ3.convert p in
    UseZ3.is_valid z3_p
- |SWF (senv, e) ->
+  |SWF (_, (senv, e)) ->
        let x_sort_list = Formula.fv_sort_include_v e in
    (* omit checking if e has a boolean sort *)
    List.for_all (fun x_sort -> List.mem x_sort senv) x_sort_list
@@ -99,18 +99,28 @@ let subst_simple_cons sita = function
     SSub (Liq.env_substitute_F sita env,
           Formula.substitution sita e1,
           Formula.substitution sita e2)
-  |SWF (senv, e) ->
-    SWF (senv, Formula.substitution sita e)
+  |SWF (env, (senv, e)) ->
+    SWF (env, (senv, Formula.substitution sita e))
     
    
-
 let unknown_p_in_simple_cons = function
-  |SWF (senv, e) -> Formula.extract_unknown_p e
+  |SWF (_, (senv, e)) -> Formula.extract_unknown_p e
   |SSub (e_env, e1, e2) -> (S.union
                              (Liq.env_extract_unknown_p e_env)
                              (S.union
                                 (Formula.extract_unknown_p e1)
                                 (Formula.extract_unknown_p e2)))
+
+
+
+let positive_negative_unknown_p = function
+  |SWF _ -> invalid_arg "constraint.positive_negative_unknown_p: well formedness constraint"
+  |SSub (env, e1, e2) ->
+    let env_formula_all = Liq.env2formula_all env in
+    let phi = Formula.Implies ((Formula.And (env_formula_all, e1)), e2) in
+    Formula.positive_negative_unknown_p phi
+
+
                              
 
 (* env|-(\x.p1) <:(\y.p2) などからsimple_consを生成 *)
@@ -138,33 +148,34 @@ let pa_subtyping_to_simple_cons env (args1, p1) (args2, p2) =
   
                           
 (* spit cons to simple_cons list *)
-let rec split_cons (c:cons) = match c with
+let rec split_cons' top_env (c:cons) =
+  match c with
   |WF (env, Liq.TFun ((x, ty1), ty2) ) ->
     let env2 = Liq.env_add env (x, ty1) in
-   (split_cons (WF (env, ty1)))@(split_cons (WF (env2, ty2)))
+    (split_cons' top_env (WF (env, ty1)))@(split_cons' top_env (WF (env2, ty2)))
   |WF (env, Liq.TScalar (base_ty, phi)) ->
     (match Liq.b2sort base_ty with
-    |None -> raise (Constraint "dont know what sort is this")
-    |Some b_sort ->
-      let senv =(Liq.mk_sort_env env) in
-      (match base_ty with
-       |Liq.TData (data, tys, pas) ->
-         let tys_simple_cons = 
-           List.concat (List.map (fun ty -> split_cons (WF (env, ty))) tys)
-         in
-         let pas_simple_cons =
-           List.map (fun (args_sort, p) -> SWF(args_sort@senv, p)) pas
-         in
-         (SWF ((Id.valueVar_id, b_sort)::senv, phi))::(tys_simple_cons@pas_simple_cons)
-       |Liq.TBool|Liq.TInt|Liq.TAny _ ->
-         [SWF ((Id.valueVar_id, b_sort)::senv, phi)]
-       |Liq.TVar _ -> assert false (* becase TVar will be unused *)))
+     |None -> raise (Constraint "dont know what sort is this")
+     |Some b_sort ->
+       let senv =(Liq.mk_sort_env env) in
+       (match base_ty with
+        |Liq.TData (data, tys, pas) ->
+          let tys_simple_cons = 
+            List.concat (List.map (fun ty -> split_cons' top_env (WF (env, ty))) tys)
+          in
+          let pas_simple_cons =
+            List.map (fun (args_sort, p) -> SWF(top_env, (args_sort@senv, p))) pas
+          in
+          (SWF (top_env, ((Id.valueVar_id, b_sort)::senv, phi)))::(tys_simple_cons@pas_simple_cons)
+        |Liq.TBool|Liq.TInt|Liq.TAny _ ->
+          [SWF (top_env,((Id.valueVar_id, b_sort)::senv, phi))]
+        |Liq.TVar _ -> assert false (* becase TVar will be unused *)))
   |WF (env, Liq.TBot) -> []
 
   |Sub (env,
         Liq.TFun ((x, ty1_in), ty1_out),
         Liq.TFun ((y, ty2_in), ty2_out)  ) -> (* ty1_in -> ty1_out <: ty2_in -> ty2_out *)
-    let simple_cons_in = split_cons (Sub (env, ty2_in, ty1_in)) in
+    let simple_cons_in = split_cons' top_env (Sub (env, ty2_in, ty1_in)) in
     let env2 = Liq.env_add env (y, ty2_in) in
     let ty1_out' =
       if x = y then
@@ -173,7 +184,7 @@ let rec split_cons (c:cons) = match c with
         let y_sort = (match Liq.type2sort ty2_in with Some s -> s| _ -> assert false) in
         let y_var = Formula.Var (y_sort, y) in
         Liq.substitute_F (M.singleton x y_var) ty1_out in (* [y/x]ty1_out *)
-    let simple_cons_out = split_cons (Sub (env2, ty1_out', ty2_out)) in
+    let simple_cons_out = split_cons' top_env (Sub (env2, ty1_out', ty2_out)) in
     simple_cons_in@simple_cons_out
   |Sub (env,
         Liq.TScalar (b1, phi1),
@@ -182,7 +193,7 @@ let rec split_cons (c:cons) = match c with
     (match b1,b2 with
      |(Liq.TData (data, tys1, pas1)),(Liq.TData (data', tys2, pas2)) when data = data' ->
        let tys_simple_cons =
-         List.concat (List.map2 (fun ty1 ty2 -> split_cons (Sub (env, ty1, ty2))) tys1 tys2)
+         List.concat (List.map2 (fun ty1 ty2 -> split_cons' top_env (Sub (env, ty1, ty2))) tys1 tys2)
        in
        let pas_simple_cons =
          List.map2 (pa_subtyping_to_simple_cons env) pas1 pas2
@@ -203,7 +214,13 @@ let rec split_cons (c:cons) = match c with
     (Printf.printf "shape miss match:%s vs %s" (Liq.t2string ty1) (Liq.t2string ty2));
     assert false        (* shape miss match *)
        
-       
+
+let split_cons c =
+  match c with
+  |WF (env, ty) -> split_cons' env c
+  |Sub (env, ty1, ty2) -> split_cons' env c
+
+
 (* -------------------------------------------------- *)
 (* pp *)
 (* -------------------------------------------------- *)  

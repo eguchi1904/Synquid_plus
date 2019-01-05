@@ -1,7 +1,7 @@
-OCAMLFLAGS +=  -linkpkg -bin-annot -g  -ccopt "-rpath  /home/eguchi/.lib/"
+OCAMLFLAGS +=  -linkpkg -bin-annot
 #EXTLIBDIRS =  ~/.opam/4.06.1/lib/z3/
 
-PACKS = z3
+PACKS = Z3
 
 
 
@@ -16,7 +16,7 @@ SOURCES = extensions.ml m.ml list_map.ml s.ml id.ml syntax.ml formula.mli formul
 deformation.ml useZ3.ml find_unknownP.ml \
 type.mli type.ml  preSyntax.ml data_info.mli data_info.ml  mk_tmp.ml parser.mly lexer.mll preprocess.mli preprocess.ml\
 taSyntax.mli taSyntax.ml ml.mli ml.ml qualifier.mli qualifier.ml constraint.mli constraint.ml\
-consGen.mli consGen.ml consSolver.mli consSolver.ml typeInfer.mli typeInfer.ml\
+consGen.mli consGen.ml consSolver.mli consSolver.ml solver.ml solver.mli typeInfer.mli typeInfer.ml\
 step2.ml qe.ml step3.ml  main.ml 
 RESULT = main
 
