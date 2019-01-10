@@ -9,7 +9,7 @@ module ConsPool:
 sig
 
   (* ConsPool.consRef型を持つ値は、ConsGen.importされた要素を参照することが保証される
-　   ∵ importによってしか、elm型をもつ値を生成できない
+　   ∵ importによってしか、consRef型をもつ値を生成できない
    *)
   type consRef
   val consRef_get : consRef -> (Constraint.simple_cons option)
@@ -38,7 +38,7 @@ sig
   type t = private {
                name : Id.t;
                env : Liq.env;
-               wellformed_env : (Id.t * Formula.sort) list;
+               wellformed_env : Formula.Senv.t;
                
                positive_cons : ConsPool.consRef list;
                negative_cons : ConsPool.consRef list;
@@ -55,7 +55,7 @@ end
 
   type t =  {name: Id.t    (* unknown predicate　のid *)
             ;env: Liq.env  (* unknown predicate が生成された時のenv *)
-            ;wellformed_env: (Id.t * Formula.sort) list (* well formed ness *)
+            ;wellformed_env: Formula.Senv.t
             ;positive_cons : ConsPool.consRef list
             ;negative_cons : ConsPool.consRef list
             ;othere_cons :  ConsPool.consRef list
@@ -244,4 +244,11 @@ module G = struct
       pcs
         
 end
+
+
+
+(* let f cs = *)
+(*   let cs_pool, pcs = PredicateCons.of_scons_list cs in *)
+(*   let predicate_graph = G.of_predicateCons_list pcs in *)
+  
          

@@ -90,7 +90,7 @@ let rec formula2z3 (ctx:context) (smap:sort_map) (emap:id_expr_map) (fmap:id_fun
       (Hashtbl.add emap i new_var);
       new_var, z_sort)
 
-  |Formula.Unknown (sort_sita, sita, i) ->
+  |Formula.Unknown (senv, sort_sita, sita, i) ->
     (Printf.printf "p2z3: encounter unknown predicate: %s\n" i);
     assert false
     (* let z_sort = sort2z3 ctx smap Formula.BoolS in *)

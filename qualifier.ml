@@ -201,9 +201,10 @@ let unify_under_senv (senv: (Id.t * Formula.sort) list) (var_sort: (Id.t * Formu
                           
     
                               
-let gen_p_candidate const_var_sita (senv: (Id.t * Formula.sort) list) k ((bvs, e):t) =
+let gen_p_candidate const_var_sita (senv:Formula.Senv.t) k ((bvs, e):t) =
 try
   (* check the well formuedness about unbounded var and unify its sort *)
+  let senv = Formula.Senv.reveal senv in
   let () = log_init senv k (bvs, e) in
   let q_var_sort =  Formula.fv_sort_include_v e in
   let bounded_var_sort, unbounded_var_sort =

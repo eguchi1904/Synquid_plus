@@ -20,7 +20,7 @@ val cons_list_to_string_human : cons list -> string
 (* -------------------------------------------------- *)
 (* formula constraints: well formedness / implication  *)
 (* -------------------------------------------------- *)                            
-type simple_cons = |SWF of Liq.env * ((Id.t * Formula.sort) list * Formula.t) 
+type simple_cons = |SWF of Liq.env * (Formula.Senv.t * Formula.t) 
                    |SSub of (Liq.env * Formula.t * Formula.t)
                           
 

@@ -1,6 +1,8 @@
 OCAMLFLAGS +=  -linkpkg -bin-annot
 #OCAMLLDFLAGS += -ccopt -I,"~/.opam/ocaml-base-compiler.4.06.1/.opam-switch/sources/z3.4.8.1/src/api"
 #EXTLIBDIRS =  ~/.opam/4.06.1/lib/z3/
+OCAMLLDFLAGS += -ccopt -Wl,-rpath,"/Users/eguchishingo/.opam/ocaml-base-compiler.4.06.1/lib/z3"
+
 
 
 

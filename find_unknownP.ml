@@ -31,11 +31,11 @@ let rec guess_candidate' cs (pcandi:(t list) M.t) =
   |(env, Unknown _, Unknown _) :: cs' -> (* とりあえず *)
   (* raise (Invalid_argument "predicateunknown vs predicateunknown") *)
     guess_candidate' cs' pcandi
-  |(env, Unknown (_, sita, i), e) :: cs' ->
+  |(env, Unknown (_, _, sita, i), e) :: cs' ->
     let sita_inv = subst_inv sita in
     let e' = substitution sita_inv e in
     guess_candidate' cs' (add_pcandi pcandi i e')
-  |(env, e, Unknown (_,sita, i)) :: cs'->
+  |(env, e, Unknown (_, _,sita, i)) :: cs'->
     let sita_inv = subst_inv sita in
     let e' = substitution sita_inv e in    
     guess_candidate' cs' (add_pcandi pcandi i e')
@@ -61,7 +61,7 @@ let rec isnt_valid z3_env cs pcandi =
 
 let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *)
   match c with
-  |(env, e, Unknown (_,sita_i, i)) ->
+  |(env, e, Unknown (_, _,sita_i, i)) ->
     let sita = M.map (fun tlist -> and_list tlist) pcandi in
     let qs = M.find i pcandi in
     let qs' = List.filter

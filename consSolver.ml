@@ -135,12 +135,12 @@ let rec extend_qualifiers cs (qs: Qualifier.t list) =
   |SSub (env, Formula.Unknown _, Formula.Unknown _) :: cs' -> 
   (* raise (Invalid_argument "predicateunknown vs predicateunknown") *)
     extend_qualifiers cs' qs
-  |SSub (env, Formula.Unknown (sort_sita, sita, i), e) :: cs'
+  |SSub (env, Formula.Unknown (_, _, sita, i), e) :: cs'
        when S.is_empty (Formula.extract_unknown_p e)->
     (* let sita_inv = subst_inv sita in *)
     (* let e' = Formula.substitution sita_inv e in *)
     extend_qualifiers cs' ((Qualifier.formula_to_qualifier e)::qs)
-  |SSub (env, e, Formula.Unknown (sort_sita, sita, i)) :: cs'
+  |SSub (env, e, Formula.Unknown (_, _, sita, i)) :: cs'
           when S.is_empty (Formula.extract_unknown_p e) ->
     (* let sita_inv = subst_inv sita in *)
     (* let e' = Formula.substitution sita_inv e in *)
@@ -157,7 +157,7 @@ let rec k_positive_pos cs = match cs with
     let e2_list = Formula.list_and e2 in
     let k_set_e2 = List.fold_left
                   (fun acc e -> match e with
-                                 |Formula.Unknown (_,_, i) -> S.add i acc
+                                 |Formula.Unknown (_,_,_, i) -> S.add i acc
                                  |_ -> acc)
                    S.empty
                    e2_list
@@ -165,7 +165,7 @@ let rec k_positive_pos cs = match cs with
     let premise_list = (Formula.list_and env_formula)@(Formula.list_and e1) in
     let k_set_premise = List.fold_left
                           (fun acc e -> match e with
-                                        |Formula.Unknown (_,_, i) -> S.add i acc
+                                        |Formula.Unknown (_,_,_, i) -> S.add i acc
                                         |_ -> acc)
                           S.empty
                           premise_list
@@ -193,8 +193,12 @@ let rec init_p_assignment const_var_sita (qualifiers: Qualifier.t list) (cs:simp
   let p_assign = List.fold_left
                    (fun acc c ->
                      match c with
-                     |SWF (_, (senv, Formula.Unknown (sort_sita, sita, k))) ->
-                       let p_list = List.concat (List.map (gen_p_candidate const_var_sita senv k) qualifiers) in
+                     |SWF (_, (senv, Formula.Unknown (_, sort_sita, sita, k))) ->
+                       let p_list = List.concat
+                                      (List.map
+                                         (gen_p_candidate const_var_sita senv k)
+                                         qualifiers)
+                       in
                        let () = log_assingment ("in fold:"^k) acc in 
                        M.add k p_list acc
                      |_ -> acc)
@@ -271,7 +275,7 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
       List.fold_left
         (fun acc e2 ->
           match e2 with
-          |Formula.Unknown (sort_sita_i, sita_i, i) ->
+          |Formula.Unknown (_, sort_sita_i, sita_i, i) ->
             let qs = M.find i pcandi in
             let qs' = filter_qualifiers sita_pcandi env_phi e (sort_sita_i, sita_i, qs) in
             M.add i qs' acc
@@ -290,7 +294,7 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
     in
     let () = log_refine "successfly refined" k_list pcandi new_pcandi c in
     new_pcandi
-  |SWF (env, (senv, Formula.Unknown (sort_sita_i, sita_i, i))) ->
+  |SWF (env, (senv, Formula.Unknown (_, sort_sita_i, sita_i, i))) ->
     let qs = M.find i pcandi in
     let qs' = List.filter
                 (fun q -> let q' = (Formula.sort_subst2formula sort_sita_i (Formula.substitution sita_i q)) in

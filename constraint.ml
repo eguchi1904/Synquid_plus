@@ -6,7 +6,7 @@ type cons = |WF of (Liq.env * Liq.t)
 
 (* synquidの型systemではunknown predicate が入ると、envからformulaの抽出の仕方が定まらないので、
 simple_consでも、type envを持つ必要がある *)
-type simple_cons = |SWF of Liq.env * ((Id.t * Formula.sort) list * Formula.t) 
+type simple_cons = |SWF of Liq.env * (Formula.Senv.t * Formula.t) 
                    |SSub of (Liq.env * Formula.t * Formula.t)
                           
 
@@ -38,7 +38,7 @@ let scons2string = function
         (List.map
            (fun (x, sort) ->
              Printf.sprintf "%s: %s" x (Formula.sort2string sort))
-           senv)
+           (Formula.Senv.reveal senv))
     in
     Printf.sprintf "SWF\n--------------------------------------------------\n%s\n--------------------------------------------------\n%s\n"
                    senv_str
@@ -80,13 +80,18 @@ let inst_scons sita = function
 let is_valid_simple_cons z3_env = function
   |SSub (env, e1, e2 ) -> (* env/\e => sita*P *)
     let env_formula = Liq.env2formula env (S.union (Formula.fv e1) (Formula.fv e2)) in
-   let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
-   let z3_p,p_s = UseZ3.convert p in
-   UseZ3.is_valid z3_p
+    let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
+    let z3_p,p_s = UseZ3.convert p in
+    let is_valid = UseZ3.is_valid z3_p in
+    if not is_valid then
+      (print_string ("not_valid!\n"^(Formula.p2string p));
+       is_valid)
+    else
+      is_valid
   |SWF (_, (senv, e)) ->
        let x_sort_list = Formula.fv_sort_include_v e in
    (* omit checking if e has a boolean sort *)
-   List.for_all (fun x_sort -> List.mem x_sort senv) x_sort_list
+   List.for_all (fun x_sort -> Formula.Senv.mem2 x_sort senv) x_sort_list
 
 let subst_cons sita = function
   |WF (env, ty) -> WF (Liq.env_substitute_F sita env, Liq.substitute_F sita ty)
@@ -181,11 +186,13 @@ let rec split_cons' top_env (c:cons) =
             List.concat (List.map (fun ty -> split_cons' top_env (WF (env, ty))) tys)
           in
           let pas_simple_cons =
-            List.map (fun (args_sort, p) -> SWF(top_env, (args_sort@senv, p))) pas
+            List.map (fun (args_sort, p) ->
+                SWF(top_env, (Formula.Senv.add_list senv args_sort, p))) pas
           in
-          (SWF (top_env, ((Id.valueVar_id, b_sort)::senv, phi)))::(tys_simple_cons@pas_simple_cons)
+          (SWF (top_env, (Formula.Senv.add senv Id.valueVar_id b_sort, phi)))
+          ::(tys_simple_cons@pas_simple_cons)
         |Liq.TBool|Liq.TInt|Liq.TAny _ ->
-          [SWF (top_env,((Id.valueVar_id, b_sort)::senv, phi))]
+          [SWF (top_env,(Formula.Senv.add senv Id.valueVar_id b_sort, phi))]
         |Liq.TVar _ -> assert false (* becase TVar will be unused *)))
   |WF (env, Liq.TBot) -> []
 

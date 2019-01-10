@@ -9,7 +9,7 @@ val mk_tmp :
   Data_info.t M.t -> Type.env -> Ml.schema TaSyntax.t -> Liq.t
 
 (* generate refinement type template from ML type *)
-val fresh: Data_info.t M.t -> Ml.t -> Liq.t 
+val fresh: Formula.Senv.t -> Data_info.t M.t -> Ml.t -> Liq.t 
 
 (* 
   "cons_gen data_info env t ty" generate constraint to satisfy

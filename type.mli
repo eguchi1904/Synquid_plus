@@ -59,7 +59,7 @@ val env_extract_bindings : env -> (Id.t * schema) list
 val env_extract_unknown_p : env -> S.t
 val env2formula : env -> S.t -> Formula.t
 val env2formula_all : env -> Formula.t
-val mk_sort_env : env -> (Id.t * Formula.sort) list
+val mk_sort_env : env -> Formula.Senv.t
   
 (* -------------------------------------------------- *)
 (* substitution *)
@@ -73,7 +73,7 @@ val replace_F : Id.t -> Id.t -> t -> t
 val sort_subst2type : Formula.sort M.t -> t -> t
 val alpha_fresh : t -> t
 val instantiate_implicit : schema -> t list -> Formula.pa list -> t
-val instantiate : schema -> t
+val instantiate : env -> schema -> t
 val mk_valid : Id.t -> basetype -> Formula.t
 
 

@@ -6,6 +6,49 @@ type sort = BoolS | IntS | DataS of Id.t * (sort list) | SetS of sort | AnyS of 
 (* type unop = Neg | Not *)
 
 type sort_subst = sort M.t
+module Senv:
+sig
+  type t = private (Id.t * sort) list
+
+  val empty : t
+    
+  (* これは消したほうが安全ではある。formula.mlでしか使ってないはず *)
+  val cover : (Id.t * sort) list -> t
+
+  val reveal : t -> (Id.t * sort) list
+    
+  val add : t -> Id.t -> sort -> t
+
+  val add_list : t -> (Id.t * sort) list -> t
+
+  val append : t -> t ->t
+
+  val mem : Id.t -> t -> bool
+
+  val mem2 : (Id.t * sort) -> t -> bool
+    
+end = struct
+  
+  type t = (Id.t * sort) list
+
+  let empty = []
+         
+  let cover x = x
+
+  let reveal x = x
+              
+  let add senv x sort = (x, sort)::senv
+
+
+  let append senv1 senv2 = senv1@senv2
+
+  let add_list = append
+
+  let mem x senv = List.mem_assoc x senv
+
+  let mem2 (x, x_sort) senv = List.mem (x, x_sort) senv
+end
+    
               
 (* type binop = *)
 (*     Times | Plus | Minus |          (\* Int -> Int -> Int      *\) *)
@@ -26,7 +69,7 @@ type t =
   |Var of sort * Id.t   
   (* unknown predicate *)
   (* これは相互再帰だからだめだ *)
-  |Unknown of sort_subst * subst * Id.t
+  |Unknown of Senv.t * sort_subst * subst * Id.t
   |Cons of sort * Id.t * (t list) (* datatype constructor *)
   |UF of sort * Id.t * (t list)   (* uninterpreted function *)
   |All of (Id.t * sort) list * t  (* 使わない *)
@@ -84,7 +127,7 @@ let rec p2string = function
   |Set (_,ts) ->let ts_string = String.concat ", " (List.map p2string ts) in
                 Printf.sprintf "[%s]" ts_string
   |Var (_,id) ->Printf.sprintf "%s " id
- |Unknown (_, sita, id)->
+ |Unknown (_, _, sita, id)->
     let sita_list = M.bindings sita in
     let sita_str_list = List.map
                           (fun (s, p) -> Printf.sprintf "%s->%s" s (p2string p))
@@ -165,7 +208,7 @@ let rec p2string_with_sort = function
   |Set (s,ts) ->let ts_string = String.concat ", " (List.map p2string_with_sort ts) in
                 Printf.sprintf "([%s]:%s)" ts_string (sort2string s)
   |Var (s,id) ->Printf.sprintf "(%s:%s) " id (sort2string s)
-  |Unknown (sort_sita, sita, id)->
+  |Unknown (_, sort_sita, sita, id)->
     let sita_list = M.bindings sita in
     let sita_str_list = List.map
                           (fun (s, p) -> Printf.sprintf "%s->%s" s (p2string_with_sort p))
@@ -298,7 +341,7 @@ let fv_sort_include_v e =  List.uniq (fv_sort_in_v' e)
    
 (* 普通の変数の *)
 let rec extract_unknown_p = function               (* 自由変数、 *)
-  |Unknown (_, _, i) -> S.singleton i
+  |Unknown (_, _, _, i) -> S.singleton i
   |Bool _ | Int _ |Var _ -> S.empty
   |Set (_, ts) |Cons (_,_, ts) |UF (_,_,ts) ->
     List.fold_left (fun acc t -> S.union acc (extract_unknown_p t)) S.empty ts
@@ -344,7 +387,7 @@ othere: それ以外
  *)
 let rec positive_negative_unknown_p  = function
   |All _ | Exist _ -> invalid_arg "formula.positive_unknown_p: quantifiyers "
-  |Unknown (_, _, p) -> (S.singleton p, S.empty, S.empty)
+  |Unknown (_, _, _, p) -> (S.singleton p, S.empty, S.empty)
   |Implies (t1, t2) ->
     let nega_ps1, pos_ps1, othere_ps1 = positive_negative_unknown_p t1 in
     let pos_ps2, nega_ps2, othere_ps2 = positive_negative_unknown_p t2 in
@@ -413,20 +456,24 @@ let id2pa_shape i ((arg_sorts,rets):pa_shape) :pa =
   let uf_args = List.map (fun (x,s) ->Var(s,x)) args in
   let body = UF (rets, i, uf_args) in
   (args,body)
-  
 
-let genUnkownP i = Unknown (M.empty, M.empty, (Id.genid i))
+let genUnknownP_explicit_id senv i =  Unknown (senv, M.empty, M.empty, i)
+
+(* スペルミスだ.. *)
+let genUnkownP senv i = Unknown (senv, M.empty, M.empty, (Id.genid i))
                  
-let genUnknownPa ((args,p):pa) s = (args, genUnkownP s) (* for predicate abstraction *)
+let genUnknownPa senv ((args,_):pa) s :pa =
 
-let genUnknownPa_shape ((arg_sort,rets):pa_shape) s =
+  (args, genUnkownP (Senv.append (Senv.cover args) senv)  s) (* for predicate abstraction *)
+  
+let genUnknownPa_shape senv ((arg_sort,rets):pa_shape) s :pa =
   (Id.init_pa_arg_counter ());
   let args = List.fold_right
                (fun  sort args -> args@[((Id.gen_pa_arg ()), sort)])
                arg_sort
                []
   in
-  (args, genUnkownP s)
+  (args, genUnkownP (Senv.append (Senv.cover args) senv) s)
 
 
 (* -------------------------------------------------- *)
@@ -465,10 +512,10 @@ let rec sort_subst_to_shape sita ((args, s):pa_shape) :pa_shape=
 let rec sort_subst2formula (sita:sort_subst) = function
   |Bool b -> Bool b
   |Int i -> Int i
-  |Unknown (sort_sita, formula_sita, i) ->
+  |Unknown (senv, sort_sita, formula_sita, i) ->
     let sort_sita' = compose_sort_subst sita sort_sita in
     let formula_sita' = M.map (sort_subst2formula sita) formula_sita in
-    Unknown (sort_sita', formula_sita', i)
+    Unknown (senv, sort_sita', formula_sita', i)
   |Set (s, ts) ->
     let ts' = List.map (sort_subst2formula sita) ts in
     Set (sort_subst sita s, ts')
@@ -620,13 +667,14 @@ and substitution (sita:subst) (t:t) =
      |Var (_,i') -> Var (s,i')  (* 代入先のsortを参照する。 *)
      | p -> p)
 
-  |Unknown (sort_sita, sita1, i) when M.mem i sita ->
+  |Unknown (senv, sort_sita, sita1, i) when M.mem i sita ->
     let p = M.find i sita in
     (sort_subst2formula sort_sita (substitution sita1 p))        (* pending substitution を展開する。 *)
 
-  |Unknown (sort_sita, sita1, i) ->
+  |Unknown (senv, sort_sita, sita1, i) ->
+    let sita = M.filter (fun x _ -> Senv.mem x senv) sita in (* senvにあるものだけを残す *)
     let sita' = subst_compose sita sita1 in
-    Unknown (sort_sita, sita', i)          (* pending substitution を合成 *)
+    Unknown (senv, sort_sita, sita', i)          (* pending substitution を合成 *)
 
   (* 残りはただの再起 *)
   |Set (s, ts) ->

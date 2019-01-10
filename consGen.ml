@@ -59,37 +59,39 @@ let rec constructor_shape c_t =
 (* constraints generation *)
 (* -------------------------------------------------- *)
 
-let rec fresh (data_info_map: Data_info.t M.t) t =
+let rec fresh senv (data_info_map: Data_info.t M.t) t =
   let open Data_info in
   match t with
-  |Ml.MLBool -> Liq.TScalar (Liq.TBool, Formula.genUnkownP "k")
-  |Ml.MLInt -> Liq.TScalar (Liq.TInt, Formula.genUnkownP "k")
+  |Ml.MLBool -> Liq.TScalar (Liq.TBool, Formula.genUnkownP senv "k")
+  |Ml.MLInt -> Liq.TScalar (Liq.TInt, Formula.genUnkownP senv "k")
   |Ml.MLData (i, tys) when M.mem i data_info_map ->
-    let tys_tmp = List.map (fresh data_info_map) tys in
+    let tys_tmp = List.map (fresh senv data_info_map) tys in
     let data_info = M.find i data_info_map in
     let pa_shape_list = Data_info.instantiate_pred_param_shape data_info tys_tmp in
     let unknown_pa_list = List.map
-                            (fun (s, shape) -> Formula.genUnknownPa_shape shape s)
+                            (fun (s, shape) -> Formula.genUnknownPa_shape senv shape s)
                             pa_shape_list
     in
     
-    Liq.TScalar (Liq.TData (i, tys_tmp, unknown_pa_list), Formula.genUnkownP "k")
+    Liq.TScalar (Liq.TData (i, tys_tmp, unknown_pa_list), Formula.genUnkownP senv "k")
   |Ml.MLData (i, _) -> assert false
-  |Ml.MLVar x -> Liq.TScalar ((Liq.TAny x), Formula.genUnkownP "k") (* TAny i　型 *)
+  |Ml.MLVar x -> Liq.TScalar ((Liq.TAny x), Formula.genUnkownP senv "k") (* TAny i　型 *)
   |Ml.MLFun (ty1, ty2) ->
     let x = Id.genid "x" in
-    Liq.TFun ((x, (fresh data_info_map ty1)), (fresh data_info_map ty2))
+    let new_senv = try Formula.Senv.add senv x (Ml.t2sort ty1) with Ml.T2SORT -> senv in
+    Liq.TFun ((x, (fresh senv data_info_map ty1)), (fresh new_senv data_info_map ty2))
       
 
 let mk_tmp dinfos env t =
-  let tmp = fresh  dinfos (Ml.ta_infer (Ml.shape_env env) t) in
+  let senv = Liq.mk_sort_env env in
+  let tmp = fresh senv dinfos (Ml.ta_infer (Ml.shape_env env) t) in
   tmp
 
             
 let rec cons_gen dinfos env t req_ty =
   match t with
   |TaSyn.PLet ((x, (alist, ty)), t1, t2) when S.mem x (TaSyn.fv t1)-> (* recursive def *)
-    let new_tmp_x =  fresh dinfos ty in
+    let new_tmp_x =  fresh (Liq.mk_sort_env env) dinfos ty in
     let new_tmp_x_sch = (alist, [], new_tmp_x) in
     let new_c =  [WF (env, new_tmp_x)] in
     (* logging *)
@@ -102,7 +104,7 @@ let rec cons_gen dinfos env t req_ty =
     let (_, c2) = cons_gen dinfos env2 t2 req_ty in
     (req_ty, new_c@c1@c2)
  |TaSyn.PLet ((x, (alist, ty)), t1, t2) ->
-   let new_tmp_x = fresh dinfos ty in
+   let new_tmp_x = fresh  (Liq.mk_sort_env env) dinfos ty in
    let (_, c1) = cons_gen dinfos env t1 new_tmp_x in
     (* disable let polimorphism for predicate *)
    let new_tmp_x_sch = (alist, [], new_tmp_x) in
@@ -189,7 +191,7 @@ and cons_gen_e dinfos env e =
        assert false
     )
   |TaSyn.PAppHo (e1, f1)  ->
-    let tmp_f1 =  fresh  dinfos (Ml.ta_infer_f (Ml.shape_env env) f1)  in
+    let tmp_f1 =  fresh   (Liq.mk_sort_env env) dinfos (Ml.ta_infer_f (Ml.shape_env env) f1)  in
     let (_, c_f1) = cons_gen_f dinfos env f1 tmp_f1 in
     (match cons_gen_e dinfos env e1 with
      |((Liq.TLet (c_env1, Liq.TFun ((x, tmp_in), tmp_out) )), c_e1) ->
@@ -247,7 +249,7 @@ and cons_gen_e dinfos env e =
        let unknown_pa_and_c_pa_list =
          List.map
            (fun (p, (arg_sort, rets)) ->
-             let (args, p) = Formula.genUnknownPa_shape (arg_sort, rets) p in
+             let (args, p) = Formula.genUnknownPa_shape  (Liq.mk_sort_env env) (arg_sort, rets) p in
              (* make well formedness constraints *)
              let arg_env= List.map (fun (x, sort) -> (x, Liq.sort2type sort))
                                    args
@@ -261,7 +263,7 @@ and cons_gen_e dinfos env e =
        let unknown_pa_list, c_pa_list = List.split unknown_pa_and_c_pa_list in
 
        (* typeのinstantiate *)
-       let tys_tmp = List.map (fresh dinfos) tys in
+       let tys_tmp = List.map (fresh (Liq.mk_sort_env env) dinfos) tys in
        let c_tys = List.map (fun ty -> WF (env, ty)) tys_tmp in
 
        let ty_x' = Liq.instantiate_implicit x_liq_sch tys_tmp unknown_pa_list in
@@ -287,7 +289,7 @@ and cons_gen_e dinfos env e =
        (Liq.TLet (Liq.env_empty, ty_x'),new_c))
 
   |TaSyn.PInnerFun f_in ->
-     let tmp_f =  fresh  dinfos (Ml.ta_infer_f (Ml.shape_env env) f_in)  in
+     let tmp_f =  fresh (Liq.mk_sort_env env) dinfos (Ml.ta_infer_f (Ml.shape_env env) f_in)  in
      let (_, c_f) = cons_gen_f dinfos env f_in tmp_f in
      let new_c = [WF (env, tmp_f)] in
   (* logging *)

@@ -264,9 +264,9 @@ let env_extract_unknown_p ((l, p):env) =
 let rec mk_sort_env ((x_tys, _):env) = match x_tys with
   |(x, ty)::left ->
     (match schema2sort ty with
-     |Some sort -> (x,sort)::(mk_sort_env (left,[]))
+     |Some sort -> Formula.Senv.add  (mk_sort_env (left,[])) x sort
      |None -> mk_sort_env (left,[]))
-  |[] -> []
+  |[] -> Formula.Senv.empty
 
   
                
@@ -458,10 +458,11 @@ let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
                                                    t)))
   
 
-let instantiate ((ts,ps,t):schema) =
+let instantiate env ((ts,ps,t):schema) =
+  let senv = mk_sort_env env in
   let t = alpha_fresh t in
   let ts' = List.map genTvar ts in
-  let ps' = List.map (fun (i, shape) -> Formula.genUnknownPa_shape shape i) ps in
+  let ps' = List.map (fun (i, shape) -> Formula.genUnknownPa_shape senv shape i) ps in
   instantiate_implicit (ts,ps,t) ts' ps'
  
 (* fに関係するenvの条件を抜き出す。 *)
