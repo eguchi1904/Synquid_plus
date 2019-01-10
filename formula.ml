@@ -311,7 +311,10 @@ let rec extract_unknown_p = function               (* 自由変数、 *)
   |All (args,t1) |Exist (args,t1) ->
     S.diff (extract_unknown_p t1) (S.of_list (List.map fst args))
 
-
+let is_unknown_p = function
+  |Unknown _ -> true
+  |_ -> false
+   
 let union_positive_negative_unknown_p_sets (pos_ps1, nega_ps1, othere_ps1)
                                            (pos_ps2, nega_ps2, othere_ps2)
   =

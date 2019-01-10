@@ -31,6 +31,7 @@ val is_valid_simple_cons : UseZ3.z3_env -> simple_cons -> bool
 (* unknown p に対するsubst *)
 val subst_simple_cons : Formula.subst -> simple_cons -> simple_cons
 val unknown_p_in_simple_cons : simple_cons -> S.t
+val is_predicate_normal_position : simple_cons -> bool
 val positive_negative_unknown_p : simple_cons -> (S.t * S.t * S.t)
 
  val scons2string : simple_cons -> string

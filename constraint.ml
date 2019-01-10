@@ -120,6 +120,23 @@ let positive_negative_unknown_p = function
     let phi = Formula.Implies ((Formula.And (env_formula_all, e1)), e2) in
     Formula.positive_negative_unknown_p phi
 
+    
+let is_predicate_normal_position = function
+  |SWF (env, (senv, e))->
+    let env_formula_list = Liq.env2formula_all env |> Formula.list_and in
+    let e_list = Formula.list_and e in
+    List.for_all
+      (fun e -> Formula.is_unknown_p e || S.is_empty (Formula.extract_unknown_p e))
+      (env_formula_list@e_list)
+  |SSub (env, e1, e2) ->
+    let env_formula_list = Liq.env2formula_all env |> Formula.list_and in
+    let e1_list = Formula.list_and e1 in
+    let e2_list = Formula.list_and e2 in
+    List.for_all
+      (fun e -> Formula.is_unknown_p e || S.is_empty (Formula.extract_unknown_p e))
+      (env_formula_list@e1_list@e2_list)    
+    
+    
 
                              
 
