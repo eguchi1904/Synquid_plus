@@ -6,6 +6,16 @@ type sort = BoolS | IntS | DataS of Id.t * (sort list) | SetS of sort | AnyS of 
 (* type unop = Neg | Not *)
 
 type sort_subst = sort M.t
+
+let rec sort2string = function
+  |BoolS -> "Bool"
+  |IntS -> "Int"
+  |DataS (i,sorts) ->
+    Printf.sprintf "%s %s" i (String.concat " " (List.map sort2string sorts))
+  |SetS s -> Printf.sprintf "Set %s" (sort2string s)
+  |AnyS i -> i
+  |UnknownS i -> Printf.sprintf "unknown_%s" i
+               
 module Senv:
 sig
   type t = private (Id.t * sort) list
@@ -26,9 +36,11 @@ sig
   val mem : Id.t -> t -> bool
 
   val mem2 : (Id.t * sort) -> t -> bool
+
+  val of_string : t -> string
     
 end = struct
-  
+  (* 新しく足すものは、リストの先頭から *)
   type t = (Id.t * sort) list
 
   let empty = []
@@ -42,11 +54,24 @@ end = struct
 
   let append senv1 senv2 = senv1@senv2
 
-  let add_list = append
+  let add_list senv list = list@senv
 
   let mem x senv = List.mem_assoc x senv
 
   let mem2 (x, x_sort) senv = List.mem (x, x_sort) senv
+
+let of_string senv = 
+  let senv_str =
+    String.concat
+      "\n"
+      (List.map
+         (fun (x, sort) ->
+           Printf.sprintf "%s: %s" x (sort2string sort))
+          senv)
+    in
+    Printf.sprintf "\n--------------------------------------------------\n%s\n--------------------------------------------------\n"
+    senv_str
+                            
 end
     
               
@@ -127,16 +152,17 @@ let rec p2string = function
   |Set (_,ts) ->let ts_string = String.concat ", " (List.map p2string ts) in
                 Printf.sprintf "[%s]" ts_string
   |Var (_,id) ->Printf.sprintf "%s " id
- |Unknown (_, _, sita, id)->
+ |Unknown (senv, _, sita, id)->
     let sita_list = M.bindings sita in
     let sita_str_list = List.map
                           (fun (s, p) -> Printf.sprintf "%s->%s" s (p2string p))
                           sita_list
     in
+    let senv_str = List.map fst (Senv.reveal senv) |> String.concat "," in
     if sita_list = [] then
-      Printf.sprintf "P[%s]" id
+      Printf.sprintf "senv:[%s].P[%s]" senv_str id
     else
-      Printf.sprintf "[%s].P[%s]" (String.concat ";" sita_str_list) id              
+      Printf.sprintf "senv:[%s].sita:[%s].P[%s]" senv_str (String.concat ";" sita_str_list) id              
   |Cons (_,id,ts)|UF (_,id,ts) ->
     let ts_string = String.concat " " (List.map p2string ts) in
     Printf.sprintf "(%s %s)" id ts_string
@@ -187,14 +213,6 @@ let rec p2string = function
   |Not t ->
     Printf.sprintf "!%s" (p2string t )
 
-let rec sort2string = function
-  |BoolS -> "Bool"
-  |IntS -> "Int"
-  |DataS (i,sorts) ->
-    Printf.sprintf "%s %s" i (String.concat " " (List.map sort2string sorts))
-  |SetS s -> Printf.sprintf "Set %s" (sort2string s)
-  |AnyS i -> i
-  |UnknownS i -> Printf.sprintf "unknown_%s" i
    
 let rec pashape2string ((args,rets):pa_shape) =
   match args with
@@ -672,8 +690,9 @@ and substitution (sita:subst) (t:t) =
     (sort_subst2formula sort_sita (substitution sita1 p))        (* pending substitution を展開する。 *)
 
   |Unknown (senv, sort_sita, sita1, i) ->
-    let sita = M.filter (fun x _ -> Senv.mem x senv) sita in (* senvにあるものだけを残す *)
+
     let sita' = subst_compose sita sita1 in
+    let sita' = M.filter (fun x _ -> Senv.mem x senv) sita' in (* senvにあるものだけを残す *)
     Unknown (senv, sort_sita, sita', i)          (* pending substitution を合成 *)
 
   (* 残りはただの再起 *)

@@ -61,9 +61,19 @@ let rec constructor_shape c_t =
 
 let rec fresh senv (data_info_map: Data_info.t M.t) t =
   let open Data_info in
+  let senv_with_v_sort =
+    try
+      Formula.Senv.add
+        senv
+        Id.valueVar_id
+        (Ml.t2sort t)
+    with
+      Ml.T2SORT -> senv
+  in
   match t with
-  |Ml.MLBool -> Liq.TScalar (Liq.TBool, Formula.genUnkownP senv "k")
-  |Ml.MLInt -> Liq.TScalar (Liq.TInt, Formula.genUnkownP senv "k")
+  |Ml.MLBool ->
+    Liq.TScalar (Liq.TBool, Formula.genUnkownP senv_with_v_sort "k")
+  |Ml.MLInt -> Liq.TScalar (Liq.TInt, Formula.genUnkownP senv_with_v_sort "k")
   |Ml.MLData (i, tys) when M.mem i data_info_map ->
     let tys_tmp = List.map (fresh senv data_info_map) tys in
     let data_info = M.find i data_info_map in
@@ -73,9 +83,9 @@ let rec fresh senv (data_info_map: Data_info.t M.t) t =
                             pa_shape_list
     in
     
-    Liq.TScalar (Liq.TData (i, tys_tmp, unknown_pa_list), Formula.genUnkownP senv "k")
+    Liq.TScalar (Liq.TData (i, tys_tmp, unknown_pa_list), Formula.genUnkownP senv_with_v_sort "k")
   |Ml.MLData (i, _) -> assert false
-  |Ml.MLVar x -> Liq.TScalar ((Liq.TAny x), Formula.genUnkownP senv "k") (* TAny i　型 *)
+  |Ml.MLVar x -> Liq.TScalar ((Liq.TAny x), Formula.genUnkownP senv_with_v_sort "k") (* TAny i　型 *)
   |Ml.MLFun (ty1, ty2) ->
     let x = Id.genid "x" in
     let new_senv = try Formula.Senv.add senv x (Ml.t2sort ty1) with Ml.T2SORT -> senv in

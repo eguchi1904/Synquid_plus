@@ -25,6 +25,8 @@ sig
   val mem : Id.t -> t -> bool
 
   val mem2 : (Id.t * sort) -> t -> bool
+
+  val of_string : t -> string    
 end                
 
           

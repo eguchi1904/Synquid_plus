@@ -83,15 +83,30 @@ let is_valid_simple_cons z3_env = function
     let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
     let z3_p,p_s = UseZ3.convert p in
     let is_valid = UseZ3.is_valid z3_p in
-    if not is_valid then
-      (print_string ("not_valid!\n"^(Formula.p2string p));
-       is_valid)
-    else
-      is_valid
+    is_valid
+    (* if not is_valid then *)
+    (*   (print_string ("not_valid!\n"^(Formula.p2string p)); *)
+    (*    is_valid) *)
+    (* else *)
+    (*   is_valid *)
   |SWF (_, (senv, e)) ->
        let x_sort_list = Formula.fv_sort_include_v e in
    (* omit checking if e has a boolean sort *)
-   List.for_all (fun x_sort -> Formula.Senv.mem2 x_sort senv) x_sort_list
+       List.for_all (fun x_sort -> Formula.Senv.mem2 x_sort senv) x_sort_list
+
+let assert_p_well_formedness = function
+  |SSub _ -> true
+  |SWF (env, (senv,phi)) ->
+    List.for_all (function |Formula.Unknown (senv2, _, _, _) ->
+                             if senv <> senv2 then
+                               let () = Printf.printf "senv vs senv2differ:\n%s \nvs\n %s"
+                                                      (Formula.Senv.of_string senv)
+                                                      (Formula.Senv.of_string senv2) in
+                               false
+                             else
+                               true
+                           | _ -> true)
+              (Formula.list_and phi)
 
 let subst_cons sita = function
   |WF (env, ty) -> WF (Liq.env_substitute_F sita env, Liq.substitute_F sita ty)
@@ -241,7 +256,8 @@ let rec split_cons' top_env (c:cons) =
 
 let split_cons c =
   match c with
-  |WF (env, ty) -> split_cons' env c
+  |WF (env, ty) ->
+    let ret = split_cons' env c in (ignore (List.for_all assert_p_well_formedness ret));ret
   |Sub (env, ty1, ty2) -> split_cons' env c
 
 
