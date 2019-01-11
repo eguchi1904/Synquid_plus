@@ -199,6 +199,7 @@ end = struct
                     S.empty
                         othere_cons
       in
+      (assert (S.mem t.name p_in_othre_cons));
       S.union p_in_pos_cons
               p_in_nega_cons
       |>S.union p_in_othre_cons
@@ -240,13 +241,27 @@ let rec decompose_result_of_implication = function
 (* graph predicate *)
 module G = struct
 
-  include Graph.Persistent.Digraph.ConcreteBidirectional(PredicateCons)
+  module G = Graph.Persistent.Digraph.ConcreteBidirectional(PredicateCons)
+  include G
 
   let add_edge_v2vlist graph v vlist = 
     List.fold_left (fun acc_g v_dst -> add_edge acc_g v v_dst) empty vlist
 
   let add_edge_vlist2v graph vlist v = 
-    List.fold_left (fun acc_g v_src -> add_edge acc_g v_src v) empty vlist    
+    List.fold_left (fun acc_g v_src -> add_edge acc_g v_src v) empty vlist
+
+  let remove_vertes_list g vlist =
+    List.fold_left remove_vertex g vlist
+
+  let sub_graph g vlist =
+    List.fold_left
+      (fun acc_g v ->
+        if not (List.mem v vlist) then
+          remove_vertex acc_g v
+        else
+          acc_g)
+      g
+    vlist
                     
 
   let of_predicateCons_list (objective_ps: Id.t list) (pcs:PredicateCons.t list) =
@@ -259,13 +274,75 @@ module G = struct
         add_edge_v2vlist (add_vertex acc_graph node)  node depend_nodes)
       empty
       nodes
+
+  let self_loop_nodes g =
+    fold_vertex
+      (fun node acc_self_loop_nodes ->
+             if mem_edge g node node then
+               node::acc_self_loop_nodes
+             else
+               acc_self_loop_nodes
+      )
+      g
+      []
+
+  let max_degree_node g =
+    let (max_degree, max_node_opt) =
+      G.fold_vertex
+        (fun node (max_degree, max_node_opt) ->
+          let degree = (G.out_degree g node) + (G.in_degree g node) in
+          if degree > max_degree then
+            (degree, Some node)
+          else
+            (max_degree, max_node_opt))
+        g
+        (-1, None)
+    
+    in
+    match max_node_opt with
+    |None -> invalid_arg "max_degree_node: empty graph"
+    |Some node -> node
         
 end
 
+module GComponens = Graph.Components.Make(G)
 
+(* 有向グラフ からDAGが誘導できるような、vertexのリストを取ってくる　*)
+(* g is multiple elements conected component *)
+let rec choose_vertexs_to_induce_DAG_rec (g:G.t) = 
+  let max_degree_node = G.max_degree_node g in
+  let g_minus = G.remove_vertex g max_degree_node in
+  let g_minus_components = GComponens.scc_list g_minus in
+  let chosen_vertex_g_minus = List.map
+                                (fun component ->
+                                  if List.length component <= 1 then
+                                    []
+                                  else
+                                    let sub_g = G.sub_graph g_minus component in
+                                    choose_vertexs_to_induce_DAG_rec sub_g
+                                )
+                                g_minus_components
+                              |>
+                                List.concat
+  in
+  max_degree_node::chosen_vertex_g_minus
+  
+let choose_vertexsf_to_induce_DAG (g:G.t) (componets: G.vertex list) =
+  let self_loop_nodes = G.self_loop_nodes g in
+  let sub_g = G.remove_vertes_list self_loop_nodes in
+  let sub_g_components = GComponens.scc_list sub_g in       
+  1
+  
+       
 
 let f objective_predicate_list cs =
   let cs_pool, pcs = PredicateCons.of_scons_list cs in
-  let predicate_graph = G.of_predicateCons_list objective_predicate_list pcs 
+  let predicate_graph = G.of_predicateCons_list objective_predicate_list pcs in
+  (* compute strongly connected components: 強連結成分分解 
+     リストはトポロジカルオーダーになることが保証されている
+   *)
+  let component_list:PredicateCons.t list list =
+    GComponens.scc_list(predicate_graph)
+  in
+  1
   
-         
