@@ -50,8 +50,8 @@ sig
     
   val of_scons_list : Constraint.simple_cons list -> ConsPool.t * t list
   val dependency : t list -> t -> t list
-end
-  = struct
+    
+end = struct
 
   type t =  {name: Id.t    (* unknown predicate　のid *)
             ;env: Liq.env  (* unknown predicate が生成された時のenv *)
@@ -76,8 +76,15 @@ end
   let rec extract_envs = function
     |(SSub _):: _ -> invalid_arg "Solver.extract_envs"      
     |SWF (env, (senv, phi)) :: left ->
-      let ps = Formula.extract_unknown_p phi |> S.elements in
-      let p_envs_list = List.map (fun p -> (p, (env, senv))) ps in
+      let p_envs_list = Formula.list_and phi
+                           |> List.filter (function |Formula.Unknown (inner_senv, sort_sita, sita, p) ->
+                                                    (assert (sort_sita = M.empty && sita = M.empty));
+                                                    senv = inner_senv (* check if this well form cons is most strict one *)
+                                                    |_ -> false)
+                           |> List.map (function |Formula.Unknown (inner_senv, _, _, p) ->
+                                                   (p, (env, inner_senv))
+                                                 | _ -> assert false )
+      in
       p_envs_list@(extract_envs left)
     |[] -> []
 
@@ -121,8 +128,16 @@ end
     (assert (List.for_all Constraint.is_predicate_normal_position cs));
     let cs_pool = ConsPool.import cs 
     in
+
     let wf_cs, sub_cs = List.partition (function |SWF _ -> true |SSub _ -> false) cs in
     let env_senv_list = extract_envs wf_cs in
+    
+    (* DEBUG:
+       check env_senv_list have one entry for each unknow predicate in constraint list cs *)
+    let all_p_set =             
+      List.fold_left S.union S.empty (List.map Constraint.unknown_p_in_simple_cons cs) in
+    (assert (S.for_all (fun p -> (List.length (List.assoc_all p env_senv_list)) = 1) all_p_set));
+    (* end DEBUG *)
     let pos_map, nega_map, othere_map = extract_consts_map cs_pool (M.empty, M.empty, M.empty) in
     let tlist =  List.map
                    (fun (p, (env, senv)) ->
@@ -234,21 +249,23 @@ module G = struct
     List.fold_left (fun acc_g v_src -> add_edge acc_g v_src v) empty vlist    
                     
 
-  let of_predicateCons_list (pcs:PredicateCons.t list) =
+  let of_predicateCons_list (objective_ps: Id.t list) (pcs:PredicateCons.t list) =
+    (* remve objective predicate from node of graph *)
+    let nodes = List.filter (fun pc -> List.mem pc.PredicateCons.name objective_ps) pcs in
     List.fold_left
       (fun acc_graph node ->
         let depend_nodes = PredicateCons.dependency pcs node
         in
         add_edge_v2vlist (add_vertex acc_graph node)  node depend_nodes)
       empty
-      pcs
+      nodes
         
 end
 
 
 
-(* let f cs = *)
-(*   let cs_pool, pcs = PredicateCons.of_scons_list cs in *)
-(*   let predicate_graph = G.of_predicateCons_list pcs in *)
+let f objective_predicate_list cs =
+  let cs_pool, pcs = PredicateCons.of_scons_list cs in
+  let predicate_graph = G.of_predicateCons_list objective_predicate_list pcs 
   
          

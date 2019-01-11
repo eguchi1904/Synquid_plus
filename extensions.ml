@@ -42,8 +42,13 @@ module List = struct
 
 
   let flatten_opt_list l =
-    l|> List.filter (function Some _  -> true | None -> false)
-     |> List.map (function Some s -> s | None -> assert false)
+    l
+    |> List.filter (function Some _  -> true | None -> false)
+    |> List.map (function Some s -> s | None -> assert false)
+
+  let assoc_all x table =
+    List.filter (fun (y, v) -> x = y) table
+    |> List.map snd
           
       
     
