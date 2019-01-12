@@ -1,3 +1,4 @@
+open Extensions
 module Liq = Type
 exception Constraint of string           
 
@@ -155,6 +156,66 @@ let is_predicate_normal_position = function
     List.for_all
       (fun e -> Formula.is_unknown_p e || S.is_empty (Formula.extract_unknown_p e))
       (env_formula_list@e1_list@e2_list)    
+
+(* the shape of constraint is restricted to \Gamma | - phi <: q
+   use Liq.env2formula_all
+ *)
+let mk_qformula_from_positive_cons env p = function
+  |SWF _ -> invalid_arg "constraint.mk_qformula_from_positive_cons"
+  |SSub (cons_env, e1, Formula.Unknown (_, _, _, p'))
+       when p' <> p -> invalid_arg "constraint.mk_qformula_from_positive_cons"
+  |SSub (cons_env, e1, Formula.Unknown (senv, sort_sita, sita, _)) ->
+    (* sitaの中のformulaには、sort_sitaが適用済みということで良いのかな *)
+    (match Liq.env_suffix cons_env env with
+     |None -> invalid_arg "constraint.mk_qformula: cons_env and env mismatch"
+     |Some env' ->       (* will construct formula p satisfying "env' and e1 -> sita.p" *)
+       let sita_list = M.bindings sita in
+       let sita_vars_list = List.map
+                              (fun (src_id, dst_e) ->
+                                let var_sort =( try Formula.Senv.find src_id senv with _ -> assert false) in
+                                (Formula.Var (var_sort, src_id)), dst_e )
+                              sita_list
+       in
+       let freshing_subst = List.fold_left
+                              (fun acc_map c -> match c with
+                                                |(Formula.Var (sort, id), _) ->
+                                                  M.add id (Formula.genFvar sort id) acc_map
+                                                | _ -> assert false
+                              )
+                             M.empty
+                             sita_vars_list
+       in
+       (* fresh! *)
+       let freshed_env' = Liq.env_substitute_F freshing_subst env' in
+       let freshed_e1 = Formula.substitution freshing_subst e1 in
+       let freshed_sita_vars_list = List.map
+                                 (fun (src_var, dst_formula) ->
+                                   (src_var, Formula.substitution freshing_subst dst_formula))
+                                 sita_vars_list
+       in
+       let eq_list = List.map
+                       (fun (src_var, dst_e) -> Formula.Eq (src_var, dst_e))
+                       freshed_sita_vars_list
+                        
+       in
+       let qformula_body =
+         (Formula.list_and (Liq.env2formula_all freshed_env'))
+         @(Formula.list_and freshed_e1)
+         @eq_list
+       in
+       let fv_qformula_body =
+         List.fold_left
+           (fun acc_fvs e -> (Formula.fv_sort_include_v e)@acc_fvs)
+           []
+           qformula_body
+       in
+       let binding = List.diff fv_qformula_body (Formula.Senv.reveal senv) in
+       (* 重複してないかとかassert分あっても良いか *)
+       Formula.QExist (binding, qformula_body)
+    )
+  | SSub _ -> invalid_arg "constraint.mk_qformula_from_positive_cons: not normal form"
+
+    
     
     
 

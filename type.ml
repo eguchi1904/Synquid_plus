@@ -238,8 +238,11 @@ let env_mem env v =
 
 let env_append ((its1, p1):env) ((its2, p2):env):env =
   (its1@its2, p1@p2)
-
-
+  
+let env_suffix ((l1, p1):env) ((l2, p2):env) =
+  match  ((List.suffix l1 l2), (List.suffix p1 p2)) with
+  |(Some l), (Some p) -> Some (l, p)
+  |_ -> None
   
 let env_bindings (env,_) =
   List.map fst env

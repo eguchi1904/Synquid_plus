@@ -3,7 +3,7 @@ open Constraint
 
 module Liq = Type
            
-
+  
    
 module ConsPool:
 sig
@@ -14,7 +14,7 @@ sig
   type consRef
   val consRef_get : consRef -> (Constraint.simple_cons option)
   val consRef_set : consRef -> (Constraint.simple_cons option) -> unit
-    
+  val consRef_set_none : consRef -> unit
 
   val import : Constraint.simple_cons list ->  consRef list
   type t = consRef list
@@ -24,6 +24,10 @@ end = struct
   type consRef =   (Constraint.simple_cons option) ref
   let consRef_get = (!)
   let consRef_set = (:=)
+
+  let consRef_set_none cref =
+    cref := None
+                  
   type t = consRef list
          
   let import:Constraint.simple_cons list ->  t =
@@ -212,9 +216,39 @@ end = struct
                      ts)
       depend_name
 
+
+      
+
 end
                      
 
+module QSolution =              (* predicate unkonwn のqunatifyer付きの解 *)
+  struct
+    type t = Or of Formula.qformula list
+                 
+      
+    (* input: positive constraint for p in normal form
+       \Gamma;.. -> p
+       \Gamma;.. .. -> p
+       ...
+     *)
+    let qsolution_for_cons_list env p positive_cs =
+      Or (List.map (Constraint.mk_qformula_from_positive_cons env p) positive_cs)
+
+      
+    let qsolution_for_pnode node =
+      if node.PredicateCons.othere_cons <> [] then invalid_arg "solver.predicateCons.mk_qformula"
+      else
+        let pos_cs = List.map ConsPool.consRef_get node.PredicateCons.positive_cons
+                     |> List.flatten_opt_list
+        in
+        let qsolution = qsolution_for_cons_list node.env node.name pos_cs in
+        (* set None to solved constraint *)
+        let () = List.iter ConsPool.consRef_set_none node.PredicateCons.positive_cons in
+        qsolution
+
+      
+  end
 
   (* input:  phi -> (unknown_p1 /\ unknown_p2 /\ phi1 /\ phi2 )
 
@@ -242,6 +276,7 @@ let rec decompose_result_of_implication = function
 module G = struct
 
   module G = Graph.Persistent.Digraph.ConcreteBidirectional(PredicateCons)
+  module GComponens = Graph.Components.Make(G)
   include G
 
   let add_edge_v2vlist graph v vlist = 
@@ -250,8 +285,11 @@ module G = struct
   let add_edge_vlist2v graph vlist v = 
     List.fold_left (fun acc_g v_src -> add_edge acc_g v_src v) empty vlist
 
-  let remove_vertes_list g vlist =
+  let remove_vertex_list g vlist =
     List.fold_left remove_vertex g vlist
+
+  let mem_vertex_list g vlist =
+    List.for_all (G.mem_vertex g) vlist
 
   let sub_graph g vlist =
     List.fold_left
@@ -264,14 +302,18 @@ module G = struct
     vlist
                     
 
+  let has_cycle g =
+    let components = GComponens.scc_list g in
+    List.exists (fun component -> (List.length component >= 2)) components
+    
   let of_predicateCons_list (objective_ps: Id.t list) (pcs:PredicateCons.t list) =
     (* remve objective predicate from node of graph *)
     let nodes = List.filter (fun pc -> List.mem pc.PredicateCons.name objective_ps) pcs in
     List.fold_left
       (fun acc_graph node ->
-        let depend_nodes = PredicateCons.dependency pcs node
-        in
-        add_edge_v2vlist (add_vertex acc_graph node)  node depend_nodes)
+        let depend_nodes = PredicateCons.dependency pcs node in
+        let acc_graph = G.add_vertex acc_graph node         in
+        add_edge_vlist2v acc_graph depend_nodes node )
       empty
       nodes
 
@@ -326,23 +368,81 @@ let rec choose_vertexs_to_induce_DAG_rec (g:G.t) =
                                 List.concat
   in
   max_degree_node::chosen_vertex_g_minus
+
+(* 有向グラフ からDAGが誘導できるような、vertexのリストを取ってくる　*)
+(* g is multiple elements conected component *)
   
-let choose_vertexsf_to_induce_DAG (g:G.t) (componets: G.vertex list) =
+let choose_vertexs_to_induce_DAG (g:G.t) = 
   let self_loop_nodes = G.self_loop_nodes g in
-  let sub_g = G.remove_vertes_list self_loop_nodes in
-  let sub_g_components = GComponens.scc_list sub_g in       
-  1
+  let g_minus = G.remove_vertex_list g  self_loop_nodes in
+  let g_minus_components = GComponens.scc_list g_minus in
+  let chosen_vertex_g_minus = List.map
+                                (fun component ->
+                                  if List.length component <= 1 then
+                                    []
+                                  else
+                                    let sub_g = G.sub_graph g_minus component in
+                                    choose_vertexs_to_induce_DAG_rec sub_g
+                                )
+                                g_minus_components
+                              |>
+                                List.concat  
+  in
+  self_loop_nodes@chosen_vertex_g_minus
   
-       
+module GTopological = Graph.Topological.Make(G)
+
+
+  
+     
+let rec qsolution_list_for_component  (nodes, (component_sub_graph, starting_nodes)) =
+  (assert (G.mem_vertex_list component_sub_graph nodes ));
+  let dag = G.remove_vertex_list component_sub_graph starting_nodes in
+  (assert (not (G.has_cycle dag)));
+  GTopological.fold
+    (fun node qsolution_acc ->
+      let qsolution = QSolution.qsolution_for_pnode node in
+       (* add to tail of list
+          to make resulting qformula_assc be topological order *)
+      qsolution_acc@[node.PredicateCons.name, qsolution])
+    dag
+    []
+  
+  
+  
+
+  
+  
+  (*   g: 　　　　　　predicate graph
+   components: 対象の強連結成分のnodes*)
+(* let mk_qformula_assoc  (g:G.t) components = *)
+(*   let map = *)
+(*     List.fold_left *)
+(*       (fun acc_map (nodes, (component_sub_graph, starting_nodes)) -> *)
+(*         solve_componens_by_quntifiyers acc_map (nodes, (component_sub_graph, starting_nodes))) *)
+(*       M.empty *)
+(*       components *)
+(*   in *)
+(*   map *)
+  
+  
 
 let f objective_predicate_list cs =
   let cs_pool, pcs = PredicateCons.of_scons_list cs in
-  let predicate_graph = G.of_predicateCons_list objective_predicate_list pcs in
+  let graph = G.of_predicateCons_list objective_predicate_list pcs in
   (* compute strongly connected components: 強連結成分分解 
      リストはトポロジカルオーダーになることが保証されている
    *)
   let component_list:PredicateCons.t list list =
-    GComponens.scc_list(predicate_graph)
+    GComponens.scc_list(graph)
+  in
+  let component_with_starting_nodes_list =
+    List.map
+      (fun nodes ->
+        let component_sub_graph = G.sub_graph graph nodes in
+        let starting_nodes = choose_vertexs_to_induce_DAG component_sub_graph in
+        (nodes, (component_sub_graph, starting_nodes)))
+      component_list
   in
   1
   

@@ -26,6 +26,8 @@ sig
   val cover : (Id.t * sort) list -> t
 
   val reveal : t -> (Id.t * sort) list
+
+  val find : Id.t -> t -> sort    
     
   val add : t -> Id.t -> sort -> t
 
@@ -38,6 +40,8 @@ sig
   val mem2 : (Id.t * sort) -> t -> bool
 
   val of_string : t -> string
+
+
     
 end = struct
   (* 新しく足すものは、リストの先頭から *)
@@ -48,6 +52,8 @@ end = struct
   let cover x = x
 
   let reveal x = x
+
+  let find = List.assoc 
               
   let add senv x sort = (x, sort)::senv
 
@@ -455,8 +461,21 @@ let rec list_and (es:t) =
   |And (e1,e2) -> (list_and e1)@(list_and e2)
   |e -> [e]
 
-  
 
+let rec or_list (es: t list) =
+  match es with
+  |[] -> Bool false
+  |[e] -> e
+  |(Bool false)::es' -> or_list es'
+  |e::es' -> Or (e, or_list es')  
+
+let rec list_or (es:t) =
+  match es with
+  |Or (Bool false, e2) -> list_or e2
+  |Or (e1, Bool false) -> list_or e1
+  |Or (e1,e2) -> (list_or e1)@(list_or e2)
+  |e -> [e]
+           
 
 
 let genFvar s i = Var (s, (Id.genid i))

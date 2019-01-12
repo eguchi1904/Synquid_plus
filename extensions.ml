@@ -17,6 +17,15 @@ module List = struct
     |x::xs -> x::(diff xs l2)
     |[] -> []
 
+
+  (* suffix (prefix@sufix) prefix = Some sufix *)
+  let rec suffix l prefix =
+    match l, prefix with
+    |(x::xs),(p::ps)  when x = p ->  suffix ps xs
+    |(x::xs),(p::ps) -> None
+    |_, [] -> Some l
+    |[],(p::ps) -> None
+
   let rec uniq = function
   |[] -> []
   |x::xs -> if List.mem x xs then uniq xs else x::(uniq xs)

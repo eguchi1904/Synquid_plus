@@ -33,10 +33,11 @@ val subst_simple_cons : Formula.subst -> simple_cons -> simple_cons
 val unknown_p_in_simple_cons : simple_cons -> S.t
 val is_predicate_normal_position : simple_cons -> bool
 val positive_negative_unknown_p : simple_cons -> (S.t * S.t * S.t)
+val mk_qformula_from_positive_cons : Liq.env -> Id.t -> simple_cons -> Formula.qformula
 
- val scons2string : simple_cons -> string
- val scons2string_human : Formula.subst -> simple_cons -> string  
- val scons_list_to_string : simple_cons list -> string
+val scons2string : simple_cons -> string
+val scons2string_human : Formula.subst -> simple_cons -> string  
+val scons_list_to_string : simple_cons list -> string
 
 (* -------------------------------------------------- *)
 (* (pure)formula constraints : well formedness / implication  *)

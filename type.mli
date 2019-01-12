@@ -60,6 +60,8 @@ val env_extract_unknown_p : env -> S.t
 val env2formula : env -> S.t -> Formula.t
 val env2formula_all : env -> Formula.t
 val mk_sort_env : env -> Formula.Senv.t
+val env_suffix : env -> env -> env option
+  
   
 (* -------------------------------------------------- *)
 (* substitution *)

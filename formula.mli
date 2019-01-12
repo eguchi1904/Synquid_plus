@@ -14,7 +14,9 @@ sig
                    
   val cover : (Id.t * sort) list -> t
     
-  val reveal : t -> (Id.t * sort) list    
+  val reveal : t -> (Id.t * sort) list
+
+  val find : Id.t -> t -> sort        
     
   val add : t -> Id.t -> sort -> t
 
@@ -86,6 +88,9 @@ val positive_negative_unknown_p : t -> (S.t * S.t * S.t)
   
 val and_list : t list -> t
 val list_and : t -> t list
+val or_list : t list -> t
+val list_or : t -> t list
+  
 val genFvar : sort -> string -> t
 val id2pa_shape : Id.t -> pa_shape -> pa
 
