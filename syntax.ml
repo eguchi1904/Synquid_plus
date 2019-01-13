@@ -79,7 +79,7 @@ and auxi_exist_t (t:t) = match t with
 
 and auxi_exist_b (b:b) = match b with
   |PIf (e1, t1, t2) -> (auxi_exist e1)||(auxi_exist_t t1)||(auxi_exist_t t2)
-  |PMatch (e, case_list) -> (auxi_exist e)||(List.for_all auxi_exist_case case_list)
+  |PMatch (e, case_list) -> (auxi_exist e)||(List.exists auxi_exist_case case_list)
 
 and auxi_exist_case case = auxi_exist_t case.body
 

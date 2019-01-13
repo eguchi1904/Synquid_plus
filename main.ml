@@ -208,7 +208,7 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
                                  defs
   in
   let syn_goals, check_goal = List.partition
-                                (fun (id, prg) -> Syntax.auxi_exist_t prg)
+                                (fun (id, prg) -> (Syntax.auxi_exist_t prg) || prg = Syntax.PHole)
                                 syn_check_goals
   in
 
