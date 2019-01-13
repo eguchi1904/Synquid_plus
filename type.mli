@@ -8,7 +8,7 @@ and basetype =
           
 type schema = Id.t list * (Id.t * Formula.pa_shape) list * t
 
-type env
+type env = private (Id.t * schema) list * (Formula.t list)
    
 type contextual = TLet of env * t
 

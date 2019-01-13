@@ -23,7 +23,38 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
 
  and 'a case = {constructor : Id.t ; argNames : (Id.t * 'a) list ; body : 'a t}
 
-             
+let rec remove_annotations = function
+  |PLet ((x, _), t1, t2) -> Syntax.PLet (x, remove_annotations t1, remove_annotations t2)
+  |PE e -> Syntax.PE (remove_annotations_e e)
+  |PI b -> Syntax.PI (remove_annotations_b b)
+  |PF f -> Syntax.PF (remove_annotations_f f)
+  |PHole -> Syntax.PHole
+
+and remove_annotations_e = function
+  |PSymbol (x, _) -> Syntax.PSymbol x
+  |PAuxi i -> Syntax.PAuxi i
+  |PInnerFun f_in -> Syntax.PInnerFun (remove_annotations_f f_in)
+  |PAppFo (e1, e2)-> Syntax.PAppFo (remove_annotations_e e1, remove_annotations_e e2)
+  |PAppHo (e1, f2) -> Syntax.PAppHo (remove_annotations_e e1, remove_annotations_f f2)
+
+
+and remove_annotations_b = function
+  |PIf (e1, t2, t3) -> Syntax.PIf (remove_annotations_e e1, remove_annotations t2, remove_annotations t3)
+  |PMatch (e, case_list) ->
+    Syntax.PMatch (remove_annotations_e e, List.map remove_annotations_case case_list)
+
+and remove_annotations_case {constructor =  c; argNames = x_sch_list; body = t } =
+  Syntax.{constructor =  c; argNames = List.map fst x_sch_list; body = remove_annotations  t }
+
+and remove_annotations_f = function
+  |PFun ((y, _), t1) ->
+    Syntax.PFun (y, remove_annotations t1)
+
+  |PFix ((f_name, _, _), body) ->
+    Syntax.PFix (f_name, remove_annotations_f body)
+                     
+                 
+         
 let rec access_annotation_t (f:'a -> 'a) (t:'a t) = match t with
   |PLet ((x, sch), t1, t2) -> PLet ((x, (f sch)),
                                     (access_annotation_t f t1),

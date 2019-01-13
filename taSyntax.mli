@@ -22,6 +22,11 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
 
  and 'a case = {constructor : Id.t ; argNames : (Id.t * 'a) list ; body : 'a t}
 
+val remove_annotations: 'a t -> Syntax.t
+val remove_annotations_e: 'a e -> Syntax.e
+val remove_annotations_b: 'a b -> Syntax.b
+val remove_annotations_f: 'a f -> Syntax.f
+             
 val substitute:   Id.t -> 'a e -> 'a t -> 'a t
 val substitute_f: Id.t -> 'a e -> 'a f -> 'a f
 val syn2string: ('a -> string) -> 'a t -> string

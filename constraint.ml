@@ -217,6 +217,60 @@ let mk_qformula_from_positive_cons env p = function
 
     
     
+let mk_qformula_from_negative_cons env p = function
+  |SWF _ -> invalid_arg "constraint.mk_qformula_from_negative_cons"
+  |SSub (cons_env, e1, e2)
+       when S.mem p (Formula.extract_unknown_p e2)-> invalid_arg "constraint.mk_qformula_from_negative_cons"
+  |SSub (cons_env, e1, e2)  ->
+    (match Liq.env_suffix cons_env env with
+     |None -> invalid_arg "constraint.mk_qformula: cons_env and env mismatch"
+     |Some env' ->
+       let env'_list = (Formula.list_and (Liq.env2formula_all env')) in
+       let e1_list = Formula.list_and e1 in
+       let unknown_p_list, othere_negatives =
+         List.partition (function |Formula.Unknown(_,_,_,id) -> id = p
+                                  |_ -> false)
+                        (env'_list@e1_list)
+       in
+       (match unknown_p_list, othere_negatives with
+        |(Formula.Unknown(senv, sort_sita, sita, _))::othere_p, _ ->
+          (assert (othere_p = [])); (* とりあえず、他のpもあったら気づくように *)
+          let sita_list = M.bindings sita in
+          let sita_vars_list = List.map
+                                 (fun (src_id, dst_e) ->
+                                   let var_sort =( try Formula.Senv.find src_id senv with _ -> assert false) in
+                                   (Formula.Var (var_sort, src_id)), dst_e )
+                                 sita_list
+          in
+          let freshing_subst = List.fold_left
+                                 (fun acc_map c -> match c with
+                                                   |(Formula.Var (sort, id), _) ->
+                                                     M.add id (Formula.genFvar sort id) acc_map
+                                                   | _ -> assert false
+                                 )
+                                 M.empty
+                                 sita_vars_list
+          in
+          (* fresh *)
+          let freshed_othere_negatives = List.map (Formula.substitution freshing_subst) othere_negatives in
+          let freshed_e2 = Formula.substitution freshing_subst e2 in
+          let qformula_premises_of_implication = freshed_othere_negatives in
+          let qformula_result_of_implication = freshed_e2 in
+          let fv_qformula =
+            List.fold_left
+              (fun acc_fvs e -> (Formula.fv_sort_include_v e)@acc_fvs)
+              []
+              (qformula_premises_of_implication@[qformula_result_of_implication])
+          in
+          let bindings = List.diff fv_qformula (Formula.Senv.reveal senv) in
+          Formula.QAll (bindings, qformula_premises_of_implication, qformula_result_of_implication)
+        |_ -> invalid_arg "constraint.mk_qformula_from_negative_cons: not negative constraint")
+    )
+         
+       
+          
+
+
     
 
                              

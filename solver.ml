@@ -43,6 +43,7 @@ sig
                name : Id.t;
                env : Liq.env;
                wellformed_env : Formula.Senv.t;
+               hints : Formula.t list; (* userから与えられるヒント *)
                
                positive_cons : ConsPool.consRef list;
                negative_cons : ConsPool.consRef list;
@@ -51,8 +52,14 @@ sig
   val compare : t -> t -> int
   val hash : t -> int
   val equal : t -> t -> bool
+
+  val get_positive_cons :  t -> Constraint.simple_cons list
+
+  val get_negative_cons :  t -> Constraint.simple_cons list
+
+  val get_othere_cons :  t -> Constraint.simple_cons list        
     
-  val of_scons_list : Constraint.simple_cons list -> ConsPool.t * t list
+  val of_scons_list : (Formula.t list) M.t -> Constraint.simple_cons list -> ConsPool.t * t list
   val dependency : t list -> t -> t list
     
 end = struct
@@ -60,6 +67,7 @@ end = struct
   type t =  {name: Id.t    (* unknown predicate　のid *)
             ;env: Liq.env  (* unknown predicate が生成された時のenv *)
             ;wellformed_env: Formula.Senv.t
+            ;hints : Formula.t list (* userから与えられるヒント *)
             ;positive_cons : ConsPool.consRef list
             ;negative_cons : ConsPool.consRef list
             ;othere_cons :  ConsPool.consRef list
@@ -75,6 +83,23 @@ end = struct
   let hash t = Hashtbl.hash t.name
 
   let equal t1 t2 = t1.name = t2.name
+
+
+  let get_positive_cons node =
+    node.positive_cons
+    |> List.map ConsPool.consRef_get 
+    |> List.flatten_opt_list
+
+  let get_negative_cons node =
+    node.negative_cons
+    |> List.map ConsPool.consRef_get 
+    |> List.flatten_opt_list
+
+  let get_othere_cons node =
+    node.othere_cons
+    |> List.map ConsPool.consRef_get 
+    |> List.flatten_opt_list    
+    
                   
           
   let rec extract_envs = function
@@ -128,7 +153,7 @@ end = struct
 
 
          
-  let of_scons_list cs = 
+  let of_scons_list p_hint_map cs = 
     (assert (List.for_all Constraint.is_predicate_normal_position cs));
     let cs_pool = ConsPool.import cs 
     in
@@ -145,12 +170,14 @@ end = struct
     let pos_map, nega_map, othere_map = extract_consts_map cs_pool (M.empty, M.empty, M.empty) in
     let tlist =  List.map
                    (fun (p, (env, senv)) ->
+                     let hints = try (M.find p p_hint_map) with Not_found -> [] in
                      let positive_cons = M.find_defo p [] pos_map in
                      let negative_cons = M.find_defo p [] nega_map in
                      let othere_cons   = M.find_defo p [] othere_map in
                      {name = p
                      ;env = env
                      ;wellformed_env = senv
+                     ;hints = hints
                      ;positive_cons = positive_cons (* [.....] -> p *)
                      ;negative_cons = negative_cons (* [...p...] -> ... *)
                      ;othere_cons = othere_cons (* [...p...] -> p *)
@@ -394,7 +421,7 @@ module GTopological = Graph.Topological.Make(G)
 
 
   
-     
+(* 連結成分: nodeの *)
 let rec qsolution_list_for_component  (nodes, (component_sub_graph, starting_nodes)) =
   (assert (G.mem_vertex_list component_sub_graph nodes ));
   let dag = G.remove_vertex_list component_sub_graph starting_nodes in
@@ -407,6 +434,40 @@ let rec qsolution_list_for_component  (nodes, (component_sub_graph, starting_nod
       qsolution_acc@[node.PredicateCons.name, qsolution])
     dag
     []
+
+let init_assignment_for_starting_node node_in_component starting_node =
+  let p = starting_node.PredicateCons.name in    
+  let env = starting_node.PredicateCons.env in
+  let hint_formula_list = starting_node.PredicateCons.hints in
+  let pos_cons = PredicateCons.get_positive_cons starting_node in
+  let nega_cons = PredicateCons.get_negative_cons starting_node in
+  let is_independent_cons cons = (* p以外で、node_in_componentに即するpredicateがconsに出現しないか *)
+    S.for_all
+      (fun unknown_p -> (not (List.mem unknown_p node_in_component)))
+      (S.remove p (Constraint.unknown_p_in_simple_cons cons))
+  in
+  let independent_pos_cons = List.filter is_independent_cons pos_cons in
+  let independent_nega_cons = List.filter is_independent_cons nega_cons in
+    
+    
+  
+  let qformula_solution_for_pos_cons =
+    List.map (Constraint.mk_qformula_from_positive_cons env p) independent_pos_cons in
+  let qformula_solution_for_nega_cons =
+    List.map (Constraint.mk_qformula_from_negative_cons env p) independent_nega_cons in
+  let init_formulas = (List.map Qe.f (qformula_solution_for_pos_cons@qformula_solution_for_nega_cons))@hint_formula_list in
+  (p, init_formulas)
+  
+  
+  
+let init_assignment_for_starting_node_list (nodes, (component_sub_graph, starting_nodes)) =
+  List.fold_left
+    (fun acc_map starting_node -> let p, init_formulas = init_assignment_for_starting_node nodes starting_node in
+                                  M.add p init_formulas acc_map)
+    M.empty
+  starting_nodes
+  
+  
   
   
   
@@ -427,8 +488,8 @@ let rec qsolution_list_for_component  (nodes, (component_sub_graph, starting_nod
   
   
 
-let f objective_predicate_list cs =
-  let cs_pool, pcs = PredicateCons.of_scons_list cs in
+let f p_hint_map objective_predicate_list cs =
+  let cs_pool, pcs = PredicateCons.of_scons_list p_hint_map cs in
   let graph = G.of_predicateCons_list objective_predicate_list pcs in
   (* compute strongly connected components: 強連結成分分解 
      リストはトポロジカルオーダーになることが保証されている

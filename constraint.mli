@@ -34,6 +34,7 @@ val unknown_p_in_simple_cons : simple_cons -> S.t
 val is_predicate_normal_position : simple_cons -> bool
 val positive_negative_unknown_p : simple_cons -> (S.t * S.t * S.t)
 val mk_qformula_from_positive_cons : Liq.env -> Id.t -> simple_cons -> Formula.qformula
+val mk_qformula_from_negative_cons : Liq.env -> Id.t -> simple_cons -> Formula.qformula
 
 val scons2string : simple_cons -> string
 val scons2string_human : Formula.subst -> simple_cons -> string  
