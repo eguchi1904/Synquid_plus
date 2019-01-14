@@ -16,6 +16,8 @@ sig
   val consRef_set : consRef -> (Constraint.simple_cons option) -> unit
   val consRef_set_none : consRef -> unit
 
+  (* val consRef_valid : consRef -> bool *)
+
   val import : Constraint.simple_cons list ->  consRef list
   type t = consRef list
          
@@ -27,7 +29,7 @@ end = struct
 
   let consRef_set_none cref =
     cref := None
-                  
+
   type t = consRef list
          
   let import:Constraint.simple_cons list ->  t =
@@ -191,11 +193,10 @@ end = struct
                          |>List.map ConsPool.consRef_get
                          |> List.flatten_opt_list
     in
-    let negative_cons =  t.negative_cons
-                         |> List.map ConsPool.consRef_get
-                         |> List.flatten_opt_list
-
-    in    
+    (* let negative_cons =  t.negative_cons *)
+    (*                      |> List.map ConsPool.consRef_get *)
+    (*                      |> List.flatten_opt_list *)
+    (* in     *)
     let othere_cons =  t.othere_cons
                        |> List.map ConsPool.consRef_get
                        |> List.flatten_opt_list
@@ -218,23 +219,23 @@ end = struct
                         S.empty
                         positive_cons
       in
-      let p_in_nega_cons = List.fold_left
-                        (fun acc scons ->
-                          S.union acc (Constraint.unknown_p_in_simple_cons scons))
-                    S.empty
-                        negative_cons
-      in
-      let p_in_othre_cons = List.fold_left
+      (* let p_in_nega_cons = List.fold_left *)
+      (*                   (fun acc scons -> *)
+      (*                     S.union acc (Constraint.unknown_p_in_simple_cons scons)) *)
+      (*               S.empty *)
+      (*                   negative_cons *)
+      (* in *)
+      let p_in_othere_cons = List.fold_left
                         (fun acc scons ->
                           S.union acc (Constraint.unknown_p_in_simple_cons scons))
                     S.empty
                         othere_cons
       in
-      (assert (S.mem t.name p_in_othre_cons));
-      S.union p_in_pos_cons
-              p_in_nega_cons
-      |>S.union p_in_othre_cons
+      (assert (S.mem t.name p_in_othere_cons));
+      S.union p_in_pos_cons p_in_othere_cons
+              
 
+  (*　pがqに依存している =def= [...q...] -> p という形のconstraintがある　*)
   let dependency ts t  =
     let depend_name = dependency_id t |> S.elements in
     List.map
@@ -435,15 +436,15 @@ let rec qsolution_list_for_component  (nodes, (component_sub_graph, starting_nod
     dag
     []
 
-let init_assignment_for_starting_node node_in_component starting_node =
+let init_assignment_for_starting_node objective_predicate node_in_component starting_node =
   let p = starting_node.PredicateCons.name in    
   let env = starting_node.PredicateCons.env in
   let hint_formula_list = starting_node.PredicateCons.hints in
   let pos_cons = PredicateCons.get_positive_cons starting_node in
   let nega_cons = PredicateCons.get_negative_cons starting_node in
-  let is_independent_cons cons = (* p以外で、node_in_componentに即するpredicateがconsに出現しないか *)
+  let is_independent_cons cons = (* objective_predicate以外のunknown predicateが出てこないか*)
     S.for_all
-      (fun unknown_p -> (not (List.mem unknown_p node_in_component)))
+      (fun unknown_p -> (List.mem unknown_p objective_predicate))
       (S.remove p (Constraint.unknown_p_in_simple_cons cons))
   in
   let independent_pos_cons = List.filter is_independent_cons pos_cons in
@@ -460,12 +461,161 @@ let init_assignment_for_starting_node node_in_component starting_node =
   
   
   
-let init_assignment_for_starting_node_list (nodes, (component_sub_graph, starting_nodes)) =
+let init_assignment_for_starting_node_list objective_predicate nodes starting_nodes =
   List.fold_left
-    (fun acc_map starting_node -> let p, init_formulas = init_assignment_for_starting_node nodes starting_node in
-                                  M.add p init_formulas acc_map)
+    (fun acc_map starting_node ->
+      let p, init_formulas =
+        init_assignment_for_starting_node objective_predicate nodes starting_node in
+      M.add p init_formulas acc_map)
     M.empty
-  starting_nodes
+    starting_nodes
+
+
+
+(* componentを解く時に持ち回す、assignment *)
+module Assignments:
+sig
+  
+ type t =  {start_nodes: Formula.t M.t
+           ;inter_nodes: Formula.t M.t                
+           ;inter_nodes_qsolutions : (Id.t * QSolution.t) list (* topological order *)
+           ;yet_qe_qsolutions :  (Id.t * QSolution.t) list     (* suffix of inter_nodes_qsolutions *)
+           }
+         
+ type consSort = |NotYet | MustValid | MustSat
+
+ val sort_of_scons : Id.t list -> t -> Constraint.simple_cons -> consSort
+
+ val substitute : t -> Constraint.simple_cons -> Constraint.simple_cons
+                                     
+end = struct
+         
+  type t =  {start_nodes: Formula.t M.t
+            ;inter_nodes: Formula.t M.t                
+            ;inter_nodes_qsolutions : (Id.t * QSolution.t) list (* topological order *)
+            ;yet_qe_qsolutions :  (Id.t * QSolution.t) list     (* suffix of inter_nodes_qsolutions *)
+            }
+          
+  type consSort = |NotYet | MustValid | MustSat
+
+  let sort_of_scons obj_ps assign cons =
+    let p_in_cons = Constraint.unknown_p_in_simple_cons cons in
+    let start_map = assign.start_nodes in
+    let inter_map = assign.inter_nodes in
+    let exist_obj_ps = S.exists (fun p -> List.mem p obj_ps) p_in_cons in
+    let exist_unfix_ps = S.exists (fun p -> not ((M.mem p start_map) || (M.mem p inter_map))) p_in_cons in
+    if exist_unfix_ps then
+      NotYet
+    else if exist_obj_ps then
+      MustSat
+    else
+      MustValid
+
+  let substitute assign cons =
+    cons
+    |> Constraint.subst_simple_cons assign.start_nodes
+    |> Constraint.subst_simple_cons assign.inter_nodes
+
+  let find_start_node p assign =
+     M.find p assign.start_nodes
+
+  let fix_p_to_check_sat assign cons =
+    cons
+    |> substitute assign
+    |> Constraint.replace_unknown_p_to_top
+
+  let fix_p_to_check_valid assign cons = substitute assign cons
+
+    
+    
+  let must_refine obj_ps assign cons = 
+    match sort_of_scons obj_ps assign cons with
+    |NotYet -> false
+    |MustSat ->
+      let fixed_cons = fix_p_to_check_sat assign cons
+      in
+      not (Constraint.is_satisifiable_simple_cons_all fixed_cons)
+    |MustValid ->
+      let fixed_cons = fix_p_to_check_valid assign cons in
+      not (Constraint.is_valid_simple_cons_all fixed_cons)
+
+      
+  (* refine assign cons  *)
+  let refine obj_ps assign cons_sort cons =
+      match cons_sort with
+      |NotYet -> assign
+               
+      |MustSat ->
+        (match cons with
+         |Constraint.SSub (_, _, Formula.Unknown (_, _, _, p)) -> (* この位置に来るのは、starting_nodeのみ *)
+           let qs = try find_start_node p assign
+                        |> Formula.list_and
+                    with Not_found -> assert false
+           in
+           let qs' = List.filter
+                       (fun q ->
+                         let p_to_q = M.singleton p q in
+                         let cons' = Constraint.subst_simple_cons p_to_q cons in
+                         let fixed_cons' = fix_p_to_check_sat assign cons' in
+                         (Constraint.is_satisifiable_simple_cons_all fixed_cons')
+                       )
+                       qs
+           in
+           {start_nodes =  M.add p (Formula.and_list qs') assign.start_nodes
+           ;inter_nodes =  M.empty
+           ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
+           ;yet_qe_qsolutions = assign.inter_nodes_qsolutions
+           }
+            
+         |_  -> assert false
+        )
+
+      |MustValid ->
+        (match cons with
+         |Constraint.SSub (_, _, Formula.Unknown (_, _, _, p)) -> (* この位置に来るのは、starting_nodeのみ *)
+           let qs = try find_start_node p assign
+                        |> Formula.list_and
+                    with Not_found -> assert false
+           in
+           let qs' = List.filter
+                       (fun q ->
+                         let p_to_q = M.singleton p q in
+                         let cons' = Constraint.subst_simple_cons p_to_q cons in
+                         let fixed_cons' =  fix_p_to_check_valid assign cons' in
+                         (Constraint.is_valid_simple_cons_all fixed_cons')
+                       )
+                       qs
+           in
+           {start_nodes =  M.add p (Formula.and_list qs') assign.start_nodes
+           ;inter_nodes =  M.empty
+           ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
+           ;yet_qe_qsolutions = assign.inter_nodes_qsolutions
+           }
+         | _ -> assert false)
+        
+          
+end
+                  
+let find_invalid objective_predicate cs_pool assignment qfree_map =
+  1
+
+          
+let rec iter_refine obj_ps (assign:Assignments.t) cs_pool left_cs =
+  match left_cs with
+  |consref :: othere ->
+    (match ConsPool.consRef_get consref with
+     |None -> iter_refine obj_ps assign othere
+     |Some cons ->
+
+
+       
+  
+let solve_component objecitve_predicates cs_pool (nodes, (component_sub_graph, starting_nodes)) =
+  let assignment = init_assignment_for_starting_node_list objective_predicatesnodes starting_nodes in
+  let qsolution_list = qsolution_list_for_component (nodes, (component_sub_graph, starting_nodes)) in
+  iter_refine objective_predicates cs_pool qsolution_list M.empty assignment
+
+(* cs_poolを見ながらやって行くのが一番単純だし、そこまでコストもなさそうなので良いかな *)
   
   
   

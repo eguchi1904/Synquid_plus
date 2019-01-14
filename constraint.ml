@@ -77,8 +77,8 @@ let inst_scons sita = function
     
     
                           
-     
-let is_valid_simple_cons z3_env = function
+(* use Liq.env2formula_all  *)     
+let is_valid_simple_cons = function
   |SSub (env, e1, e2 ) -> (* env/\e => sita*P *)
     let env_formula = Liq.env2formula env (S.union (Formula.fv e1) (Formula.fv e2)) in
     let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
@@ -94,6 +94,33 @@ let is_valid_simple_cons z3_env = function
        let x_sort_list = Formula.fv_sort_include_v e in
    (* omit checking if e has a boolean sort *)
        List.for_all (fun x_sort -> Formula.Senv.mem2 x_sort senv) x_sort_list
+
+
+(* use Liq.env2formula_all  *)
+let is_valid_simple_cons_all = function
+ |SSub (env, e1, e2 ) -> (* env/\e => sita*P *)
+    let env_formula = Liq.env2formula_all env  in
+    let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
+    let z3_p,p_s = UseZ3.convert p in
+    let is_valid = UseZ3.is_valid z3_p in
+    is_valid
+  |SWF (_, (senv, e)) ->
+       let x_sort_list = Formula.fv_sort_include_v e in
+       List.for_all (fun x_sort -> Formula.Senv.mem2 x_sort senv) x_sort_list
+
+let is_satisifiable_simple_cons_all = function
+ |SSub (env, e1, e2 ) -> (* env/\e => sita*P *)
+    let env_formula = Liq.env2formula_all env  in
+    let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
+    let z3_p,p_s = UseZ3.convert p in
+    let is_valid = UseZ3.is_valid z3_p in
+    is_valid
+  |SWF (_, (senv, e)) ->
+       let x_sort_list = Formula.fv_sort_include_v e in
+       List.for_all (fun x_sort -> Formula.Senv.mem2 x_sort senv) x_sort_list
+       
+  
+    
 
 let assert_p_well_formedness = function
   |SSub _ -> true
@@ -132,6 +159,15 @@ let unknown_p_in_simple_cons = function
                                 (Formula.extract_unknown_p e1)
                                 (Formula.extract_unknown_p e2)))
 
+let replace_unknown_p_to_top scons =
+  let p_in_scons = unknown_p_in_simple_cons scons in
+  let sita = S.fold
+               (fun p sita -> M.add p (Formula.Bool true) sita)
+               p_in_scons
+               M.empty
+  in
+  subst_simple_cons sita scons
+    
 
 
 let positive_negative_unknown_p = function

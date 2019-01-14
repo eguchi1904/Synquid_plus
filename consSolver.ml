@@ -240,7 +240,7 @@ let rec isnt_valid z3_env cs p_candi =
     let sita = M.map (fun tlist -> Formula.and_list tlist) p_candi in
     let sita_debug = M.bindings sita in
     let scons' = subst_simple_cons sita scons in
-    if is_valid_simple_cons z3_env scons' then
+    if Constraint.is_valid_simple_cons scons' then
       isnt_valid z3_env cs' p_candi
     else
       Some scons
@@ -298,7 +298,7 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
     let qs = M.find i pcandi in
     let qs' = List.filter
                 (fun q -> let q' = (Formula.sort_subst2formula sort_sita_i (Formula.substitution sita_i q)) in
-                          is_valid_simple_cons z3_env (SWF (env,(senv, q'))))
+                          Constraint.is_valid_simple_cons  (SWF (env,(senv, q'))))
                 qs
     in
     M.add i qs' pcandi

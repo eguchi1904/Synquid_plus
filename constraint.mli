@@ -26,11 +26,18 @@ type simple_cons = |SWF of Liq.env * (Formula.Senv.t * Formula.t)
 
 val split_cons : cons -> simple_cons list
 
+(* using LIq.env2formula *)
+val is_valid_simple_cons : simple_cons -> bool
+(* using Liq.env2formula_all *)
+val is_valid_simple_cons_all : simple_cons -> bool
+(* using Liq.env2formula_all *)
+val is_satisifiable_simple_cons_all : simple_cons -> bool
   
-val is_valid_simple_cons : UseZ3.z3_env -> simple_cons -> bool
 (* unknown p に対するsubst *)
 val subst_simple_cons : Formula.subst -> simple_cons -> simple_cons
 val unknown_p_in_simple_cons : simple_cons -> S.t
+val replace_unknown_p_to_top : simple_cons -> simple_cons
+  
 val is_predicate_normal_position : simple_cons -> bool
 val positive_negative_unknown_p : simple_cons -> (S.t * S.t * S.t)
 val mk_qformula_from_positive_cons : Liq.env -> Id.t -> simple_cons -> Formula.qformula

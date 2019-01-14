@@ -302,7 +302,20 @@ let is_valid (e:Expr.expr) =
   else
     raise CANT_SOLVE
   
-
+let is_satisfiable (e:Expr.expr) =
+  (start_z3_clock ());
+  let solver = mk_solver ctx None in
+  (Z3.Solver.add solver [e]);
+  let ret = Z3.Solver.check solver [] in
+  (stop_z3_clock ());
+  if ret = UNSATISFIABLE then
+    false
+  else if ret = SATISFIABLE then
+    true
+  else
+    raise CANT_SOLVE
+  
+  
 let satisfiable_but_not_valid (e:Expr.expr) =
   (start_z3_clock ());
     let solver = mk_solver ctx None in
