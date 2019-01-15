@@ -462,12 +462,18 @@ let rec list_and (es:t) =
   |e -> [e]
 
 
+let rec or_list_rec es acc =
+  match es with
+  |[] -> acc
+  |(Bool false)::es' -> or_list_rec es' acc
+  |(Bool true):: _ -> Bool true  (* hoge or true <=> true *)
+  |e::es' -> or_list_rec es' (Or (acc, e))
+
+      
 let rec or_list (es: t list) =
   match es with
   |[] -> Bool false
-  |[e] -> e
-  |(Bool false)::es' -> or_list es'
-  |e::es' -> Or (e, or_list es')  
+  |e' :: es'  ->  or_list_rec es' e'
 
 let rec list_or (es:t) =
   match es with

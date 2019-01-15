@@ -20,6 +20,8 @@ sig
 
   val import : Constraint.simple_cons list ->  consRef list
   type t = consRef list
+
+  val get_scons_list : t -> Constraint.simple_cons list
          
 end = struct
   
@@ -35,6 +37,9 @@ end = struct
   let import:Constraint.simple_cons list ->  t =
     (fun sc ->
       List.map (fun c ->  ref (Some c)) sc)
+
+  let get_scons_list cs_pool =
+    List.map consRef_get cs_pool |> List.flatten_opt_list
 
 end
    
@@ -254,7 +259,6 @@ module QSolution =              (* predicate unkonwn のqunatifyer付きの解 *
   struct
     type t = Or of Formula.qformula list
                  
-      
     (* input: positive constraint for p in normal form
        \Gamma;.. -> p
        \Gamma;.. .. -> p
@@ -274,6 +278,12 @@ module QSolution =              (* predicate unkonwn のqunatifyer付きの解 *
         (* set None to solved constraint *)
         let () = List.iter ConsPool.consRef_set_none node.PredicateCons.positive_cons in
         qsolution
+
+    let qe = function
+      |Or qformula_list ->
+        let formula_list = List.map Qe.f qformula_list in
+        Formula.or_list formula_list
+
 
       
   end
@@ -487,6 +497,11 @@ sig
  val sort_of_scons : Id.t list -> t -> Constraint.simple_cons -> consSort
 
  val substitute : t -> Constraint.simple_cons -> Constraint.simple_cons
+
+
+ val refine : Id.t list  -> t  -> Constraint.simple_cons -> t option
+
+ val qe_and_get_next : t -> t option
                                      
 end = struct
          
@@ -528,24 +543,17 @@ end = struct
 
     
     
-  let must_refine obj_ps assign cons = 
+  let refine obj_ps assign cons = 
     match sort_of_scons obj_ps assign cons with
-    |NotYet -> false
+    |NotYet -> None
+             
     |MustSat ->
       let fixed_cons = fix_p_to_check_sat assign cons
       in
-      not (Constraint.is_satisifiable_simple_cons_all fixed_cons)
-    |MustValid ->
-      let fixed_cons = fix_p_to_check_valid assign cons in
-      not (Constraint.is_valid_simple_cons_all fixed_cons)
-
-      
-  (* refine assign cons  *)
-  let refine obj_ps assign cons_sort cons =
-      match cons_sort with
-      |NotYet -> assign
-               
-      |MustSat ->
+      let must_refine = not (Constraint.is_satisifiable_simple_cons_all fixed_cons)
+      in
+      if not must_refine then None
+      else
         (match cons with
          |Constraint.SSub (_, _, Formula.Unknown (_, _, _, p)) -> (* この位置に来るのは、starting_nodeのみ *)
            let qs = try find_start_node p assign
@@ -561,16 +569,22 @@ end = struct
                        )
                        qs
            in
-           {start_nodes =  M.add p (Formula.and_list qs') assign.start_nodes
-           ;inter_nodes =  M.empty
-           ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
-           ;yet_qe_qsolutions = assign.inter_nodes_qsolutions
-           }
+           Some {start_nodes =  M.add p (Formula.and_list qs') assign.start_nodes
+                ;inter_nodes =  M.empty
+                ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
+                ;yet_qe_qsolutions = assign.inter_nodes_qsolutions
+                }
             
          |_  -> assert false
         )
 
-      |MustValid ->
+      
+    |MustValid ->
+      let fixed_cons = fix_p_to_check_valid assign cons in
+      let must_refine = not (Constraint.is_valid_simple_cons_all fixed_cons)
+      in
+      if not must_refine then None
+      else
         (match cons with
          |Constraint.SSub (_, _, Formula.Unknown (_, _, _, p)) -> (* この位置に来るのは、starting_nodeのみ *)
            let qs = try find_start_node p assign
@@ -586,26 +600,44 @@ end = struct
                        )
                        qs
            in
-           {start_nodes =  M.add p (Formula.and_list qs') assign.start_nodes
-           ;inter_nodes =  M.empty
-           ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
-           ;yet_qe_qsolutions = assign.inter_nodes_qsolutions
-           }
+           Some {start_nodes =  M.add p (Formula.and_list qs') assign.start_nodes
+                ;inter_nodes =  M.empty
+                ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
+                ;yet_qe_qsolutions = assign.inter_nodes_qsolutions
+                }
          | _ -> assert false)
-        
-          
+      
+
+  let qe_and_get_next assign =
+    match assign.yet_qe_qsolutions with
+     |(p, qsolution) :: othere ->
+       let p_formula = QSolution.qe qsolution in
+       Some {start_nodes = assign.start_nodes
+            ;inter_nodes =  M.add p p_formula assign.inter_nodes (* add *)
+            ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
+            ;yet_qe_qsolutions = othere (* pop *)
+            }
+     |[] -> None
+       
 end
                   
-let find_invalid objective_predicate cs_pool assignment qfree_map =
-  1
-
           
-let rec iter_refine obj_ps (assign:Assignments.t) cs_pool left_cs =
+let rec iter_refine obj_ps (assign:Assignments.t) cs_list left_cs =
   match left_cs with
-  |consref :: othere ->
-    (match ConsPool.consRef_get consref with
-     |None -> iter_refine obj_ps assign othere
-     |Some cons ->
+  |cons :: othere ->
+    (match Assignments.refine obj_ps assign cons with
+     |None -> iter_refine obj_ps assign cs_list othere
+     |Some new_assign -> iter_refine obj_ps new_assign cs_list cs_list (* 振り出しに戻る *)
+    )
+  |[] ->
+    (match Assignments.qe_and_get_next assign with
+     |None -> assign
+     |Some new_assign -> iter_refine obj_ps new_assign cs_list cs_list (* iteration *)
+    )
+    
+    
+    
+          
 
 
        
