@@ -1,10 +1,11 @@
 open Extensions
 open Constraint
-
 module Liq = Type
-           
-  
-   
+
+exception InValid of Constraint.simple_cons
+exception UnSat of Constraint.simple_cons
+                 
+                 
 module ConsPool:
 sig
 
@@ -21,8 +22,14 @@ sig
   val import : Constraint.simple_cons list ->  consRef list
   type t = consRef list
 
+  val filter_valid : t -> unit
+    
   val get_scons_list : t -> Constraint.simple_cons list
-         
+
+  val substitute : Formula.t M.t -> t -> unit
+
+  val filter_none : t -> t
+    
 end = struct
   
   type consRef =   (Constraint.simple_cons option) ref
@@ -38,14 +45,47 @@ end = struct
     (fun sc ->
       List.map (fun c ->  ref (Some c)) sc)
 
+
+  let filter_valid (cs_pool:t) =
+    List.iter
+      (fun consRef ->
+        match !consRef with
+        |None -> ()
+        |Some cons ->
+          let unknown_ps = Constraint.unknown_p_in_simple_cons cons in
+          if S.is_empty unknown_ps then
+            if Constraint.is_valid_simple_cons_all cons then
+              consRef := None
+            else
+              raise (InValid cons)
+          else
+            ()
+      )
+      cs_pool
+    
+    
   let get_scons_list cs_pool =
     List.map consRef_get cs_pool |> List.flatten_opt_list
 
+  let substitute sita cs_pool =
+    List.iter
+      (fun consRef ->
+        match !consRef with
+        |None -> ()
+        |Some cons ->
+          let cons' = Constraint.subst_simple_cons sita cons in
+          consRef := Some cons'
+      )
+      cs_pool
+
+  let filter_none cs_pool  =
+    List.filter (fun consRef -> !consRef <> None) cs_pool
+    
 end
-   
+    
 module PredicateCons:
 sig
-    
+  
   type t = private {
                name : Id.t;
                env : Liq.env;
@@ -55,7 +95,7 @@ sig
                positive_cons : ConsPool.consRef list;
                negative_cons : ConsPool.consRef list;
                othere_cons :  ConsPool.consRef list;
-      }
+             }
   val compare : t -> t -> int
   val hash : t -> int
   val equal : t -> t -> bool
@@ -107,19 +147,19 @@ end = struct
     |> List.map ConsPool.consRef_get 
     |> List.flatten_opt_list    
     
-                  
-          
+    
+    
   let rec extract_envs = function
     |(SSub _):: _ -> invalid_arg "Solver.extract_envs"      
     |SWF (env, (senv, phi)) :: left ->
       let p_envs_list = Formula.list_and phi
-                           |> List.filter (function |Formula.Unknown (inner_senv, sort_sita, sita, p) ->
-                                                    (assert (sort_sita = M.empty && sita = M.empty));
-                                                    senv = inner_senv (* check if this well form cons is most strict one *)
-                                                    |_ -> false)
-                           |> List.map (function |Formula.Unknown (inner_senv, _, _, p) ->
-                                                   (p, (env, inner_senv))
-                                                 | _ -> assert false )
+                        |> List.filter (function |Formula.Unknown (inner_senv, sort_sita, sita, p) ->
+                                                   (assert (sort_sita = M.empty && sita = M.empty));
+                                                   senv = inner_senv (* check if this well form cons is most strict one *)
+                                                 |_ -> false)
+                        |> List.map (function |Formula.Unknown (inner_senv, _, _, p) ->
+                                                (p, (env, inner_senv))
+                                              | _ -> assert false )
       in
       p_envs_list@(extract_envs left)
     |[] -> []
@@ -156,10 +196,10 @@ end = struct
            extract_consts_map others (new_pos_map, new_nega_map, new_othere_map)
         )
     )
-      
+    
 
 
-         
+    
   let of_scons_list p_hint_map cs = 
     (assert (List.for_all Constraint.is_predicate_normal_position cs));
     let cs_pool = ConsPool.import cs 
@@ -219,10 +259,10 @@ end = struct
     else
       (* depend on t.name itself *)
       let p_in_pos_cons = List.fold_left
-                        (fun acc scons ->
-                          S.union acc (Constraint.unknown_p_in_simple_cons scons))
-                        S.empty
-                        positive_cons
+                            (fun acc scons ->
+                              S.union acc (Constraint.unknown_p_in_simple_cons scons))
+                            S.empty
+                            positive_cons
       in
       (* let p_in_nega_cons = List.fold_left *)
       (*                   (fun acc scons -> *)
@@ -231,14 +271,14 @@ end = struct
       (*                   negative_cons *)
       (* in *)
       let p_in_othere_cons = List.fold_left
-                        (fun acc scons ->
-                          S.union acc (Constraint.unknown_p_in_simple_cons scons))
-                    S.empty
-                        othere_cons
+                               (fun acc scons ->
+                                 S.union acc (Constraint.unknown_p_in_simple_cons scons))
+                               S.empty
+                               othere_cons
       in
       (assert (S.mem t.name p_in_othere_cons));
       S.union p_in_pos_cons p_in_othere_cons
-              
+      
 
   (*　pがqに依存している =def= [...q...] -> p という形のconstraintがある　*)
   let dependency ts t  =
@@ -250,10 +290,10 @@ end = struct
       depend_name
 
 
-      
+    
 
 end
-                     
+    
 
 module QSolution =              (* predicate unkonwn のqunatifyer付きの解 *)
   struct
@@ -285,15 +325,15 @@ module QSolution =              (* predicate unkonwn のqunatifyer付きの解 *
         Formula.or_list formula_list
 
 
-      
+        
   end
 
-  (* input:  phi -> (unknown_p1 /\ unknown_p2 /\ phi1 /\ phi2 )
+(* input:  phi -> (unknown_p1 /\ unknown_p2 /\ phi1 /\ phi2 )
 
      output: phi -> unknown_p1,
              phi -> unknown_p2,     
              phi -> phi1 /\ phi2
-   *)
+ *)
 let rec decompose_result_of_implication = function
   |SWF _ -> invalid_arg "Solver.decompose_result_of_implication"
   |SSub (env, phi1, result) ->
@@ -337,8 +377,8 @@ module G = struct
         else
           acc_g)
       g
-    vlist
-                    
+      vlist
+    
 
   let has_cycle g =
     let components = GComponens.scc_list g in
@@ -355,13 +395,19 @@ module G = struct
       empty
       nodes
 
+
+  let of_scons_list p_hint_map obj_ps cs =
+    let cs_pool, pcs =  PredicateCons.of_scons_list p_hint_map cs in
+    let graph = of_predicateCons_list obj_ps pcs in
+    graph, cs_pool
+
   let self_loop_nodes g =
     fold_vertex
       (fun node acc_self_loop_nodes ->
-             if mem_edge g node node then
-               node::acc_self_loop_nodes
-             else
-               acc_self_loop_nodes
+        if mem_edge g node node then
+          node::acc_self_loop_nodes
+        else
+          acc_self_loop_nodes
       )
       g
       []
@@ -377,108 +423,14 @@ module G = struct
             (max_degree, max_node_opt))
         g
         (-1, None)
-    
+      
     in
     match max_node_opt with
     |None -> invalid_arg "max_degree_node: empty graph"
     |Some node -> node
-        
+                
 end
 
-module GComponens = Graph.Components.Make(G)
-
-(* 有向グラフ からDAGが誘導できるような、vertexのリストを取ってくる　*)
-(* g is multiple elements conected component *)
-let rec choose_vertexs_to_induce_DAG_rec (g:G.t) = 
-  let max_degree_node = G.max_degree_node g in
-  let g_minus = G.remove_vertex g max_degree_node in
-  let g_minus_components = GComponens.scc_list g_minus in
-  let chosen_vertex_g_minus = List.map
-                                (fun component ->
-                                  if List.length component <= 1 then
-                                    []
-                                  else
-                                    let sub_g = G.sub_graph g_minus component in
-                                    choose_vertexs_to_induce_DAG_rec sub_g
-                                )
-                                g_minus_components
-                              |>
-                                List.concat
-  in
-  max_degree_node::chosen_vertex_g_minus
-
-(* 有向グラフ からDAGが誘導できるような、vertexのリストを取ってくる　*)
-(* g is multiple elements conected component *)
-  
-let choose_vertexs_to_induce_DAG (g:G.t) = 
-  let self_loop_nodes = G.self_loop_nodes g in
-  let g_minus = G.remove_vertex_list g  self_loop_nodes in
-  let g_minus_components = GComponens.scc_list g_minus in
-  let chosen_vertex_g_minus = List.map
-                                (fun component ->
-                                  if List.length component <= 1 then
-                                    []
-                                  else
-                                    let sub_g = G.sub_graph g_minus component in
-                                    choose_vertexs_to_induce_DAG_rec sub_g
-                                )
-                                g_minus_components
-                              |>
-                                List.concat  
-  in
-  self_loop_nodes@chosen_vertex_g_minus
-  
-module GTopological = Graph.Topological.Make(G)
-
-
-  
-(* 連結成分: nodeの *)
-let rec qsolution_list_for_component  (nodes, (component_sub_graph, starting_nodes)) =
-  (assert (G.mem_vertex_list component_sub_graph nodes ));
-  let dag = G.remove_vertex_list component_sub_graph starting_nodes in
-  (assert (not (G.has_cycle dag)));
-  GTopological.fold
-    (fun node qsolution_acc ->
-      let qsolution = QSolution.qsolution_for_pnode node in
-       (* add to tail of list
-          to make resulting qformula_assc be topological order *)
-      qsolution_acc@[node.PredicateCons.name, qsolution])
-    dag
-    []
-
-let init_assignment_for_starting_node objective_predicate node_in_component starting_node =
-  let p = starting_node.PredicateCons.name in    
-  let env = starting_node.PredicateCons.env in
-  let hint_formula_list = starting_node.PredicateCons.hints in
-  let pos_cons = PredicateCons.get_positive_cons starting_node in
-  let nega_cons = PredicateCons.get_negative_cons starting_node in
-  let is_independent_cons cons = (* objective_predicate以外のunknown predicateが出てこないか*)
-    S.for_all
-      (fun unknown_p -> (List.mem unknown_p objective_predicate))
-      (S.remove p (Constraint.unknown_p_in_simple_cons cons))
-  in
-  let independent_pos_cons = List.filter is_independent_cons pos_cons in
-  let independent_nega_cons = List.filter is_independent_cons nega_cons in
-    
-    
-  
-  let qformula_solution_for_pos_cons =
-    List.map (Constraint.mk_qformula_from_positive_cons env p) independent_pos_cons in
-  let qformula_solution_for_nega_cons =
-    List.map (Constraint.mk_qformula_from_negative_cons env p) independent_nega_cons in
-  let init_formulas = (List.map Qe.f (qformula_solution_for_pos_cons@qformula_solution_for_nega_cons))@hint_formula_list in
-  (p, init_formulas)
-  
-  
-  
-let init_assignment_for_starting_node_list objective_predicate nodes starting_nodes =
-  List.fold_left
-    (fun acc_map starting_node ->
-      let p, init_formulas =
-        init_assignment_for_starting_node objective_predicate nodes starting_node in
-      M.add p init_formulas acc_map)
-    M.empty
-    starting_nodes
 
 
 
@@ -486,25 +438,28 @@ let init_assignment_for_starting_node_list objective_predicate nodes starting_no
 module Assignments:
 sig
   
- type t =  {start_nodes: Formula.t M.t
-           ;inter_nodes: Formula.t M.t                
-           ;inter_nodes_qsolutions : (Id.t * QSolution.t) list (* topological order *)
-           ;yet_qe_qsolutions :  (Id.t * QSolution.t) list     (* suffix of inter_nodes_qsolutions *)
-           }
-         
- type consSort = |NotYet | MustValid | MustSat
+  type t =  {start_nodes: Formula.t M.t
+            ;inter_nodes: Formula.t M.t                
+            ;inter_nodes_qsolutions : (Id.t * QSolution.t) list (* topological order *)
+            ;yet_qe_qsolutions :  (Id.t * QSolution.t) list     (* suffix of inter_nodes_qsolutions *)
+            }
+          
+  type consSort = |NotYet | MustValid | MustSat
 
- val sort_of_scons : Id.t list -> t -> Constraint.simple_cons -> consSort
+  val sort_of_scons : Id.t list -> t -> Constraint.simple_cons -> consSort
 
- val substitute : t -> Constraint.simple_cons -> Constraint.simple_cons
+  val substitute : t -> Constraint.simple_cons -> Constraint.simple_cons
 
+  val init : Formula.t M.t -> (Id.t * QSolution.t) list -> t
 
- val refine : Id.t list  -> t  -> Constraint.simple_cons -> t option
+  val get_predicate_map : t -> Formula.t M.t
 
- val qe_and_get_next : t -> t option
-                                     
+  val refine : Id.t list  -> t  -> Constraint.simple_cons -> t option
+
+  val qe_and_get_next : t -> t option
+    
 end = struct
-         
+  
   type t =  {start_nodes: Formula.t M.t
             ;inter_nodes: Formula.t M.t                
             ;inter_nodes_qsolutions : (Id.t * QSolution.t) list (* topological order *)
@@ -532,7 +487,7 @@ end = struct
     |> Constraint.subst_simple_cons assign.inter_nodes
 
   let find_start_node p assign =
-     M.find p assign.start_nodes
+    M.find p assign.start_nodes
 
   let fix_p_to_check_sat assign cons =
     cons
@@ -541,7 +496,17 @@ end = struct
 
   let fix_p_to_check_valid assign cons = substitute assign cons
 
-    
+  let init start_node_assign qsolution_list =
+    {start_nodes = start_node_assign
+    ;inter_nodes = M.empty
+    ;inter_nodes_qsolutions = qsolution_list
+    ;yet_qe_qsolutions = qsolution_list
+    }
+
+  let get_predicate_map assign =
+    if assign.yet_qe_qsolutions <> [] then invalid_arg "Assignments.get_predicate_map: yet qe"
+    else
+      M.union (fun p _ _ -> assert false) assign.start_nodes assign.inter_nodes
     
   let refine obj_ps assign cons = 
     match sort_of_scons obj_ps assign cons with
@@ -574,8 +539,8 @@ end = struct
                 ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
                 ;yet_qe_qsolutions = assign.inter_nodes_qsolutions
                 }
-            
-         |_  -> assert false
+           
+         |_  -> raise (UnSat cons)
         )
 
       
@@ -605,87 +570,198 @@ end = struct
                 ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
                 ;yet_qe_qsolutions = assign.inter_nodes_qsolutions
                 }
-         | _ -> assert false)
+         | _ -> raise (InValid cons))
       
 
   let qe_and_get_next assign =
     match assign.yet_qe_qsolutions with
-     |(p, qsolution) :: othere ->
-       let p_formula = QSolution.qe qsolution in
-       Some {start_nodes = assign.start_nodes
-            ;inter_nodes =  M.add p p_formula assign.inter_nodes (* add *)
-            ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
-            ;yet_qe_qsolutions = othere (* pop *)
-            }
-     |[] -> None
-       
+    |(p, qsolution) :: othere ->
+      let p_formula = QSolution.qe qsolution in
+      Some {start_nodes = assign.start_nodes
+           ;inter_nodes =  M.add p p_formula assign.inter_nodes (* add *)
+           ;inter_nodes_qsolutions =  assign.inter_nodes_qsolutions
+           ;yet_qe_qsolutions = othere (* pop *)
+           }
+    |[] -> None
+         
 end
-                  
-          
-let rec iter_refine obj_ps (assign:Assignments.t) cs_list left_cs =
-  match left_cs with
-  |cons :: othere ->
-    (match Assignments.refine obj_ps assign cons with
-     |None -> iter_refine obj_ps assign cs_list othere
-     |Some new_assign -> iter_refine obj_ps new_assign cs_list cs_list (* 振り出しに戻る *)
-    )
-  |[] ->
-    (match Assignments.qe_and_get_next assign with
-     |None -> assign
-     |Some new_assign -> iter_refine obj_ps new_assign cs_list cs_list (* iteration *)
-    )
+
+module GComponens = Graph.Components.Make(G)
+
+(* 有向グラフ からDAGが誘導できるような、vertexのリストを取ってくる　*)
+(* g is multiple elements conected component *)
+
+module PredicateComponent = struct
+  
+  type t =
+    {nodes : G.vertex list
+    ;sub_graph : G.t
+    ;start_nodes : G.vertex list
+    }
     
+  let rec choose_vertexs_to_induce_DAG_rec (g:G.t) = 
+    let max_degree_node = G.max_degree_node g in
+    let g_minus = G.remove_vertex g max_degree_node in
+    let g_minus_components = GComponens.scc_list g_minus in
+    let chosen_vertex_g_minus = List.map
+                                  (fun component ->
+                                    if List.length component <= 1 then
+                                      []
+                                    else
+                                      let sub_g = G.sub_graph g_minus component in
+                                      choose_vertexs_to_induce_DAG_rec sub_g
+                                  )
+                                  g_minus_components
+                                |>
+                                  List.concat
+    in
+    max_degree_node::chosen_vertex_g_minus
     
+  (* 有向グラフ からDAGが誘導できるような、vertexのリストを取ってくる　*)
+  (* g is multiple elements conected component *)
     
-          
+  let choose_vertexs_to_induce_DAG (g:G.t) = 
+    let self_loop_nodes = G.self_loop_nodes g in
+    let g_minus = G.remove_vertex_list g  self_loop_nodes in
+    let g_minus_components = GComponens.scc_list g_minus in
+    let chosen_vertex_g_minus = List.map
+                                  (fun component ->
+                                    if List.length component <= 1 then
+                                      []
+                                    else
+                                      let sub_g = G.sub_graph g_minus component in
+                                      choose_vertexs_to_induce_DAG_rec sub_g
+                                  )
+                                  g_minus_components
+                                |>
+                                  List.concat  
+    in
+    self_loop_nodes@chosen_vertex_g_minus
 
 
-       
-  
-let solve_component objecitve_predicates cs_pool (nodes, (component_sub_graph, starting_nodes)) =
-  let assignment = init_assignment_for_starting_node_list objective_predicatesnodes starting_nodes in
-  let qsolution_list = qsolution_list_for_component (nodes, (component_sub_graph, starting_nodes)) in
-  iter_refine objective_predicates cs_pool qsolution_list M.empty assignment
-
-(* cs_poolを見ながらやって行くのが一番単純だし、そこまでコストもなさそうなので良いかな *)
-  
-  
-  
-  
-  
-
-  
-  
-  (*   g: 　　　　　　predicate graph
-   components: 対象の強連結成分のnodes*)
-(* let mk_qformula_assoc  (g:G.t) components = *)
-(*   let map = *)
-(*     List.fold_left *)
-(*       (fun acc_map (nodes, (component_sub_graph, starting_nodes)) -> *)
-(*         solve_componens_by_quntifiyers acc_map (nodes, (component_sub_graph, starting_nodes))) *)
-(*       M.empty *)
-(*       components *)
-(*   in *)
-(*   map *)
-  
-  
-
-let f p_hint_map objective_predicate_list cs =
-  let cs_pool, pcs = PredicateCons.of_scons_list p_hint_map cs in
-  let graph = G.of_predicateCons_list objective_predicate_list pcs in
-  (* compute strongly connected components: 強連結成分分解 
-     リストはトポロジカルオーダーになることが保証されている
-   *)
-  let component_list:PredicateCons.t list list =
-    GComponens.scc_list(graph)
-  in
-  let component_with_starting_nodes_list =
+  let of_graph (g:G.t) =
+    let g_components_list = GComponens.scc_list(g) in
     List.map
       (fun nodes ->
-        let component_sub_graph = G.sub_graph graph nodes in
+        let component_sub_graph = G.sub_graph g nodes in
         let starting_nodes = choose_vertexs_to_induce_DAG component_sub_graph in
-        (nodes, (component_sub_graph, starting_nodes)))
-      component_list
+        {nodes = nodes
+        ;sub_graph = component_sub_graph
+        ;start_nodes = starting_nodes
+        }
+      )
+      g_components_list
+    
+    
+  module GTopological = Graph.Topological.Make(G)
+
+
+                      
+  (* 連結成分: nodeの *)
+  let rec qsolution_list_for_component {nodes=nodes
+                                       ;sub_graph=component_sub_graph
+                                       ;start_nodes = starting_nodes
+                                       } =
+    (assert (G.mem_vertex_list component_sub_graph nodes ));
+    let dag = G.remove_vertex_list component_sub_graph starting_nodes in
+    (assert (not (G.has_cycle dag)));
+    GTopological.fold
+      (fun node qsolution_acc ->
+        let qsolution = QSolution.qsolution_for_pnode node in
+        (* add to tail of list
+          to make resulting qformula_assc be topological order *)
+        qsolution_acc@[node.PredicateCons.name, qsolution])
+      dag
+      []
+
+  let init_assignment_for_starting_node objective_predicate node_in_component starting_node =
+    let p = starting_node.PredicateCons.name in    
+    let env = starting_node.PredicateCons.env in
+    let hint_formula_list = starting_node.PredicateCons.hints in
+    let pos_cons = PredicateCons.get_positive_cons starting_node in
+    let nega_cons = PredicateCons.get_negative_cons starting_node in
+    let is_independent_cons cons = (* objective_predicate以外のunknown predicateが出てこないか*)
+      S.for_all
+        (fun unknown_p -> (List.mem unknown_p objective_predicate))
+        (S.remove p (Constraint.unknown_p_in_simple_cons cons))
+    in
+    let independent_pos_cons = List.filter is_independent_cons pos_cons in
+    let independent_nega_cons = List.filter is_independent_cons nega_cons in
+    
+    
+    
+    let qformula_solution_for_pos_cons =
+      List.map (Constraint.mk_qformula_from_positive_cons env p) independent_pos_cons in
+    let qformula_solution_for_nega_cons =
+      List.map (Constraint.mk_qformula_from_negative_cons env p) independent_nega_cons in
+    let init_formula_list = (List.map Qe.f (qformula_solution_for_pos_cons@qformula_solution_for_nega_cons))@hint_formula_list in
+    ( p, Formula.and_list init_formula_list )
+    
+    
+    
+  let init_assignment_for_starting_node_list objective_predicate component =
+    let nodes = component.nodes in
+    let starting_nodes = component.start_nodes in
+    List.fold_left
+      (fun acc_map starting_node ->
+        let p, init_formulas =
+          init_assignment_for_starting_node objective_predicate nodes starting_node in
+        M.add p init_formulas acc_map)
+      M.empty
+      starting_nodes
+
+
+    
+    
+  let rec iter_refine obj_ps (assign:Assignments.t) cs_list left_cs =
+    match left_cs with
+    |cons :: othere ->
+      (match Assignments.refine obj_ps assign cons with
+       |None -> iter_refine obj_ps assign cs_list othere
+       |Some new_assign -> iter_refine obj_ps new_assign cs_list cs_list (* 振り出しに戻る *)
+      )
+    |[] ->
+      (match Assignments.qe_and_get_next assign with
+       |None -> assign
+       |Some new_assign -> iter_refine obj_ps new_assign cs_list cs_list (* iteration *)
+      )
+     
+     
+     
+  let solve obj_ps cs_pool component =
+    let start_node_assign = init_assignment_for_starting_node_list obj_ps component in
+    let qsolution_list = qsolution_list_for_component component in 
+    let init_assign = Assignments.init start_node_assign qsolution_list in
+    let cs_list = ConsPool.get_scons_list cs_pool in 
+    let refined_assign = iter_refine obj_ps init_assign cs_list cs_list in
+    Assignments.get_predicate_map refined_assign
+
+end
+
+
+let solve_graph obj_ps cs_pool graph =
+  let pcomponent_list = PredicateComponent.of_graph graph in
+  (* 強連結成分がトポロジカルオーダーに並んでいる。先頭から解いていけば良い。 *)
+  let solution = List.fold_left
+                   (fun acc_map  p_component->
+                     let () = ConsPool.filter_valid cs_pool in (* unknown pが含まれていないものは解いておく *)                     
+                     let component_solution =
+                       PredicateComponent.solve obj_ps cs_pool p_component
+                     in
+                     let () = ConsPool.substitute component_solution cs_pool in (* 解決したunknown pを代入 *)
+                     component_solution)
+                   M.empty
+                   pcomponent_list
   in
-  1
-  
+  solution
+                          
+let f ~hints:p_hint_map ~objective_predicates:obj_ps ~constraints:cs =
+  let graph, cs_pool = G.of_scons_list p_hint_map obj_ps cs in
+  let map_except_obj_ps = solve_graph obj_ps cs_pool graph in 
+  (* cs_poolを更新する副作用によって、この時点でcs_poolにはobj_ps以外のunknown pは存在しない *)
+  let cs' = ConsPool.get_scons_list cs_pool in
+  let graph', cs_pool' = G.of_scons_list p_hint_map [] cs' in
+  let map_obj_ps = solve_graph [] cs_pool' graph' in
+  M.union (fun _ _ _ -> assert false) map_except_obj_ps map_obj_ps
+
+                                            
