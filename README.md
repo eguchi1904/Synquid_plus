@@ -4,7 +4,14 @@
 詳細型(refinemete type)を入力として受け取り、それに対応する関数型プログラムを合成します。
 Synquidという既存ツールを拡張（利用）する形で、補助関数付きプログラムの合成を行います。
 
+既存手法
 https://bitbucket.org/nadiapolikarpova/synquid
+
+
+## デモ
+
+http://www.kb.is.s.u-tokyo.ac.jp/~eguchi/tools/aplas18/
+
 
 ## 入出力
 Synquidと同じです。

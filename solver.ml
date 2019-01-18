@@ -727,7 +727,7 @@ module PredicateComponent = struct
       )
      
      
-     
+  (* ここで要素1のcomponentは特別死すべきかもしれない？*)
   let solve obj_ps cs_pool component =
     let start_node_assign = init_assignment_for_starting_node_list obj_ps component in
     let qsolution_list = qsolution_list_for_component component in 
@@ -754,6 +754,7 @@ let solve_graph obj_ps cs_pool graph =
                    pcomponent_list
   in
   solution
+
                           
 let f ~hints:p_hint_map ~objective_predicates:obj_ps ~constraints:cs =
   let graph, cs_pool = G.of_scons_list p_hint_map obj_ps cs in
