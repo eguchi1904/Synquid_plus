@@ -1,0 +1,205 @@
+--qualifier {y <= x, len _v == len x + len y,elems _v == elems x + elems y, len _v == len x, elems _v == elems x}
+qualifier {y <= x, len _v == len x + len y, elems _v == elems x + elems y} 
+
+data Pair a b where
+ Pair :: xx: a -> yy: b -> Pair a b
+  
+measure fst :: Pair a b -> a where
+  Pair xx yy -> xx
+  
+measure snd :: Pair a b -> b where
+  Pair xx yy -> yy
+
+data RList a <r :: a -> a -> Bool> where
+  Nil :: RList a <r>
+  Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+  
+termination measure len :: RList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+  
+
+
+leq :: x: a -> y: a -> {Bool | _v <==> (x <= y)}
+geq :: x: a -> y: a  -> {Bool | _v <==> (x >= y)}
+
+
+
+-- neq :: x: a -> y: a -> {Bool | _v  <==> (x != y)}
+-- not :: x:Bool -> {Bool | _v == (!x)}
+-- eq :: x: a -> y: a -> {Bool | _v  <==> (x == y)}
+-- add :: x: Int -> y:Int -> {Int | _v == (x + y)}
+-- dec :: x: Int -> y:Int -> {Int | _v == (x - y)}
+-- mul :: x: Int -> y:Int -> {Int | _v == (x * y)}
+-- zero :: {Int | _v == 0 }
+-- one :: {Int | _v == 1 }
+-- hand :: {Int | _v == 100}
+-- nintyone :: {Int | _v == 91 }
+-- nintytwo :: {Int | _v == 92}
+-- ten :: {Int | _v == 10 }
+-- true ::{Bool | _v}
+-- false ::{Bool |!_v}
+
+
+qsort :: l: RList a <{True}> -> {RList a <{_0 <= _1}> | len _v == len l && elems _v == elems l}
+
+--------------------------------------------------
+-- appendの型で頑張るversion
+--------------------------------------------------
+append:: x:a -> l1:{List {a|p _v x} <p> | True } -> l2:{List {a| p x _v}  <p> | True }
+          -> {List a <p> | len _v == 1 +  len l1 + len l2 && elems V == elems l1 + elems l2 + [x] }
+
+qsort = \l.
+   match l with
+    Nil -> Nil
+    Cons x xs -> match ?? x xs with
+                  Pair l1 l2 -> append x	(qsort l1) (qsort l2)
+
+
+--------------------------------------------------
+-- このかたはappendにつかないことが発覚した。
+-- pに推移律が成り立つと仮定すれば成立する。
+
+-- 詳細
+append =\x. \l1. \l2.
+ match l1 with
+   Nil -> Cons x l2 
+   Cons y ys -> Cons y (append x ys l2)
+   
+-- の型検査をしようとすると、
+--　任意の　p :: a -> a -> Boolに対して、
+l1:: List {a|p _v x} <p>
+l2:: List {a|p x _v} <p>
+y ::{a|p _v x}
+ys :: List {a| p y _v && p _v x} <p>
+-- の環境のもと
+Cons y (append x ys l2 ) :: List a <p>
+-- が要求され、
+
+(append x ys l2) :: List {a|p y _v}
+-- 結果として
+l2 :: List {a|p x _v && p y _v}
+--
+ List {a|p x _v} <p>  <: List {a|p x _v && p y _v} <p>
+-- いかが成立する必要があるが,　
+(p y x) && p x _v -> p x _v && p y _v
+-- * (p y x) は環境、y::{a|p _v x} からの条件
+-- これは pに推移律があれば
+-- p y x and p x _v　から、
+-- p y _v が導けるので良いが、
+-- 一般的なpに対しては成立しないので、このかたはつかない
+--------------------------------------------------
+
+
+
+
+--------------------------------------------------
+-- いかが導出されて欲しい
+--------------------------------------------------
+
+partition :: p: a -> xs: List a <{True}> -> {Pair (List {a | _v <= p} <{True}>) (List {a | _v >= p} <{True}>) | len (fst _v) + len (snd _v) == len xs && elems (fst _v) + elems (snd _v) == elems xs }
+
+partition = ??
+
+pivotAppend :: p: a -> xs: IList {a | _v <= p} -> ys: IList {a | _v >= p} -> {IList a | len _v == len xs + len ys + 1 && elems _v == elems xs + elems ys + [p] }
+pivotAppend = ??
+
+quickSort :: xs: List a <{True}> -> {IList a | len _v == len xs && elems _v == elems xs }
+quickSort = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons x3 x4 -> 
+      match partition x3 x4 with
+        Pair x9 x10 -> pivotAppend x3
+                         (quickSort x9) (quickSort x10)
+
+
+--------------------------------------------------
+-- appendの実装を与えるversion
+--------------------------------------------------
+
+qsort :: l: RList a <{True}> -> {RList a <{_0 <= _1}> | len _v == len l && elems _v == elems l}
+
+qsort = \l.
+   match l with
+    Nil -> Nil
+    Cons x xs -> match ?? x xs with
+                  Pair l1 l2 -> (fix.append =\x. \l1. \l2.
+                                  match l1 with
+                                    Nil -> Cons x l2 
+                                    Cons y ys -> Cons y (append x ys l2)
+				 )
+				 x
+　　               		  (qsort l1)
+				 (qsort l2)
+
+
+
+
+
+
+-- qsort = \l.
+--   let append = \l1. \l2.
+--      match l1 with
+--       Nil -> l2
+--       Cons y ys -> Cons y (append ys l2)
+--    in
+--    match l with
+--     Nil -> Nil
+--     Cons x xs -> match ?? x xs with
+--                   Pair l1 l2 -> append (qsort l1) (Cons x (qsort l2))
+
+
+append::x -> l1:{List {a|p _v x} <p> | True } -> l2:{List {a| p  x _v}  <p> | True } -> {List a <p> | len _v == 1 +  len l1 + len l2 && elems V == elems l1 + elems l2 + [x] }
+
+qsort = \l.
+   match l with
+    Nil -> Nil
+    Cons x xs -> match ?? x xs with
+                  Pair l1 l2 -> (fix.append =\x. \l1. \l2.
+                                  match l1 with
+                                    Nil -> Cons x l2 
+                                    Cons y ys -> Cons y (append x ys l2)
+				 )
+				 x
+				  (qsort l1)
+				 (qsort l2)
+
+
+
+partition :: p: a -> xs: RList a <{True}> -> {Pair (RList {a | _v <= p} <{True}>) (RList {a | _v > p} <{True}>) | (((len (fst _v)) + (len (snd _v))) == len xs) && (((elems (fst _v)) + (elems (snd _v))) == elems xs)}
+
+-- appendには以下の型がつく。
+append :: l1:List {a| _v < x} -> l2:List {a| x < _v} -> {List a <_0 <= _1>| len _v = len l }
+
+
+-- measure lavel1 :: RList a -> Bool where
+--   Nil -> True
+--   Cons x xs -> False
+  
+-- measure lavel2 :: RList a -> Bool where
+--   Nil -> True
+--   Cons x xs -> False  
+
+-- measure lavel3 :: RList a -> Bool where
+--   Nil -> True
+--   Cons x xs -> False
+
+-- partition :: p: a -> xs: RList a <{True}>
+--  -> {Pair (RList {a | lavel1 xs} <{True}>) (RList {a | lavel2 xs} <{True}>) | lavel3 xs } 
+
+
+-- qsort = \l.
+--   let append = \l1. \l2.
+--      match l1 with
+--       Nil -> l2
+--       Cons y ys -> Cons y (append ys l2)
+--    in
+--    match l with
+--     Nil -> Nil
+--     Cons x xs -> match partition x xs with
+--                   Pair l1 l2 -> append (qsort l1) (Cons x (qsort l2))

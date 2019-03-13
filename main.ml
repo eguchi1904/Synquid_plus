@@ -275,7 +275,7 @@ let _ =
       
      ]
      (fun s -> file := s)
-     "synquid+");
+     ("synquid+: using z3 version" ^ Z3.Version.full_version ));
   let result = main !file !mk_tmp_fun in
   (Printf.printf "z3_time:%f" !UseZ3.z3_t);
   output2file !out_file result

@@ -1,0 +1,200 @@
+qualifier {y <= x, len _v == len x + len y,elems _v == elems x + elems y, len _v == len x, elems _v == elems x}
+--qualifier {y <= x, len _v == len x + len y, elems _v == elems x + elems y} 
+
+data Pair a b where
+ Pair :: xx: a -> yy: b -> Pair a b
+  
+measure fst :: Pair a b -> a where
+  Pair xx yy -> xx
+  
+measure snd :: Pair a b -> b where
+  Pair xx yy -> yy
+
+data RList a <r :: a -> a -> Bool> where
+  Nil :: RList a <r>
+  Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+  
+termination measure len :: RList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+  
+
+
+leq :: x: a -> y: a -> {Bool | _v <==> (x <= y)}
+geq :: x: a -> y: a  -> {Bool | _v <==> (x >= y)}
+
+
+
+-- neq :: x: a -> y: a -> {Bool | _v  <==> (x != y)}
+-- not :: x:Bool -> {Bool | _v == (!x)}
+-- eq :: x: a -> y: a -> {Bool | _v  <==> (x == y)}
+-- add :: x: Int -> y:Int -> {Int | _v == (x + y)}
+-- dec :: x: Int -> y:Int -> {Int | _v == (x - y)}
+-- mul :: x: Int -> y:Int -> {Int | _v == (x * y)}
+-- zero :: {Int | _v == 0 }
+-- one :: {Int | _v == 1 }
+-- hand :: {Int | _v == 100}
+-- nintyone :: {Int | _v == 91 }
+-- nintytwo :: {Int | _v == 92}
+-- ten :: {Int | _v == 10 }
+-- true ::{Bool | _v}
+-- false ::{Bool |!_v}
+
+
+
+-- partition :: p: a -> xs: RList a <{True}> -> {Pair (RList {a | _v <= p} <{True}>) (RList {a | _v > p} <{True}>) | (((len (fst _v)) + (len (snd _v))) == len xs) && (((elems (fst _v)) + (elems (snd _v))) == elems xs)}
+
+  
+--sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}>|(len _v == len l) && (elems _v == elems l)}
+
+-- idの型は以下で十分。
+
+
+
+
+--test1 = id (id zero)
+
+
+-- max = \a. \b.
+--    if geq a b then a else b
+
+-- myinc = \x. add x one
+   
+-- sum = \x.
+--       if leq x zero then
+--         zero
+--      else
+--       add x (sum (dec x one))
+
+-- mac91 = \n.
+--  if leq n hand then
+--    mac91 (mac91 (add (add n ten) one)) 
+--  else
+--   dec n ten
+
+
+-- sortTest =
+--  let insert = \x. \l.
+--   match l with
+--    Nil -> (Cons x Nil)
+--    Cons y ys -> if geq x  y then
+--                  Cons x l
+-- 	       else
+-- 	         Cons y (insert x ys)
+--  in
+--  let  sort = \l.
+--   match l with
+--    Nil -> Nil
+--    Cons y ys -> insert y (sort ys)
+--  in
+--  sort
+
+--
+
+
+
+
+
+-- insert = \x. \l.
+--   match l with
+--    Nil -> (Cons x Nil)
+--    Cons y ys -> if leq y x then
+--             Cons y (insert x ys)
+--            else
+--             Cons x (Cons y ys)
+
+
+ -- sort = \l.
+ --  match l with
+ --   Nil -> Nil
+ --   Cons y ys ->
+ --   (let insert = \x. \l.
+ --    match l with
+ --     Nil -> (Cons x Nil)
+ --     Cons y ys -> if geq x  y then
+ --                   Cons x (Cons y ys)
+ --      	       else
+ -- 	         Cons y (insert x ys)
+ --    in
+ --     insert y (sort ys))
+
+-- sortsされたlistが返ってくる、という推論に成功
+ -- sort =\ll.
+ --  let insert = \x. \l.
+ --    match l with
+ --     Nil -> (Cons x Nil)
+ --     Cons y ys -> if geq y x then
+ --                  Cons x (Cons y ys)
+ --                 else
+ --                  Cons y (insert x ys)
+ --  in
+ --    match ll with
+ --     Nil -> Nil
+ --     Cons y ys -> insert y (sort ys)
+-- insert :: x:a -> l:RList a <{_0 <= _1}> -> {RList a <{_0 <= _1}>|(len _v == len l + 1) && (elems _v == elems l + [x])}
+
+-- insert =\x. \l.
+--   match l with
+--      Nil -> (Cons x Nil)
+--      Cons y ys -> if geq y x then
+--                   Cons x (Cons y ys)
+--                  else
+--                   Cons y (insert x ys) 
+  
+
+
+--qsort :: l: RList a <{True}> -> {RList a <{_0 <= _1}> | len _v == len l && elems _v == elems l}
+partition :: p: a -> xs: RList a <{True}> -> {Pair (RList {a | _v <= p} <{True}>) (RList {a | _v > p} <{True}>) | (((len (fst _v)) + (len (snd _v))) == len xs) && (((elems (fst _v)) + (elems (snd _v))) == elems xs)}
+
+
+qsort = \l.
+  let append = \l1. \l2.
+     match l1 with
+      Nil -> l2
+      Cons y ys -> Cons y (append ys l2)
+   in
+   match l with
+    Nil -> Nil
+    Cons x xs -> match partition x xs with
+                  Pair l1 l2 -> append (qsort l1) (Cons x (qsort l2))
+
+
+
+
+--_0 <= _1 => (r_cons x _v )	
+
+
+-- appendには以下の型がつく。
+-- append :: l1:List {a| _v < x} -> l2:List {a| x < _v} -> {List a <_0 <= _1>| ~~ }
+
+
+-- measure lavel1 :: RList a -> Bool where
+--   Nil -> True
+--   Cons x xs -> False
+  
+-- measure lavel2 :: RList a -> Bool where
+--   Nil -> True
+--   Cons x xs -> False  
+
+-- measure lavel3 :: RList a -> Bool where
+--   Nil -> True
+--   Cons x xs -> False
+
+-- partition :: p: a -> xs: RList a <{True}>
+--  -> {Pair (RList {a | lavel1 xs} <{True}>) (RList {a | lavel2 xs} <{True}>) | lavel3 xs } 
+
+
+-- qsort = \l.
+--   let append = \l1. \l2.
+--      match l1 with
+--       Nil -> l2
+--       Cons y ys -> Cons y (append ys l2)
+--    in
+--    match l with
+--     Nil -> Nil
+--     Cons x xs -> match partition x xs with
+--                   Pair l1 l2 -> append (qsort l1) (Cons x (qsort l2))

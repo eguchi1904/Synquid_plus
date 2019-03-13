@@ -159,6 +159,7 @@ let unknown_p_in_simple_cons = function
                                 (Formula.extract_unknown_p e1)
                                 (Formula.extract_unknown_p e2)))
 
+                         
 let replace_unknown_p_to_top scons =
   let p_in_scons = unknown_p_in_simple_cons scons in
   let sita = S.fold
@@ -303,13 +304,8 @@ let mk_qformula_from_negative_cons env p = function
         |_ -> invalid_arg "constraint.mk_qformula_from_negative_cons: not negative constraint")
     )
          
-       
-          
 
-
-    
-
-                             
+   
 
 (* env|-(\x.p1) <:(\y.p2) などからsimple_consを生成 *)
 let pa_subtyping_to_simple_cons env (args1, p1) (args2, p2) =

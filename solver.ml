@@ -177,7 +177,7 @@ end = struct
          |None -> invalid_arg "Solver.extract_const_map"
          |Some (SWF _) -> invalid_arg "Solver.extract_const_map"
          |Some scons ->
-           let pos_ps, nega_ps, othere_ps = Constraint.positive_negative_unknown_p scons in
+           let pos_ps, nega_ps, othere_ps = Constraint.positive_nengative_unknown_p scons in
            let new_pos_map = S.fold
                                (fun  p map -> M.add_list_map p consRef map)
                                pos_ps
@@ -674,6 +674,8 @@ module PredicateComponent = struct
       dag
       []
 
+
+    
   let init_assignment_for_starting_node objective_predicate node_in_component starting_node =
     let p = starting_node.PredicateCons.name in    
     let env = starting_node.PredicateCons.env in
