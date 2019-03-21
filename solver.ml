@@ -1,6 +1,9 @@
 open Extensions
 open Constraint
+
+   
 module Liq = Type
+module Heap = Core.Heap         (* heapのためだけに、Core依存 *)
 
 exception InValid of Constraint.simple_cons
 exception UnSat of Constraint.simple_cons
@@ -38,7 +41,6 @@ sig
 
   val neg_ps: t -> cLavel ->pLavel list
     
-         
 end = struct
          
   type cLavel = int
@@ -75,20 +77,17 @@ end
 (* Fix information (dynamic) *)
 module FixState = struct
 
-  module FixRatio = struct
-    
-    type t = {fixed: int ref ; must_fix: int ref }
-           
-  end
+  type fixRatio = {fixed: int ref ; unfixed: int ref }
 
-  type cInfo = {is_fix: bool ref
+  type cInfo = {isFix: bool ref
                ;unknown_p_count:  int ref
                ;unknown_up_p_count: int ref
                }
                  
-  type pInfo = {is_fix: bool ref
-               ;pos_ratio: FixRatio.t
-               ;neg_ratio: FixRatio.t
+  type pInfo = {isFix: bool ref
+               ;isUpp: bool 
+               ;posRatio: fixRatio
+               ;negRatio: fixRatio
                }
 
 
@@ -121,33 +120,65 @@ sig
 
   exception Empty
           
-  type t
-     
+  (* type t *)
+
+  (* raise Empty if empty *)
   val pop: t -> (G.pLavel * polarity )
 
-  (* val update: t -> G.pLavel -> FixState.pInfo -> unit *)
+  (* val update: t -> G.pLavel -> (FixState.pInfo) -> unit  *)
 
 end= struct
   
   exception Empty
           
-  type priority = |AllFix | PartialFix | ZeroFix
+
+  module FixableLevel:
+  sig
+    type t = private int
+    val all_fixable: t
+    val partial_fixable: t
+    val zero_fixable: t
+  end = struct
+    type t =  int
+    let all_fixable = 0
+    let partial_fixable = 1
+    let zero_fixable = 2
+  end
+
+  module PolarityPreference:
+  sig
+    type t = private int
+    val pos: t
+    val neg: t
+    val of_pol: polarity -> t
+  end = struct
+    type t = int
+    (* positive    *)
+    let pos = 0
+    let neg = 1
+    let of_pol = function
+      |Pos -> pos
+      |Neg -> neg
+  end
+           
+
+  (* lex-order *)
+  type priority = {fixLevel: FixableLevel.t
+                  ;fixableNum:int
+                  ;pol: PolarityPreference.t
+                  ;lavel: G.pLavel }
                   
   type table = (priority * polarity) array
 
   module InternalQueue = struct
 
-    type t= {allFix: G.pLavel Queue.t
-            ;partilaFix: G.pLavel Queue.t
-            ;zeroFix: G.pLavel Queue.t
-            }
-
+    type t = priority Heap
 
           
     let pop {allFix = top_queue
             ;partilaFix = middle_queue
-            ;zeroFix = bottom_queue }
-      =
+            ;zeroFix = bottom_queue }  
+      =      
       if not (Queue.is_empty top_queue) then
         (Queue.pop top_queue, AllFix)
       else if not (Queue.is_empty middle_queue) then
@@ -156,11 +187,21 @@ end= struct
         (Queue.pop bottom_queue, ZeroFix)
       else
         raise  Empty
-      
+
+    let add  {allFix = top_queue
+             ;partilaFix = middle_queue
+             ;zeroFix = bottom_queue }    p priority  =
+      match priority with
+      |AllFix -> Queue.add p top_queue
+      |PartialFix -> Queue.add p middle_queue
+      |ZeroFix -> Queue.add p bottom_queue     
+
   end
+
     
   type t = {table: (priority * polarity) array
-           ;internalQueue: InternalQueue.t }
+           ;internalQueue: InternalQueue.t
+           }
 
 
   let rec pop ({table = table; internalQueue = internal_queue} as queue) =
@@ -168,8 +209,43 @@ end= struct
     let priority', pol =  table.(G.int_of_pLavel p) in
     if priority = priority' then
       p, pol
-    else                        (* updated element *)
+    else                        (* updated old element *)
       pop queue
+
+
+  let priority_of_fixRatio {fixed = fixed; unfixed =unfixed} p pol=
+    let fixable_level = if !fixed = 0 then
+                          FixableLevel.all_fixable
+                        else if !fixed <> !unfixed then
+                          FixableLevel.partial_fixable
+                        else
+                          FixableLevel.zero_fixable
+    in
+    {fixLevel = fixablelevel
+      ;fixableNum = !fixed
+      ;pol = PolarityPreference.of_pol pol
+      ;lavel = p
+    }
+    
+  let calc_priority FixState.{is_fix = _
+                             ;isUpp = is_upp
+                             ;posRatio = pos_ratio
+                             ;negRatio = neg_ratio}
+    =
+    if is_upp then
+      priority_of_fixRatio pos_ratio p Pos
+    else
+      let pos_priority = priority_of_fixRatio pos_ratio in
+      let neg_priority = priority_of_fixRatio neg_ratio in
+      if pos_priority < neg_priority then
+        pos_priority
+      else
+        neg_priority
+
+    
+  let update {table = table; internalQueue = internal_queue} p (priority, pol) =
+    table.(G.int_of_pLavel p) <- (priority, pol); (* table kept up to date *)
+    InternalQueue.add internal_queue p priority  
     
 end
                     
