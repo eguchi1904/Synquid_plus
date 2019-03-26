@@ -60,7 +60,7 @@ let inst_scons sita = function
     (env_formula, e1, e2)
   |SWF (env, p) -> assert false    
    
- let scons2string_human sita sc=
+let scons2string_human sita sc=
   match sc with
   |SWF _ -> scons2string  sc
   |SSub (env, e1, e2) ->
@@ -202,6 +202,7 @@ let mk_qformula_from_positive_cons env p = function
   |SSub (cons_env, e1, Formula.Unknown (_, _, _, p'))
        when p' <> p -> invalid_arg "constraint.mk_qformula_from_positive_cons"
   |SSub (cons_env, e1, Formula.Unknown (senv, sort_sita, sita, _)) ->
+    (*  \phi(x,y) -> [x |-> e(x,y)].P(x) *)
     (* sitaの中のformulaには、sort_sitaが適用済みということで良いのかな *)
     (match Liq.env_suffix cons_env env with
      |None -> invalid_arg "constraint.mk_qformula: cons_env and env mismatch"
@@ -225,6 +226,7 @@ let mk_qformula_from_positive_cons env p = function
        (* fresh! *)
        let freshed_env' = Liq.env_substitute_F freshing_subst env' in
        let freshed_e1 = Formula.substitution freshing_subst e1 in
+       (*  \phi(x',y) -> P(y)  *)
        let freshed_sita_vars_list = List.map
                                  (fun (src_var, dst_formula) ->
                                    (src_var, Formula.substitution freshing_subst dst_formula))
@@ -240,6 +242,7 @@ let mk_qformula_from_positive_cons env p = function
          @(Formula.list_and freshed_e1)
          @eq_list
        in
+       (*  \phi(x',y) -> P(y) and x = e(x', y) -> P(y)  *)       
        let fv_qformula_body =
          List.fold_left
            (fun acc_fvs e -> (Formula.fv_sort_include_v e)@acc_fvs)

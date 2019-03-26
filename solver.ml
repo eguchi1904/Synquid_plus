@@ -358,7 +358,8 @@ end= struct
 end
 
 
-(* solverが保持する動的な状態 *)
+(* solverが保持する動的な状態,
+   FixStateとPriorityManagerを適切に同期させる責任がある *)
 module DyState:
 sig
 
@@ -375,7 +376,7 @@ end = struct
   let tell_predicate_pos_constraint_is_fixed fix_state queue c q =
     if FixState.is_predicate_fixed fix_state q then
       ()
-    else if FixState.is_fixable fix_state c q then
+    else if FixState.is_fixable fix_state c q then (* fixableが他のpでfixした *)
       decr (FixState.get_pos_fixable fix_state q)
     else
       let q_unfixable_pos = FixState.get_pos_unfixable fix_state q in
@@ -411,6 +412,12 @@ end = struct
       List.iter
         (tell_predicate_neg_constraint_is_fixed fix_state queue c)
         (G.neg_ps graph c)
+
+
+      
+  let tell_constraint_pos_predicate_is_fixed t graph p c =
+    
+    
 
 
 end
