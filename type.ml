@@ -183,95 +183,113 @@ let rec schema2string ((ts,ps,t):schema) =
 
 type subst = t M.t   (* 型変数の代入 *)
 
-           
-type env = (Id.t * schema) list * (Formula.t list)
 
-let rec env2string ((xts,ps):env) =
-  let rec xts2string = function
-    (* |(x,(_,_,t1))::( y, (_,_,t2) )::xts' -> *)
-    (*   Printf.sprintf "%s:%s; %s:%s\n%s" x (t2string t1) y (t2string t2) (xts2string xts') *)
-    |(x,sch)::xts' ->
-      Printf.sprintf "%s :: %s\n%s" x (schema2string sch) (xts2string xts')
-    |[] ->""
-  in
-  let rec ps2string = function
-    |p::ps' ->
-      Printf.sprintf "%s\n%s" (Formula.p2string p) (ps2string ps')
+type envElm = |P of Formula.t | B of (Id.t * schema)
+type env = envElm list
+
+let rec env2string env =
+  let rec emit_elm = function
+    |(P p)::othere ->  Printf.sprintf "%s\n%s" (Formula.p2string p) (emit_elm othere)
+    |(B (x,sch))::othere -> Printf.sprintf "%s :: %s\n%s" x (schema2string sch) (emit_elm othere)
     |[] -> ""
   in
   Printf.sprintf
     "------------------------------------------------------------\
      \n%s\
-
-     \n%s\
      \n============================================================\n"
-    (xts2string xts)
-    (ps2string ps)
+    (emit_elm env)
 
 type contextual = TLet of env * t
 
 (* env manupulation *)
-let env_empty:env = ([],[])
+let env_empty:env = []
 
-let env_add ((l, p):env) ((x,t):Id.t * t) =
-  ((x,([],[],t) )::l), p
+let env_add (env:env) ((x,t):Id.t * t) =
+  (B (x,(mk_mono_schmea t)))::env
 
-let env_add_list ((l, p):env) (xts: (Id.t * t) list) =
-  let xschs = List.map (fun (x, t) -> (x, mk_mono_schmea t)) xts in
-  (xschs@l, p)
+let env_add_list (env:env) (xts: (Id.t * t) list) =
+  let xschs = List.map (fun (x, t) -> B (x, mk_mono_schmea t)) xts in
+  (xschs@env)
 
-let env_add_schema ((l,p):env) (x,s) =
-  ((x,s)::l, p)
+let env_add_schema (env:env) (x,s) =
+  (B (x,s))::env
 
-let env_add_schema_list ((l,p):env) shc_list =((shc_list@l, p))
+let env_add_schema_list (env:env) sch_list =
+  List.fold_right
+    (fun (x,sch) acc_env -> (B (x,sch))::acc_env)
+    sch_list
+    env
+  
   
 
-let env_add_F ((l, ps):env)  (p:Formula.t) = (l, p::ps)
+let env_add_F (env:env)  (p:Formula.t) = (P p)::env
 
-let env_find env v =
+let rec env_find (env:env) v =
   match env with
-    (l , p) -> List.assoc v l
+  |(B (x,sch))::_ when x = v -> sch
+  |_::othere -> env_find othere v
+  |[] -> raise Not_found
 
-let env_mem env v =
+let rec env_mem (env:env) v =
   match env with
-    (l , p) -> List.mem_assoc v l             
+  |(B (x,sch))::_ when x = v -> true
+  |_::othere -> env_mem othere v
+  |[] -> false
 
-let env_append ((its1, p1):env) ((its2, p2):env):env =
-  (its1@its2, p1@p2)
+let env_append (env1:env) (env2:env):env =
+  env1@env2
   
-let env_suffix ((l1, p1):env) ((l2, p2):env) =
-  match  ((List.suffix l1 l2), (List.suffix p1 p2)) with
-  |(Some l), (Some p) -> Some (l, p)
-  |_ -> None
-  
-let env_bindings (env,_) =
-  List.map fst env
-
-let env_extract_bindings (env,_) = env
-
-let env_extract_unknown_p ((l, p):env) =
-  let l_unknown_p_set =
-    List.fold_left
-      (fun acc (_, (_, pas, ty)) ->
-        S.union
-          (S.diff (extract_unknown_p ty)
-                  (S.of_list (List.map fst pas)))
-          acc)
-      S.empty
-      l
-  in
-  S.union
-    l_unknown_p_set
-    (Formula.extract_unknown_p (Formula.and_list p))
-
-let rec mk_sort_env ((x_tys, _):env) = match x_tys with
-  |(x, ty)::left ->
-    (match schema2sort ty with
-     |Some sort -> Formula.Senv.add  (mk_sort_env (left,[])) x sort
-     |None -> mk_sort_env (left,[]))
-  |[] -> Formula.Senv.empty
+let env_suffix (env1:env) (env2:env) =
+  List.suffix env1 env2
 
   
+let env_bindings (env:env) =
+  List.fold_right
+    (fun env_elm acc ->
+      match env_elm with
+      |P _ -> acc
+      |B (x,_) -> x::acc
+    )
+    env
+    []
+
+
+let env_extract_bindings (env:env) =
+    List.fold_right
+    (fun env_elm acc ->
+      match env_elm with
+      |P _ -> acc
+      |B (x,sch) -> (x,sch)::acc
+    )
+    env
+    []
+
+  
+
+let env_extract_unknown_p (env:env) =
+  List.fold_left
+    (fun acc -> function
+      |P p -> S.union acc (Formula.extract_unknown_p p)
+      |B (x, (_, pas, ty)) ->
+        S.union acc (S.diff (extract_unknown_p ty)
+                            (S.of_list (List.map fst pas))))
+    S.empty
+    env
+  
+
+let rec mk_sort_env (env:env) =
+    List.fold_right
+      (fun env_elm acc ->
+        match env_elm with
+        |P _ -> acc
+        |B (x, sch) ->
+          (match schema2sort  sch with
+           |Some sort ->  Formula.Senv.add acc x sort
+           |None -> acc)
+      )
+      env
+  Formula.Senv.empty
+         
                
 (* -------------------------------------------------- *)
 (* substitution *)
@@ -354,16 +372,20 @@ let rec substitute_pa (pa_sita:Formula.pa M.t) (t:t) =
        
        
 
+(* 暗黙に、unknown predicate変数のvar変数に重なりがないことを過程している *)
+let rec env_substitute_F (sita:Formula.subst) (env:env) :env=
+    List.fold_right
+      (fun env_elm acc ->
+        match env_elm with
+        |P p ->
+          env_add_F acc p
+        |B (x, (arg1,arg2,ty)) ->
+          env_add_schema acc (x,(arg1, arg2, substitute_F sita ty))
+      )
+      env
+      env_empty
 
-let rec env_substitute_F (sita:Formula.subst) ((ts,ps):env) :env=
-  let ts':(Id.t * schema) list =
-    List.map (fun (x,(arg1,arg2,t)) -> (x, (arg1,arg2,substitute_F sita t))) ts
-  in
-  let ps' = List.map (Formula.substitution sita) ps in
-  (ts',ps')
   
-  
-
 (* 述語変数の置換 [y/x]t x -> yに変換*)
 let rec replace_F x y t =
   match t with
@@ -511,93 +533,136 @@ let mk_valid x b =
 (*   |[] -> Formula.Bool true *)
 
        
-let rec env2formula' (tenv:((Id.t*schema) list)) vset =
-  match tenv with
-  |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (* schemaは無視して良いの? *)
-    env2formula' tenv' vset
-  |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (* schemaは無視して良いの? *)
-    if S.mem x vset then
-      match b2sort b with
-      |Some x_sort ->
-        let x_var = Formula.Var (x_sort, x) in
-        (Formula.And ((Formula.substitution (M.singleton Id.valueVar_id x_var) p), (* [x/_v]p *)
-                        (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p)  ))
-        ))
-      |None ->assert false (* env2formula' tenv' vset *)
-    else
-      env2formula' tenv' vset
+(* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
+(*   match tenv with *)
+(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (\* schemaは無視して良いの? *\) *)
+(*     env2formula' tenv' vset *)
+(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (\* schemaは無視して良いの? *\) *)
+(*     if S.mem x vset then *)
+(*       match b2sort b with *)
+(*       |Some x_sort -> *)
+(*         let x_var = Formula.Var (x_sort, x) in *)
+(*         (Formula.And ((Formula.substitution (M.singleton Id.valueVar_id x_var) p), (\* [x/_v]p *\) *)
+(*                         (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p)  )) *)
+(*         )) *)
+(*       |None ->assert false (\* env2formula' tenv' vset *\) *)
+(*     else *)
+(*       env2formula' tenv' vset *)
 
-  |_ :: tenv' -> env2formula' tenv' vset
+(*   |_ :: tenv' -> env2formula' tenv' vset *)
 
-  |[] -> Formula.Bool true          
+(*   |[] -> Formula.Bool true    *)       
 
-let env2formula ((tenv,ps):env) free_v =
-  let p = List.fold_right (fun p acc -> Formula.And (p,acc))
-                          ps
-                          (Formula.Bool true)
-  in
-  let tenv_p = env2formula' tenv (S.union free_v (Formula.fv p)) in
-  Formula.And (tenv_p, p)
-
-(* 環境全ての条件を抜き出すver *)
-let rec env2formula_all' (tenv:((Id.t*schema) list))  =
-  match tenv with
-  |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (* schemaは無視して良いの? *)
-    env2formula_all' tenv' 
-   
-  |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (* schemaは無視して良いの? *)
+let rec env2formula' (env:env) free_v acc :Formula.t=
+  match env with
+  |B (x, ([],[],(TScalar (b,p)) )) :: othere when p = Formula.Bool true ->
+    env2formula' othere free_v acc
+  |B (x, ([],[],(TScalar (b,p)) )) :: othere when S.mem x free_v ->
     (match b2sort b with
-     |Some x_sort ->
-       let x_var = Formula.Var (x_sort, x) in    
-       (Formula.And ((Formula.substitution (M.singleton Id.valueVar_id x_var) p), (* [x/_v]p *)
-                     (env2formula_all' tenv'   )
-    ))
-     |None -> assert false
-    )
+       |Some x_sort ->
+         let x_var = Formula.Var (x_sort, x) in
+         let p_x = (Formula.substitution (M.singleton Id.valueVar_id x_var) p) in (* [x/_v]p *)
+         let free_v' = S.union (S.remove x free_v) (Formula.fv p) in
+         env2formula' othere free_v' (Formula.And (acc, p_x))
+       |None -> invalid_arg "env2formula': free_v contain non-logical variable ")
+   
+  |B _ :: othere -> env2formula' othere free_v acc
+                  
+  |P p :: othere when (p = Formula.Bool true) ->
+    env2formula' othere free_v acc
+  |P p :: othere ->
+    let free_v' = (S.union free_v (Formula.fv p)) in
+    env2formula' othere free_v' (Formula.And (acc, p))
+    
+  |[] -> acc
+      
+         
+let env2formula env free_v =  env2formula' env free_v (Formula.Bool true)
+                            
+(* 環境全ての条件を抜き出すver *)
 
-  |_ :: tenv' -> env2formula_all' tenv' 
+let rec env2formula_all' (env:env) acc :Formula.t=
+  match env with
+  |B (x, ([],[],(TScalar (b,p)) )) :: othere when p = Formula.Bool true ->
+    env2formula_all' othere  acc
+  |B (x, ([],[],(TScalar (b,p)) )) :: othere ->
+    (match b2sort b with
+       |Some x_sort ->
+         let x_var = Formula.Var (x_sort, x) in
+         let p_x = (Formula.substitution (M.singleton Id.valueVar_id x_var) p) in (* [x/_v]p *)
+         env2formula_all' othere  (Formula.And (acc, p_x))
+       |None -> invalid_arg "env2formula_all': free_v contain non-logical variable ")
+   
+  |B _ :: othere -> env2formula_all' othere acc
+                  
+  |P p :: othere when (p = Formula.Bool true) ->
+    env2formula_all' othere acc
+  |P p :: othere ->
+    env2formula_all' othere (Formula.And (acc, p))
+  |[] -> acc
+      
+         
+let env2formula_all env  = env2formula_all' env (Formula.Bool true)
+                                                        
+                            
+(* let rec env2formula_all' (tenv:((Id.t*schema) list))  = *)
+(*   match tenv with *)
+(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (\* schemaは無視して良いの? *\) *)
+(*     env2formula_all' tenv'  *)
+   
+(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (\* schemaは無視して良いの? *\) *)
+(*     (match b2sort b with *)
+(*      |Some x_sort -> *)
+(*        let x_var = Formula.Var (x_sort, x) in     *)
+(*        (Formula.And ((Formula.substitution (M.singleton Id.valueVar_id x_var) p), (\* [x/_v]p *\) *)
+(*                      (env2formula_all' tenv'   ) *)
+(*     )) *)
+(*      |None -> assert false *)
+(*     ) *)
 
-  |[] -> Formula.Bool true
+(*   |_ :: tenv' -> env2formula_all' tenv'  *)
+
+(*   |[] -> Formula.Bool true *)
        
   
 
-let env2formula_all  ((tenv,ps):env) =
-  let p = List.fold_right (fun p acc -> Formula.And (p,acc))
-                          ps
-                          (Formula.Bool true)
-  in
-  let tenv_p = env2formula_all' tenv  in
-  Formula.And (tenv_p, p)
+(* let env2formula_all  ((tenv,ps):env) = *)
+(*   let p = List.fold_right (fun p acc -> Formula.And (p,acc)) *)
+(*                           ps *)
+(*                           (Formula.Bool true) *)
+(*   in *)
+(*   let tenv_p = env2formula_all' tenv  in *)
+(*   Formula.And (tenv_p, p) *)
 
   
 
-let rec mk_subst_for_const_var ((tenv, ps):env) =
-  match tenv with
-  |(x, ([],[], TScalar (b, Formula.Eq ( Formula.Var (_, v),
-                                        Formula.Int i))))::left
-   |(x, ([],[], TScalar (b, Formula.Eq ( Formula.Int i,
+let rec mk_subst_for_const_var (env:env) =
+  match env with
+  |B (x, ([],[], TScalar (b, Formula.Eq ( Formula.Var (_, v),
+                                          Formula.Int i))))::left
+   |B (x, ([],[], TScalar (b, Formula.Eq ( Formula.Int i,
                                          Formula.Var (_, v) ))))::left
        when v = Id.valueVar_id
    ->
-    M.add x (Formula.Int i) (mk_subst_for_const_var (left,ps))
+    M.add x (Formula.Int i) (mk_subst_for_const_var left)
    
-  |(x, ([],[], TScalar (b, Formula.Eq ( Formula.Var (_, v),
+  |B (x, ([],[], TScalar (b, Formula.Eq ( Formula.Var (_, v),
                                         Formula.Bool tf))))::left
-   |(x, ([],[], TScalar (b, Formula.Eq ( Formula.Bool tf,
+   |B (x, ([],[], TScalar (b, Formula.Eq ( Formula.Bool tf,
                                          Formula.Var (_, v) ))))::left
        when v = Id.valueVar_id
    ->
-    M.add x (Formula.Bool tf) (mk_subst_for_const_var (left,ps))
+    M.add x (Formula.Bool tf) (mk_subst_for_const_var left)
 
-  |(x, ([],[], TScalar (b,  Formula.Var (_, v))))::left
+  |B (x, ([],[], TScalar (b,  Formula.Var (_, v))))::left
        when v = Id.valueVar_id ->
-    M.add x (Formula.Bool true) (mk_subst_for_const_var (left,ps))
+    M.add x (Formula.Bool true) (mk_subst_for_const_var left)
 
-  |(x, ([],[], TScalar (b,  (Formula.Not (Formula.Var (_, v))))))::left
+  |B (x, ([],[], TScalar (b,  (Formula.Not (Formula.Var (_, v))))))::left
        when v = Id.valueVar_id ->
-    M.add x (Formula.Bool false) (mk_subst_for_const_var (left,ps))
+    M.add x (Formula.Bool false) (mk_subst_for_const_var left)
 
-  |_ ::left -> mk_subst_for_const_var (left,ps)
+  |_ ::left -> mk_subst_for_const_var left
 
   |[] -> M.empty
                            

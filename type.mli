@@ -8,7 +8,8 @@ and basetype =
           
 type schema = Id.t list * (Id.t * Formula.pa_shape) list * t
 
-type env = private (Id.t * schema) list * (Formula.t list)
+type envElm = |P of Formula.t | B of (Id.t * schema)
+type env = envElm list                 
    
 type contextual = TLet of env * t
 
@@ -40,8 +41,7 @@ val schema2string : schema -> string
 (* -------------------------------------------------- *)
 (* environment *)
 (* -------------------------------------------------- *)        
-  
-  
+    
 (* manupulation *)
 val env2string :  env -> string
 val env_empty : env
@@ -54,8 +54,8 @@ val env_append : env -> env -> env
 (* investigation *)
 val env_find : env-> Id.t -> schema
 val env_mem : env -> Id.t -> bool
-val env_bindings : env-> Id.t list (* 名前変えたいな *)
-val env_extract_bindings : env -> (Id.t * schema) list
+val env_bindings : env-> Id.t list (* o(n) *)
+val env_extract_bindings : env -> (Id.t * schema) list (* o(n) *)
 val env_extract_unknown_p : env -> S.t
 val env2formula : env -> S.t -> Formula.t
 val env2formula_all : env -> Formula.t
