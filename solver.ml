@@ -10,8 +10,19 @@ exception UnSat of Constraint.simple_cons
 
 (* represent positive occurence, negative occurence of predicate in constraint *)
 type polarity =  Pos | Neg
-
                      
+                     
+module Polarity:
+sig
+  type t = private int
+  val pos: t
+  val neg: t
+end = struct
+  type t = int
+  let pos = 0
+  let neg = 1
+end
+
 (* constraintとunknown predicate　からなるグラフ構造 *)
 module G:
 sig
@@ -71,10 +82,141 @@ end = struct
   let neg_ps graph c_lav =
     graph.cTable.(c_lav).neg
 
-
 end
 
     
+module FixableLevel:
+sig
+  type t = private int
+  val already_fixed: t
+  val all_fixable: t
+  val partial_fixable: t
+  val zero_fixable: t
+end = struct
+  type t =  int
+  let already_fixed = -1            
+  let all_fixable = 0
+  let partial_fixable = 1
+  let zero_fixable = 2
+end
+
+    
+module Priority = struct
+  (* the most important factor is fixable level *)
+  type t = {fixLevel: FixableLevel.t
+           ;fixableNum:int
+           ;pol: Polarity.t
+           ;lavel: G.pLavel }
+         
+end
+
+                
+module PriorityQueue:
+sig
+
+  type t
+
+  val pop: t -> (G.pLavel * Priority.t) option
+
+  val push: t -> G.pLavel -> Priority.t -> unit
+
+  val update: t -> G.pLavel -> Priority.t -> unit
+    
+end  = struct
+  
+                  
+  module InternalQueue:
+  sig
+
+    type t = private Priority.t Heap.t
+
+    val pop: t ->  Priority.t option
+
+    val push: t -> Priority.t -> unit
+
+  end = struct
+
+    type t = Priority.t Heap.t
+
+    let pop heap =
+      match Heap.pop heap with
+      |None -> None
+      |Some priority -> Some priority
+
+      
+    let push heap priority= Heap.add heap priority
+
+  end
+
+      
+  type t = {table: Priority.t array
+           ;internalQueue: InternalQueue.t
+           }
+
+
+  let rec pop ({table = table; internalQueue = internal_queue} as queue) =
+    match InternalQueue.pop internal_queue with
+    |None -> None
+    |Some priority ->
+      let p = priority.Priority.lavel in
+      let priority' =  table.(G.int_of_pLavel p) in
+      if priority = priority' then
+        (* insert dummy priority into table *)
+        let () = table.(G.int_of_pLavel p) <-  {fixLevel = FixableLevel.already_fixed
+                                               ;fixableNum = priority.fixableNum
+                                               ;pol =  priority.pol
+                                               ;lavel = priority.lavel}
+        in
+        Some (p, priority)
+      else                        (* updated old element *)
+        pop queue
+
+
+  let push {table = table; internalQueue = internal_queue} p priority = 
+    table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
+    InternalQueue.push internal_queue priority
+
+  let update = push
+      
+      
+end
+
+
+                     
+  let priority_of_fixRatio FixState.{fixable = fixable; unfixable =unfixable} p pol=
+    let fixable_level = if !fixable = 0 then
+                          FixableLevel.all_fixable
+                        else if !fixable <> !unfixable then
+                          FixableLevel.partial_fixable
+                        else
+                          FixableLevel.zero_fixable
+    in
+    {fixLevel = fixable_level
+      ;fixableNum = !fixable
+      ;pol = PolarityPreference.of_pol pol
+      ;lavel = p
+    }
+
+    
+  let calc_priority p FixState.{isFix = _
+                               ;isUpp = is_upp
+                               ;posRatio = pos_ratio
+                               ;negRatio = neg_ratio}
+    =
+    if is_upp then
+      priority_of_fixRatio pos_ratio p Pos
+    else
+      let pos_priority = priority_of_fixRatio pos_ratio p Pos in
+      let neg_priority = priority_of_fixRatio neg_ratio p Neg in
+      if pos_priority < neg_priority then
+        pos_priority
+      else
+        neg_priority
+
+    
+end
+
+   
 (* Fix information (dynamic) *)
 module FixState:
 sig
@@ -157,7 +299,8 @@ end= struct
      affect: q -> [(c,p)] 
      wait:(c,p) -> 1 
    *)
-             
+          
+
   module Dependency = struct
 
     exception Cons_pred_mismatch
@@ -208,154 +351,7 @@ end
 
                 
 (* predicateの優先順位（解く順番）を管理 *)
-module PriorityManager:
-sig
-  
-  type t
 
-  (* onece (p, _) is poped, p never be poped again unless pushed *)
-  val pop: t -> (G.pLavel * polarity ) option
-
-  val push: t -> G.pLavel -> FixState.t -> unit
-  (* push queue p fix_sate
-     will update priority of p if p already exists in queue *)
-
-  val update: t -> G.pLavel -> FixState.t -> unit
-    
-end= struct
-  
-  module FixableLevel:
-  sig
-    type t = private int
-    val already_fixed: t
-    val all_fixable: t
-    val partial_fixable: t
-    val zero_fixable: t
-  end = struct
-    type t =  int
-    let already_fixed = -1            
-    let all_fixable = 0
-    let partial_fixable = 1
-    let zero_fixable = 2
-  end
-
-  module PolarityPreference:
-  sig
-    type t = private int
-    val pos: t
-    val neg: t
-    val of_pol: polarity -> t
-    val to_pol: t -> polarity
-  end = struct
-    type t = int
-    (* positive    *)
-    let pos = 0
-    let neg = 1
-            
-    let of_pol = function
-      |Pos -> pos
-      |Neg -> neg
-            
-    let to_pol n =
-      if n = pos then Pos
-      else if n = neg then Neg
-      else assert false
-      
-  end
-           
-
-  (* the most important factor is fixable level. *)
-  type priority = {fixLevel: FixableLevel.t
-                  ;fixableNum:int
-                  ;pol: PolarityPreference.t
-                  ;lavel: G.pLavel }
-
-                  
-  module InternalQueue:
-  sig
-
-    type t = private priority Heap.t
-
-    val pop: t -> (G.pLavel * priority) option
-
-    val push: t -> G.pLavel -> priority -> unit
-
-  end = struct
-
-    type t = priority Heap.t
-
-    let pop heap =
-      match Heap.pop heap with
-      |None -> None
-      |Some priority -> Some (priority.lavel, priority)
-
-      
-    let push heap p priority= Heap.add heap priority
-
-  end
-
-    
-  type t = {table: priority array
-           ;internalQueue: InternalQueue.t
-           }
-
-
-  let rec pop ({table = table; internalQueue = internal_queue} as queue) =
-    match InternalQueue.pop internal_queue with
-    |None -> None
-    |Some (p, priority) ->
-      let priority' =  table.(G.int_of_pLavel p) in
-      if priority = priority' then
-        (* insert dummy priority into table *)
-        let () = table.(G.int_of_pLavel p) <-  {fixLevel = FixableLevel.already_fixed
-                                               ;fixableNum = priority.fixableNum
-                                               ;pol =  priority.pol
-                                               ;lavel = priority.lavel}
-        in
-        Some (p, PolarityPreference.to_pol priority.pol)
-      else                        (* updated old element *)
-        pop queue
-
-
-  let priority_of_fixRatio FixState.{fixable = fixable; unfixable =unfixable} p pol=
-    let fixable_level = if !fixable = 0 then
-                          FixableLevel.all_fixable
-                        else if !fixable <> !unfixable then
-                          FixableLevel.partial_fixable
-                        else
-                          FixableLevel.zero_fixable
-    in
-    {fixLevel = fixable_level
-      ;fixableNum = !fixable
-      ;pol = PolarityPreference.of_pol pol
-      ;lavel = p
-    }
-
-    
-  let calc_priority p FixState.{isFix = _
-                               ;isUpp = is_upp
-                               ;posRatio = pos_ratio
-                               ;negRatio = neg_ratio}
-    =
-    if is_upp then
-      priority_of_fixRatio pos_ratio p Pos
-    else
-      let pos_priority = priority_of_fixRatio pos_ratio p Pos in
-      let neg_priority = priority_of_fixRatio neg_ratio p Neg in
-      if pos_priority < neg_priority then
-        pos_priority
-      else
-        neg_priority
-
-  let push {table = table; internalQueue = internal_queue} p fix_state =
-    let p_info = FixState.get_p_info fix_state p  in
-    let priority = calc_priority p p_info in
-    table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
-    InternalQueue.push internal_queue p priority
-
-  let update = push
-    
-end
 
 
 (* solverが保持する動的な状態,
@@ -398,7 +394,6 @@ end = struct
       decr q_unfixable_neg;
       if( !q_unfixable_neg = 0 ) then
         PriorityManager.update queue q fix_state
-
       else
         ()
       
@@ -415,7 +410,7 @@ end = struct
 
 
       
-  let tell_constraint_pos_predicate_is_fixed t graph p c =
+        (* let tell_constraint_pos_predicate_is_fixed t graph p c = *)
     
     
 
