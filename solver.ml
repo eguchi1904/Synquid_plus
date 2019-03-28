@@ -182,9 +182,93 @@ end  = struct
 end
 
 
+    
+
+
+   
+(* Fix information (dynamic) *)
+module FixState:
+sig
+  
+ type fixRatio = {fixable: int ref ; unfixable: int ref }
+
+
+  (* !isFIx = trueの時、他のレコードは無意味な値 *)
+  type pInfo = {isFix: bool ref
+               ;isUpp: bool 
+               ;posRatio: fixRatio
+               ;negRatio: fixRatio
+               }
+
+  module OthereUnknownCounter:
+  sig
+    (* Postable[p] is a number of othere unknown predicate 
+                in posittive fixable co  nstraints  *)
+    type t = {posTable: int array
+             ;negTable: int array
+             ;posAffect: (G.pLavel * int) array
+             ;negAffect: (G.pLavel * int) array}
+
+
+  end
+  
+             
+     
+  type t = {table: pInfo array }
+
+
+         
+
+  (* val set_constraint_is_fixed: t -> G.cLavel -> unit *)
+
+  (* val is_predicate_fixed: t -> G.pLavel -> bool *)
+
+  (* val is_constraint_fixed: t -> G.cLavel -> bool *)
+
+  (* val get_p_info: t -> G.pLavel -> pInfo *)
+    
+  (* val get_pos_unfixable: t -> G.pLavel -> int ref *)
+
+  (* val get_pos_fixable: t -> G.pLavel -> int ref *)
+
+  (* val get_neg_unfixable: t -> G.pLavel -> int ref *)
+
+  (* val get_neg_fixable: t -> G.pLavel -> int ref     *)
+
+  (* val is_fixable: t -> G.cLavel -> G.pLavel -> bool (\* dependecy を参照 *\) *)
+    
+  (* val decr_pos_unfix: t -> G.pLavel -> unit *)
+
+  (* val decr_neg_unfix: t -> G.pLavel -> unit *)
+    
+end= struct
+  
+
+  type fixRatio = {fixable: int ref ; unfixable: int ref }
+
+
+
+  (* !isFIx = trueの時、他のレコードは無意味な値 *)
+  type pInfo = {isFix: bool ref
+               ;isUpp: bool 
+               ;posRatio: fixRatio
+               ;negRatio: fixRatio
+               }
+
+
+  (* 各predicate の依存関係を保持する
+     例
+     Cをpでfixさせるには、qがfixしてる必要がある場合
+     affect: q -> [(c,p)] 
+     wait:(c,p) -> 1 
+   *)
+          
+  type t = {table: pInfo array }
+
+
                      
-  let priority_of_fixRatio FixState.{fixable = fixable; unfixable =unfixable} p pol=
-    let fixable_level = if !fixable = 0 then
+  let priority_of_fixRatio {fixable = fixable; unfixable =unfixable} p pol=
+    let fixable_level = if !unfixable = 0 then
                           FixableLevel.all_fixable
                         else if !fixable <> !unfixable then
                           FixableLevel.partial_fixable
@@ -213,113 +297,7 @@ end
       else
         neg_priority
 
-    
-end
-
-   
-(* Fix information (dynamic) *)
-module FixState:
-sig
-  
- type fixRatio = {fixable: int ref ; unfixable: int ref }
-
-  type cInfo = {isFix: bool ref
-               ;unknown_p_count:  int ref
-               ;unknown_up_p_count: int ref
-               }
-
-
-  (* !isFIx = trueの時、他のレコードは無意味な値 *)
-  type pInfo = {isFix: bool ref
-               ;isUpp: bool 
-               ;posRatio: fixRatio
-               ;negRatio: fixRatio
-               }
-
-  module Dependency:
-  sig
-
-    exception Cons_pred_mismatch
-            
-    type pc_tuple = (G.cLavel * G.pLavel)
-                  
-    type t = {wait: (pc_tuple, int) Hashtbl.t
-             ;affect: (pc_tuple list) array
-             }
-  end
-  
-     
-  type t = {cTable: cInfo array; pTable: pInfo array; dependency: Dependency.t}
-         
-
-  val set_constraint_is_fixed: t -> G.cLavel -> unit
-
-  val is_predicate_fixed: t -> G.pLavel -> bool
-
-  val is_constraint_fixed: t -> G.cLavel -> bool
-
-  val get_p_info: t -> G.pLavel -> pInfo
-    
-  val get_pos_unfixable: t -> G.pLavel -> int ref
-
-  val get_pos_fixable: t -> G.pLavel -> int ref
-
-  val get_neg_unfixable: t -> G.pLavel -> int ref
-
-  val get_neg_fixable: t -> G.pLavel -> int ref    
-
-  val is_fixable: t -> G.cLavel -> G.pLavel -> bool (* dependecy を参照 *)
-    
-  (* val decr_pos_unfix: t -> G.pLavel -> unit *)
-
-  (* val decr_neg_unfix: t -> G.pLavel -> unit *)
-    
-end= struct
-  
-
-  type fixRatio = {fixable: int ref ; unfixable: int ref }
-
-  type cInfo = {isFix: bool ref
-               ;unknown_p_count:  int ref
-               ;unknown_up_p_count: int ref
-               }
-
-
-  (* !isFIx = trueの時、他のレコードは無意味な値 *)
-  type pInfo = {isFix: bool ref
-               ;isUpp: bool 
-               ;posRatio: fixRatio
-               ;negRatio: fixRatio
-               }
-
-
-  (* 各predicate の依存関係を保持する
-     例
-     Cをpでfixさせるには、qがfixしてる必要がある場合
-     affect: q -> [(c,p)] 
-     wait:(c,p) -> 1 
-   *)
-          
-
-  module Dependency = struct
-
-    exception Cons_pred_mismatch
-            
-    type pc_tuple = (G.cLavel * G.pLavel)
-                  
-    type t = {wait: (pc_tuple, int) Hashtbl.t
-             ;affect: (pc_tuple list) array
-             }
-
-    let wait_num_to_be_fixable t c p =
-      try
-        Hashtbl.find t.wait (c,p)
-      with
-        _ -> raise Cons_pred_mismatch
-           
-  end
-
-  type t = {cTable: cInfo array; pTable: pInfo array; dependency: Dependency.t }
+      
 
   let set_constraint_is_fixed t c =
     t.cTable.(G.int_of_cLavel c).isFix := true
@@ -349,10 +327,31 @@ end= struct
 
 end
 
-                
-(* predicateの優先順位（解く順番）を管理 *)
+
+(* これはまた別のモジュールな感じあるな *)
+type cInfo = {isFix: bool ref
+             ;unknown_p_count:  int ref
+             ;unknown_up_p_count: int ref
+             }
 
 
+  module Dependency = struct
+
+    exception Cons_pred_mismatch
+            
+    type pc_tuple = (G.cLavel * G.pLavel)
+                  
+    type t = {wait: (pc_tuple, int) Hashtbl.t
+             ;affect: (pc_tuple list) array
+             }
+
+    let wait_num_to_be_fixable t c p =
+      try
+        Hashtbl.find t.wait (c,p)
+      with
+        _ -> raise Cons_pred_mismatch
+           
+  end
 
 (* solverが保持する動的な状態,
    FixStateとPriorityManagerを適切に同期させる責任がある *)
