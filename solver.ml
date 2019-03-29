@@ -92,27 +92,27 @@ end
     |AllFixable of int
     |PartialFix
     |ZeroFix
-としても良かったが、順序関係を明示的にする為に以下のようにした
+
   *)
-module FixableLevel:
+module PredicateFixableLevel:
 sig
   type t = private (int * int)
-  val already_fixed: t
-  val all_fixable: int -> t
-  val partial_fixable: t
-  val zero_fixable: t
+  val fixed: t
+  val all: int -> t
+  val partial: t
+  val zero: t
 end = struct
   type t =  (int * int)
-  let already_fixed = (-1,0)
-  let all_fixable i = (0, i) 
-  let partial_fixable = (1, 0)
-  let zero_fixable = (2, 0)
+  let fixed = (-1,0)
+  let all i = (0, i) 
+  let partial = (1, 0)
+  let zero = (2, 0)
 end
 
     
 module Priority = struct
   (* the most important factor is fixable level *)
-  type t = {fixLevel: FixableLevel.t
+  type t = {fixLevel: PredicateFixableLevel.t
            ;fixableNum:int
            ;pol: Polarity.t
            ;lavel: G.pLavel }
@@ -171,7 +171,7 @@ end  = struct
       let priority' =  table.(G.int_of_pLavel p) in
       if priority = priority' then
         (* insert dummy priority into table *)
-        let () = table.(G.int_of_pLavel p) <-  {fixLevel = FixableLevel.already_fixed
+        let () = table.(G.int_of_pLavel p) <-  {fixLevel = PredicateFixableLevel.fixed
                                                ;fixableNum = priority.fixableNum
                                                ;pol =  priority.pol
                                                ;lavel = priority.lavel}
@@ -196,7 +196,7 @@ end
 
    
 (* Fix information (dynamic) *)
-module FixState:
+module PFixState:
 sig
   
  type fixRatio = {fixable: int ref ; unfixable: int ref }
@@ -314,11 +314,11 @@ end= struct
                      
   let priority_of_fixRatio_pos {fixable = fixable; unfixable =unfixable} unknown_c p =
     let fixable_level = if !unfixable = 0 then
-                          FixableLevel.all_fixable (OthereUnknownCounter.get_pos unknown_c p)
+                          PredicateFixableLevel.all (OthereUnknownCounter.get_pos unknown_c p)
                         else if !fixable >  0 then
-                          FixableLevel.partial_fixable
+                          PredicateFixableLevel.partial
                         else
-                          FixableLevel.zero_fixable
+                          PredicateFixableLevel.zero
     in
     Priority.{fixLevel = fixable_level
              ;fixableNum = !fixable
@@ -330,11 +330,11 @@ end= struct
     
   let priority_of_fixRatio_neg {fixable = fixable; unfixable =unfixable} unknown_c p =
     let fixable_level = if !unfixable = 0 then
-                          FixableLevel.all_fixable (OthereUnknownCounter.get_neg unknown_c p)
+                          PredicateFixableLevel.all (OthereUnknownCounter.get_neg unknown_c p)
                         else if !fixable > 0 then
-                          FixableLevel.partial_fixable
+                          PredicateFixableLevel.partial
                         else
-                          FixableLevel.zero_fixable
+                          PredicateFixableLevel.zero
     in
     Priority.{fixLevel = fixable_level
              ;fixableNum = !fixable
@@ -388,34 +388,57 @@ end= struct
 
 end
 
+module CFixState = struct
+  
+  type cInfo = {isFix: bool ref
+               ;unknown_p_count:  int ref
+               ;unknown_up_p_count: int ref
+               }
+             
 
-(* これはまた別のモジュールな感じあるな *)
-type cInfo = {isFix: bool ref
-             ;unknown_p_count:  int ref
-             ;unknown_up_p_count: int ref
-             }
+
+  type t = {isFix: bool array
+           ;unknown_p_count: int array           
+           ;unknown_up_p_count: int array
+           }
+
+  let is_fixed t c = t.isFix.(G.int_of_cLavel c)
+
+end
+
+                 
+                   
 
 
-  module Dependency = struct
-
-    exception Cons_pred_mismatch
-            
-    type pc_tuple = (G.cLavel * G.pLavel)
-                  
-    type t = {wait: (pc_tuple, int) Hashtbl.t
-             ;affect: (pc_tuple list) array
-             }
-
-    let wait_num_to_be_fixable t c p =
-      try
-        Hashtbl.find t.wait (c,p)
-      with
-        _ -> raise Cons_pred_mismatch
-           
-  end
+         
 
 (* solverが保持する動的な状態,
    FixStateとPriorityManagerを適切に同期させる責任がある *)
+                    
+
+
+             
+module Dependency = struct
+  
+  exception Cons_pred_mismatch
+          
+  type pc_tuple = (G.cLavel * G.pLavel)
+                
+  type t = {wait: (pc_tuple, int) Hashtbl.t
+           ;affect: (pc_tuple list) array
+           }
+         
+  let wait_num_to_be_fixable t c p =
+    try
+      Hashtbl.find t.wait (c,p)
+    with
+      _ -> raise Cons_pred_mismatch
+         
+end
+
+
+                  
+                  
 module DyState:
 sig
 
