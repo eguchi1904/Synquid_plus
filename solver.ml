@@ -84,20 +84,29 @@ end = struct
 
 end
 
-    
+
+
+(*
+ type fixableLevle 
+  = |Already_Fixed
+    |AllFixable of int
+    |PartialFix
+    |ZeroFix
+としても良かったが、順序関係を明示的にする為に以下のようにした
+  *)
 module FixableLevel:
 sig
-  type t = private int
+  type t = private (int * int)
   val already_fixed: t
-  val all_fixable: t
+  val all_fixable: int -> t
   val partial_fixable: t
   val zero_fixable: t
 end = struct
-  type t =  int
-  let already_fixed = -1            
-  let all_fixable = 0
-  let partial_fixable = 1
-  let zero_fixable = 2
+  type t =  (int * int)
+  let already_fixed = (-1,0)
+  let all_fixable i = (0, i) 
+  let partial_fixable = (1, 0)
+  let zero_fixable = (2, 0)
 end
 
     
@@ -200,23 +209,9 @@ sig
                ;negRatio: fixRatio
                }
 
-  module OthereUnknownCounter:
-  sig
-    (* Postable[p] is a number of othere unknown predicate 
-                in posittive fixable co  nstraints  *)
-    type t = {posTable: int array
-             ;negTable: int array
-             ;posAffect: (G.pLavel * int) array
-             ;negAffect: (G.pLavel * int) array}
+  type t 
 
-
-  end
-  
-             
-     
-  type t = {table: pInfo array }
-
-
+  val calc_priority: t -> G.pLavel -> Priority.t
          
 
   (* val set_constraint_is_fixed: t -> G.cLavel -> unit *)
@@ -256,6 +251,55 @@ end= struct
                }
 
 
+  module OthereUnknownCounter:
+  sig
+    (* Postable[p] is a number of othere unknown predicate 
+       in positive fixable constraints  *)                     
+    type t = {posTable: int array
+             ;negTable: int array
+             ;posAffect: (G.pLavel * int) list array
+             ;negAffect: (G.pLavel * int) list array}
+
+    val get_pos: t -> G.pLavel -> int
+    val get_neg: t -> G.pLavel -> int
+
+    val fix: t -> G.pLavel -> unit
+
+  end = struct
+           
+    type t = {posTable: int array
+             ;negTable: int array
+             ;posAffect: (G.pLavel * int) list array
+             ;negAffect: (G.pLavel * int) list array}
+
+    let get_pos t p =
+      t.posTable.( G.int_of_pLavel p )
+
+    let get_neg t p =
+      t.negTable.( G.int_of_pLavel p )
+
+
+    let fix {posTable = pos_table
+            ;negTable =  neg_table
+            ;posAffect =  pos_affect
+            ;negAffect =  neg_affect } p =
+      let () = List.iter
+                 (fun (q,i) ->
+                   let q = G.int_of_pLavel q in
+                   pos_table.(q) <- pos_table.(q) - i)
+                 pos_affect.(G.int_of_pLavel p)
+      in
+      let () = List.iter
+                 (fun (q,i) ->
+                   let q = G.int_of_pLavel q in
+                   neg_table.(q) <- neg_table.(q) - i)
+                 neg_affect.(G.int_of_pLavel p)      
+      in
+      ()
+      
+      
+  end
+
   (* 各predicate の依存関係を保持する
      例
      Cをpでfixさせるには、qがfixしてる必要がある場合
@@ -263,35 +307,52 @@ end= struct
      wait:(c,p) -> 1 
    *)
           
-  type t = {table: pInfo array }
+  type t = {table: pInfo array
+           ;unknownCounter: OthereUnknownCounter.t }
 
 
                      
-  let priority_of_fixRatio {fixable = fixable; unfixable =unfixable} p pol=
+  let priority_of_fixRatio_pos {fixable = fixable; unfixable =unfixable} unknown_c p =
     let fixable_level = if !unfixable = 0 then
-                          FixableLevel.all_fixable
-                        else if !fixable <> !unfixable then
+                          FixableLevel.all_fixable (OthereUnknownCounter.get_pos unknown_c p)
+                        else if !fixable >  0 then
                           FixableLevel.partial_fixable
                         else
                           FixableLevel.zero_fixable
     in
-    {fixLevel = fixable_level
-      ;fixableNum = !fixable
-      ;pol = PolarityPreference.of_pol pol
-      ;lavel = p
+    Priority.{fixLevel = fixable_level
+             ;fixableNum = !fixable
+             ;pol = Polarity.pos
+             ;lavel = p
     }
 
+
     
-  let calc_priority p FixState.{isFix = _
-                               ;isUpp = is_upp
-                               ;posRatio = pos_ratio
-                               ;negRatio = neg_ratio}
+  let priority_of_fixRatio_neg {fixable = fixable; unfixable =unfixable} unknown_c p =
+    let fixable_level = if !unfixable = 0 then
+                          FixableLevel.all_fixable (OthereUnknownCounter.get_neg unknown_c p)
+                        else if !fixable > 0 then
+                          FixableLevel.partial_fixable
+                        else
+                          FixableLevel.zero_fixable
+    in
+    Priority.{fixLevel = fixable_level
+             ;fixableNum = !fixable
+             ;pol = Polarity.neg
+             ;lavel = p
+    }    
+
+    
+  let calc_priority {table = table
+                    ;unknownCounter = unknown_counter} p
     =
-    if is_upp then
-      priority_of_fixRatio pos_ratio p Pos
+    let p_info = table.(G.int_of_pLavel p) in
+    
+    if p_info.isUpp then
+      priority_of_fixRatio_pos p_info.posRatio  unknown_counter  p
     else
-      let pos_priority = priority_of_fixRatio pos_ratio p Pos in
-      let neg_priority = priority_of_fixRatio neg_ratio p Neg in
+      let pos_priority = priority_of_fixRatio_pos p_info.posRatio unknown_counter p in
+      let neg_priority = priority_of_fixRatio_neg p_info.negRatio unknown_counter p in
       if pos_priority < neg_priority then
         pos_priority
       else
@@ -299,30 +360,30 @@ end= struct
 
       
 
-  let set_constraint_is_fixed t c =
-    t.cTable.(G.int_of_cLavel c).isFix := true
+  (* let set_constraint_is_fixed t c = *)
+  (*   t.cTable.(G.int_of_cLavel c).isFix := true *)
 
-  let is_constraint_fixed t c = !(t.cTable.(G.int_of_cLavel c).isFix)
+  (* let is_constraint_fixed t c = !(t.cTable.(G.int_of_cLavel c).isFix) *)
 
-  let is_predicate_fixed t p = !(t.pTable.(G.int_of_pLavel p).isFix)
+  (* let is_predicate_fixed t p = !(t.pTable.(G.int_of_pLavel p).isFix) *)
 
-  let get_p_info t p =
-    t.pTable.(G.int_of_pLavel p)
+  (* let get_p_info t p = *)
+  (*   t.pTable.(G.int_of_pLavel p) *)
     
-  let get_pos_unfixable t p =
-    t.pTable.(G.int_of_pLavel p).posRatio.unfixable
+  (* let get_pos_unfixable t p = *)
+  (*   t.pTable.(G.int_of_pLavel p).posRatio.unfixable *)
 
-  let get_neg_unfixable t p =
-    t.pTable.(G.int_of_pLavel p).negRatio.unfixable
+  (* let get_neg_unfixable t p = *)
+  (*   t.pTable.(G.int_of_pLavel p).negRatio.unfixable *)
 
-  let get_pos_fixable t p =
-    t.pTable.(G.int_of_pLavel p).posRatio.fixable
+  (* let get_pos_fixable t p = *)
+  (*   t.pTable.(G.int_of_pLavel p).posRatio.fixable *)
 
-  let get_neg_fixable t p =
-    t.pTable.(G.int_of_pLavel p).negRatio.fixable    
+  (* let get_neg_fixable t p = *)
+  (*   t.pTable.(G.int_of_pLavel p).negRatio.fixable     *)
     
-  let is_fixable t c p =
-    (Dependency.wait_num_to_be_fixable t.dependency c p) = 0
+  (* let is_fixable t c p = *)
+  (*   (Dependency.wait_num_to_be_fixable t.dependency c p) = 0 *)
     
 
 end
