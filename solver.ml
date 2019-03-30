@@ -9,7 +9,7 @@ exception InValid of Constraint.simple_cons
 exception UnSat of Constraint.simple_cons
 
 (* represent positive occurence, negative occurence of predicate in constraint *)
-type polarity =  Pos | Neg
+
                      
                      
 module Polarity:
@@ -19,8 +19,8 @@ sig
   val neg: t
 end = struct
   type t = int
-  let pos = 0
-  let neg = 1
+  let pos = 1
+  let neg = 0                   (*  negativeのが優先順位高いかな *)
 end
 
 (* constraintとunknown predicate　からなるグラフ構造 *)
@@ -99,14 +99,14 @@ sig
   type t = private (int * int)
   val fixed: t
   val all: int -> t
-  val partial: t
-  val zero: t
+  val partial: bool -> t        (* partial is_hinted *)
+  val zero: bool -> t           (* zero is_hinted *)
 end = struct
   type t =  (int * int)
   let fixed = (-1,0)
   let all i = (0, i) 
-  let partial = (1, 0)
-  let zero = (2, 0)
+  let partial b= if b then (1, 0) else (1, 1)
+  let zero b = if b then (2, 0) else (2, 1)
 end
 
     
@@ -202,12 +202,13 @@ sig
  type fixRatio = {fixable: int ref ; unfixable: int ref }
 
 
-  (* !isFIx = trueの時、他のレコードは無意味な値 *)
+ (* !isFIx = trueの時、他のレコードは無意味な値 *)
   type pInfo = {isFix: bool ref
-               ;isUpp: bool 
+               ;isUpp: bool
+               ;hinted: bool
                ;posRatio: fixRatio
                ;negRatio: fixRatio
-               }
+               }               
 
   type t 
 
@@ -245,7 +246,8 @@ end= struct
 
   (* !isFIx = trueの時、他のレコードは無意味な値 *)
   type pInfo = {isFix: bool ref
-               ;isUpp: bool 
+               ;isUpp: bool
+               ;hinted: bool
                ;posRatio: fixRatio
                ;negRatio: fixRatio
                }
@@ -312,13 +314,13 @@ end= struct
 
 
                      
-  let priority_of_fixRatio_pos {fixable = fixable; unfixable =unfixable} unknown_c p =
+  let priority_of_fixRatio_pos {fixable = fixable; unfixable =unfixable} unknown_c hinted p =
     let fixable_level = if !unfixable = 0 then
                           PredicateFixableLevel.all (OthereUnknownCounter.get_pos unknown_c p)
                         else if !fixable >  0 then
-                          PredicateFixableLevel.partial
+                          PredicateFixableLevel.partial hinted
                         else
-                          PredicateFixableLevel.zero
+                          PredicateFixableLevel.zero hinted
     in
     Priority.{fixLevel = fixable_level
              ;fixableNum = !fixable
@@ -328,13 +330,13 @@ end= struct
 
 
     
-  let priority_of_fixRatio_neg {fixable = fixable; unfixable =unfixable} unknown_c p =
+  let priority_of_fixRatio_neg {fixable = fixable; unfixable =unfixable} unknown_c hinted p =
     let fixable_level = if !unfixable = 0 then
                           PredicateFixableLevel.all (OthereUnknownCounter.get_neg unknown_c p)
                         else if !fixable > 0 then
-                          PredicateFixableLevel.partial
+                          PredicateFixableLevel.partial hinted
                         else
-                          PredicateFixableLevel.zero
+                          PredicateFixableLevel.zero hinted
     in
     Priority.{fixLevel = fixable_level
              ;fixableNum = !fixable
@@ -347,12 +349,13 @@ end= struct
                     ;unknownCounter = unknown_counter} p
     =
     let p_info = table.(G.int_of_pLavel p) in
-    
+    let hinted = p_info.hinted in    
     if p_info.isUpp then
-      priority_of_fixRatio_pos p_info.posRatio  unknown_counter  p
+      priority_of_fixRatio_pos p_info.posRatio unknown_counter hinted p
     else
-      let pos_priority = priority_of_fixRatio_pos p_info.posRatio unknown_counter p in
-      let neg_priority = priority_of_fixRatio_neg p_info.negRatio unknown_counter p in
+
+      let pos_priority = priority_of_fixRatio_pos p_info.posRatio unknown_counter hinted p in
+      let neg_priority = priority_of_fixRatio_neg p_info.negRatio unknown_counter hinted p in
       if pos_priority < neg_priority then
         pos_priority
       else
@@ -437,12 +440,22 @@ sig
 
   type t
      
-  val fix_constraint: t -> G.t -> G.pLavel -> G.cLavel -> unit
+  (* val fix_constraint: t -> G.t -> G.pLavel -> G.cLavel -> unit *)
 
 end = struct
   
-  type t = {fixState: FixState.t;
-            queue: PriorityManager.t }
+  type t = {fixability: FixablilityManager.t
+           ;pFixState: PFixState.t
+           ;cFixState: CFixState.t
+           ;queue: PriorityQueue.t
+           }
+
+
+  (* pをfixする *)
+  let fix t graph p pol =
+    
+
+    
 
 
   let tell_predicate_pos_constraint_is_fixed fix_state queue c q =
