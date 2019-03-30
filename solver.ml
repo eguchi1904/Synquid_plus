@@ -406,37 +406,30 @@ module CFixState = struct
 
 end
 
-                 
+
+module Fixablility = struct
+
+  (* これはconstraint.mlに写しても良いかもな *)
+  type bound = |UpBound of {env: Liq.env; vars: S.t; bound: Formula.t }
+               |LowBound of {env: Liq.env; vars: S.t; bound: Formula.t }
+
+
+  type t = |UnBound of int ref
+           |Bound of (int ref * bound)
                    
+  
+end
 
-
-         
-
-(* solverが保持する動的な状態,
-   FixStateとPriorityManagerを適切に同期させる責任がある *)
-                    
-
-
-             
-module Dependency = struct
+                   
+module FixablilityManager = struct
   
   exception Cons_pred_mismatch
           
-  type pc_tuple = (G.cLavel * G.pLavel)
-                
-  type t = {wait: (pc_tuple, int) Hashtbl.t
-           ;affect: (pc_tuple list) array
-           }
-         
-  let wait_num_to_be_fixable t c p =
-    try
-      Hashtbl.find t.wait (c,p)
-    with
-      _ -> raise Cons_pred_mismatch
-         
+  type t = {table: ((G.cLavel * G.pLavel), Fixablility.t ) Hashtbl.t
+           ;affect: ((G.cLavel * G.pLavel) list) array }
+  
 end
-
-
+                          
                   
                   
 module DyState:
