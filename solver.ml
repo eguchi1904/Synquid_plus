@@ -101,12 +101,15 @@ sig
   val all: int -> t
   val partial: bool -> t        (* partial is_hinted *)
   val zero: bool -> t           (* zero is_hinted *)
+  val othere_unknown_count: t -> int option
 end = struct
   type t =  (int * int)
   let fixed = (-1,0)
   let all i = (0, i) 
   let partial b= if b then (1, 0) else (1, 1)
   let zero b = if b then (2, 0) else (2, 1)
+  let othere_unknown_count (i,j) =
+    if i = 0 then Some j else None
 end
 
     
@@ -253,24 +256,23 @@ end= struct
                }
 
 
-  module OthereUnknownCounter:
+  module FixableLevelGraph:
   sig
-    (* Postable[p] is a number of othere unknown predicate 
-       in positive fixable constraints  *)                     
-    type t = {posTable: int array
-             ;negTable: int array
+    
+    type t = {posTable: PredicateFixableLevel.t array
+             ;negTable: PredicateFixableLevel.t array
              ;posAffect: (G.pLavel * int) list array
              ;negAffect: (G.pLavel * int) list array}
 
-    val get_pos: t -> G.pLavel -> int
-    val get_neg: t -> G.pLavel -> int
+    val get_pos: t -> G.pLavel -> PredicateFixableLevel.t
+    val get_neg: t -> G.pLavel -> PredicateFixableLevel.t
 
     val fix: t -> G.pLavel -> unit
 
   end = struct
            
-    type t = {posTable: int array
-             ;negTable: int array
+    type t = {posTable: PredicateFixableLevel.t array
+             ;negTable: PredicateFixableLevel.t array
              ;posAffect: (G.pLavel * int) list array
              ;negAffect: (G.pLavel * int) list array}
 
@@ -288,17 +290,22 @@ end= struct
       let () = List.iter
                  (fun (q,i) ->
                    let q = G.int_of_pLavel q in
-                   pos_table.(q) <- pos_table.(q) - i)
+                   match PredicateFixableLevel.othere_unknown_count pos_table.(q) with
+                   |None -> assert false (* affectに入っているのは全て、allfixableなもの *)
+                   |Some n -> pos_table.(q) <- PredicateFixableLevel.all (n - i)
+                 )
                  pos_affect.(G.int_of_pLavel p)
       in
       let () = List.iter
                  (fun (q,i) ->
                    let q = G.int_of_pLavel q in
-                   neg_table.(q) <- neg_table.(q) - i)
-                 neg_affect.(G.int_of_pLavel p)      
-      in
+                   match PredicateFixableLevel.othere_unknown_count neg_table.(q) with
+                   |None -> assert false
+                   |Some n -> neg_table.(q) <- PredicateFixableLevel.all (n - i)
+                 )
+                 neg_affect.(G.int_of_pLavel p)
+      in      
       ()
-      
       
   end
 
@@ -310,7 +317,9 @@ end= struct
    *)
           
   type t = {table: pInfo array
-           ;unknownCounter: OthereUnknownCounter.t }
+           ;fixableLevleGraph: FixableLevelGraph.t}
+         
+         
 
 
                      
@@ -318,9 +327,9 @@ end= struct
     let fixable_level = if !unfixable = 0 then
                           PredicateFixableLevel.all (OthereUnknownCounter.get_pos unknown_c p)
                         else if !fixable >  0 then
-                          PredicateFixableLevel.partial hinted
+                          PredicateFixableLevel.partial false (* positive fix wont use hint *)
                         else
-                          PredicateFixableLevel.zero hinted
+                          PredicateFixableLevel.zero false (* positive fix wont use hint *)
     in
     Priority.{fixLevel = fixable_level
              ;fixableNum = !fixable
@@ -423,7 +432,7 @@ module Fixablility = struct
   
 end
 
-                   
+
 module FixablilityManager = struct
   
   exception Cons_pred_mismatch
