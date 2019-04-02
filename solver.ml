@@ -96,20 +96,15 @@ end
   *)
 module PredicateFixableLevel:
 sig
-  type t = private (int * int)
-  val fixed: t
-  val all: int -> t
-  val partial: bool -> t        (* partial is_hinted *)
-  val zero: bool -> t           (* zero is_hinted *)
-  val othere_unknown_count: t -> int option
+  type t = private int 
+  val all: t
+  val partial: t        (* partial is_hinted *)
+  val zero:  t           (* zero is_hinted *)
 end = struct
-  type t =  (int * int)
-  let fixed = (-1,0)
-  let all i = (0, i) 
-  let partial b= if b then (1, 0) else (1, 1)
-  let zero b = if b then (2, 0) else (2, 1)
-  let othere_unknown_count (i,j) =
-    if i = 0 then Some j else None
+  type t =  int
+  let all  = 0
+  let partial  = 1
+  let zero  = 2
 end
 
     
@@ -194,212 +189,102 @@ end  = struct
 end
 
 
-    
+module PFixState = struct
 
-
-   
-(* Fix information (dynamic) *)
-module PFixState:
-sig
+  type state = |Fixed
+               |AllFixable of int
+               |PartialFixable
+               |ZeroFixable
+               
   
- type fixRatio = {fixable: int ref ; unfixable: int ref }
+  type t = {posTable: state array
+           ;negTable: state array
+             
+           ;posAffect: (G.pLavel * int) list array
+           ;negAffect: (G.pLavel * int) list array
+           }           
 
-
- (* !isFIx = trueの時、他のレコードは無意味な値 *)
-  type pInfo = {isFix: bool ref
-               ;isUpp: bool
-               ;hinted: bool
-               ;posRatio: fixRatio
-               ;negRatio: fixRatio
-               }               
-
-  type t 
-
-  val calc_priority: t -> G.pLavel -> Priority.t
-         
-
-  (* val set_constraint_is_fixed: t -> G.cLavel -> unit *)
-
-  (* val is_predicate_fixed: t -> G.pLavel -> bool *)
-
-  (* val is_constraint_fixed: t -> G.cLavel -> bool *)
-
-  (* val get_p_info: t -> G.pLavel -> pInfo *)
-    
-  (* val get_pos_unfixable: t -> G.pLavel -> int ref *)
-
-  (* val get_pos_fixable: t -> G.pLavel -> int ref *)
-
-  (* val get_neg_unfixable: t -> G.pLavel -> int ref *)
-
-  (* val get_neg_fixable: t -> G.pLavel -> int ref     *)
-
-  (* val is_fixable: t -> G.cLavel -> G.pLavel -> bool (\* dependecy を参照 *\) *)
-    
-  (* val decr_pos_unfix: t -> G.pLavel -> unit *)
-
-  (* val decr_neg_unfix: t -> G.pLavel -> unit *)
-    
-end= struct
-  
-
-  type fixRatio = {fixable: int ref ; unfixable: int ref }
-
-
-
-  (* !isFIx = trueの時、他のレコードは無意味な値 *)
-  type pInfo = {isFix: bool ref
-               ;isUpp: bool
-               ;hinted: bool
-               ;posRatio: fixRatio
-               ;negRatio: fixRatio
-               }
-
-
-  module FixableLevelGraph:
-  sig
-    
-    type t = {posTable: PredicateFixableLevel.t array
-             ;negTable: PredicateFixableLevel.t array
-             ;posAffect: (G.pLavel * int) list array
-             ;negAffect: (G.pLavel * int) list array}
-
-    val get_pos: t -> G.pLavel -> PredicateFixableLevel.t
-    val get_neg: t -> G.pLavel -> PredicateFixableLevel.t
-
-    val fix: t -> G.pLavel -> unit
-
-  end = struct
-           
-    type t = {posTable: PredicateFixableLevel.t array
-             ;negTable: PredicateFixableLevel.t array
-             ;posAffect: (G.pLavel * int) list array
-             ;negAffect: (G.pLavel * int) list array}
-
-    let get_pos t p =
-      t.posTable.( G.int_of_pLavel p )
-
-    let get_neg t p =
-      t.negTable.( G.int_of_pLavel p )
 
 
     let fix {posTable = pos_table
             ;negTable =  neg_table
             ;posAffect =  pos_affect
             ;negAffect =  neg_affect } p =
-      let () = List.iter
-                 (fun (q,i) ->
-                   let q = G.int_of_pLavel q in
-                   match PredicateFixableLevel.othere_unknown_count pos_table.(q) with
-                   |None -> assert false (* affectに入っているのは全て、allfixableなもの *)
-                   |Some n -> pos_table.(q) <- PredicateFixableLevel.all (n - i)
-                 )
-                 pos_affect.(G.int_of_pLavel p)
+      let p = G.int_of_pLavel p in
+      let () = (List.iter
+                  (fun (q,i) ->
+                    let q = G.int_of_pLavel q in
+                    match  pos_table.(q) with
+                    |Fixed -> ()
+                    |AllFixable n -> pos_table.(q) <-  AllFixable (n - i);
+                    |_ -> assert false)
+                  pos_affect.(p) )
       in
-      let () = List.iter
-                 (fun (q,i) ->
-                   let q = G.int_of_pLavel q in
-                   match PredicateFixableLevel.othere_unknown_count neg_table.(q) with
-                   |None -> assert false
-                   |Some n -> neg_table.(q) <- PredicateFixableLevel.all (n - i)
-                 )
-                 neg_affect.(G.int_of_pLavel p)
-      in      
-      ()
+      let () = (List.iter
+                  (fun (q,i) ->
+                    let q = G.int_of_pLavel q in
+                    match  neg_table.(q) with
+                    |Fixed -> ()
+                    |AllFixable n -> neg_table.(q) <-  AllFixable (n - i);
+                    |_ -> assert false)
+                  neg_affect.(p) )      
+      in
+      pos_table.(p) <- Fixed;
+      neg_table.(p) <- Fixed
       
   end
-
-  (* 各predicate の依存関係を保持する
-     例
-     Cをpでfixさせるには、qがfixしてる必要がある場合
-     affect: q -> [(c,p)] 
-     wait:(c,p) -> 1 
-   *)
-          
-  type t = {table: pInfo array
-           ;fixableLevleGraph: FixableLevelGraph.t}
-         
-         
+    
 
 
-                     
-  let priority_of_fixRatio_pos {fixable = fixable; unfixable =unfixable} unknown_c hinted p =
-    let fixable_level = if !unfixable = 0 then
-                          PredicateFixableLevel.all (OthereUnknownCounter.get_pos unknown_c p)
-                        else if !fixable >  0 then
-                          PredicateFixableLevel.partial false (* positive fix wont use hint *)
-                        else
-                          PredicateFixableLevel.zero false (* positive fix wont use hint *)
-    in
-    Priority.{fixLevel = fixable_level
-             ;fixableNum = !fixable
-             ;pol = Polarity.pos
-             ;lavel = p
-    }
+   
+(* Fix information (dynamic) *)
+module PFixableConstraintCounter:
+sig
+  
+ type fixRatio = {fixable: int ref ; unfixable: int ref }
 
+
+ (* !isFIx = trueの時、他のレコードは無意味な値 *)
+ type pInfo = {posRatio: fixRatio
+              ;negRatio: fixRatio
+               }               
+
+  type t 
+
+         (* val decr_pos_unfix: t -> G.pLavel -> unit *)
+
+         (* val decr_neg_unfix: t -> G.pLavel -> unit *)
+     
 
     
-  let priority_of_fixRatio_neg {fixable = fixable; unfixable =unfixable} unknown_c hinted p =
-    let fixable_level = if !unfixable = 0 then
-                          PredicateFixableLevel.all (OthereUnknownCounter.get_neg unknown_c p)
-                        else if !fixable > 0 then
-                          PredicateFixableLevel.partial hinted
-                        else
-                          PredicateFixableLevel.zero hinted
-    in
-    Priority.{fixLevel = fixable_level
-             ;fixableNum = !fixable
-             ;pol = Polarity.neg
-             ;lavel = p
-    }    
+end= struct
+  
 
-    
-  let calc_priority {table = table
-                    ;unknownCounter = unknown_counter} p
-    =
-    let p_info = table.(G.int_of_pLavel p) in
-    let hinted = p_info.hinted in    
-    if p_info.isUpp then
-      priority_of_fixRatio_pos p_info.posRatio unknown_counter hinted p
+  type fixRatio = {fixable: int ref ; unfixable: int ref } 
+
+                
+  let to_fixable_level  {fixable = fixable; unfixable =unfixable} =
+    if !unfixable = 0 then
+      PredicateFixableLevel.all
+    else if !fixable >  0 then
+      PredicateFixableLevel.partial 
     else
-
-      let pos_priority = priority_of_fixRatio_pos p_info.posRatio unknown_counter hinted p in
-      let neg_priority = priority_of_fixRatio_neg p_info.negRatio unknown_counter hinted p in
-      if pos_priority < neg_priority then
-        pos_priority
-      else
-        neg_priority
-
-      
-
-  (* let set_constraint_is_fixed t c = *)
-  (*   t.cTable.(G.int_of_cLavel c).isFix := true *)
-
-  (* let is_constraint_fixed t c = !(t.cTable.(G.int_of_cLavel c).isFix) *)
-
-  (* let is_predicate_fixed t p = !(t.pTable.(G.int_of_pLavel p).isFix) *)
-
-  (* let get_p_info t p = *)
-  (*   t.pTable.(G.int_of_pLavel p) *)
+      PredicateFixableLevel.zero
     
-  (* let get_pos_unfixable t p = *)
-  (*   t.pTable.(G.int_of_pLavel p).posRatio.unfixable *)
 
-  (* let get_neg_unfixable t p = *)
-  (*   t.pTable.(G.int_of_pLavel p).negRatio.unfixable *)
+  (* !isFIx = trueの時、他のレコードは無意味な値 *)
+  type pInfo ={posRatio: fixRatio
+              ;negRatio: fixRatio
+              }               
 
-  (* let get_pos_fixable t p = *)
-  (*   t.pTable.(G.int_of_pLavel p).posRatio.fixable *)
+          
+  type t =  pInfo array
 
-  (* let get_neg_fixable t p = *)
-  (*   t.pTable.(G.int_of_pLavel p).negRatio.fixable     *)
-    
-  (* let is_fixable t c p = *)
-  (*   (Dependency.wait_num_to_be_fixable t.dependency c p) = 0 *)
-    
+         
 
 end
 
+   
 module CFixState = struct
   
   type cInfo = {isFix: bool ref

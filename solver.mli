@@ -30,9 +30,8 @@ end
 
 module PredicateFixableLevel:
 sig
-  type t = private (int * int)
-  val fixed: t
-  val all: int -> t
+  type t = int 
+  val all: t
   val partial: t
   val zero: t
 end
@@ -40,6 +39,7 @@ end
 module Priority:
 sig
   type t = {fixLevel: PredicateFixableLevel.t
+           ;othereUnknown: int
            ;fixableNum:int
            ;pol: Polarity.t
            ;lavel: G.pLavel }     
@@ -59,8 +59,38 @@ sig
     
 end
 
+module CFixState:
+sig
+  type t
 
+  val is_fixed: t -> G.cLavel -> bool
+
+end
+     
 module PFixState:
+sig
+  
+  type state = |Fixed
+               |AllFixable of int
+               |PartialFixable
+               |ZeroFixable
+
+
+  type t
+
+  val fix: t -> G.pLavel -> unit
+
+  val unfix: t -> G.pLavel -> unit
+
+  val update: t -> G.pLavel -> PredicateFixableLevel.t -> unit
+
+  val calc_priority : t -> G.pLavel -> bool -> Priority.t
+
+end
+     
+  (* hint *)
+     
+module PFixableConstraintCounter:
 sig
   
  type fixRatio = {fixable: int ref ; unfixable: int ref }
@@ -80,13 +110,6 @@ sig
 end
 
      
-module CFixState:
-sig
-  type t
-
-  val is_fixed: t -> G.cLavel -> bool
-
-end
 
 module FixablilityManager:
 sig
