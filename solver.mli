@@ -28,7 +28,7 @@ sig
     
 end
 
-module PMap: sig type t end
+module PMap: sig type 'a t end
      
 module PG:
 sig
@@ -85,7 +85,7 @@ module PFixState:
 sig
   
   type state = |Fixed of state
-               |AllFixable of int
+               |AllFixable of (int * int PMap.t)
                |PartialFixable
                |ZeroFixable
 
@@ -98,7 +98,9 @@ sig
   (* 呼び出し時点で、pをunfixしたことによる、fixableLevelの変化は反映されていないといけない *)
   val unfix: t -> G.pLavel -> unit
 
-  val pos_update2allfixable: t -> G.pLavel -> (G.pLavel * int) list -> unit
+  val pos_update2allfixable: t -> G.pLavel -> int PMap.t -> unit
+
+  val neg_update2allfixable: t -> G.pLavel -> int PMap.t -> unit    
   (* 上がるのにも下がるのにも対応する *)
   val pos_update: t ->  G.pLavel -> PredicateFixableLevel.t -> unit
 

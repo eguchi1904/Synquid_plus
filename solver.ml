@@ -195,13 +195,7 @@ end  = struct
       let p = priority.Priority.lavel in
       let priority' =  table.(G.int_of_pLavel p) in
       if priority = priority' then
-        (* insert dummy priority into table *)
-        let () = table.(G.int_of_pLavel p) <-  {fixLevel = PredicateFixableLevel.fixed
-                                               ;fixableNum = priority.fixableNum
-                                               ;pol =  priority.pol
-                                               ;lavel = priority.lavel}
-        in
-        Some (p, priority)
+        Some (p, priority)      (* table はpopされた時のものに保たれる *)
       else                        (* updated old element *)
         pop queue
 
@@ -215,13 +209,14 @@ end  = struct
       
 end
 
-
+(* 怪しい *)
 module PFixState = struct
 
   type state = |Fixed of state  (* pre state *)
                |AllFixable of (int * int PMap.t)
                |PartialFixable 
-               |ZeroFixable 
+               |ZeroFixable
+
                
                
   type t = {posTable: state array
@@ -314,7 +309,7 @@ module PFixState = struct
 
     (* partial -> allfiable
        zero -> allfixable
-       にupdateするときは特別 *)       
+       にupdateするときは特別, affect mapを必要とするため *)       
     let pos_update2allfixable t p (othere_unknown_map: int PMap.t) =
       let pos_table = t.posTable in
       match pos_table.(G.int_of_pLavel p) with
@@ -330,37 +325,63 @@ module PFixState = struct
         pos_table.(G.int_of_pLavel p) <- AllFixable (unknown_count, othere_unknown_map);
         update_affect t.posAffect p othere_unknown_map
 
+    let neg_update2allfixable t p (othere_unknown_map: int PMap.t) =
+      let neg_table = t.negTable in
+      match neg_table.(G.int_of_pLavel p) with
+      |Fixed _ | AllFixable _ ->
+        invalid_arg "neg_update2allfixable: decreasing update"
+      |PartialFixable |ZeroFixable ->
+        let unknown_count =
+          PMap.fold
+            (fun _ i acc -> i+ acc)
+            othere_unknown_map
+            0
+        in
+        neg_table.(G.int_of_pLavel p) <- AllFixable (unknown_count, othere_unknown_map);
+        update_affect t.negAffect p othere_unknown_map        
+
     (* backtraceでこうなることもあるね、
      affectから自分を消してから変更する*)
-    let pos_update_from_allfixable t p fixable_level =
+    (* let pos_update_from_allfixable t p fixable_level = *)
+    (*   let pos_table = t.posTable in *)
+    (*   match pos_table.(G.int_of_pLavel p) with *)
+    (*   |AllFixable (n, map) -> *)
+    (*     remove_affect t.posAffect p map; *)
+    (*     pos_table.(G.int_of_pLavel p) <- fixable_level *)
+    (*   |_ -> invalid_arg "pos_update_from_allfixable: not allfixable" *)
+    (* 上がるのにも下がるのにも対応する backtraceがあるので *)
+
+    let update_table table p fixable_level =
+      if fixable_level = PredicateFixableLevel.partial then
+        table.(G.int_of_pLavel p) <- PartialFixable
+        else if fixable_level = PredicateFixableLevel.zero then
+        table.(G.int_of_pLavel p) <- ZeroFixable
+        else if fixable_level = PredicateFixableLevel.all then
+            invalid_arg "update: use update2allfixable!"            
+        else
+          assert false
+        
+    let pos_update t p fixable_level =
       let pos_table = t.posTable in
       match pos_table.(G.int_of_pLavel p) with
+      |Fixed _ -> invalid_arg "pos_update:attempt to update fixed predicate "
       |AllFixable (n, map) ->
         remove_affect t.posAffect p map;
-        pos_table.(G.int_of_pLavel p) <- fixable_level
-      |_ -> invalid_arg "pos_update_from_allfixable: not allfixable"
-        
-        
+        update_table pos_table p fixable_level
+      |PartialFixable |ZeroFixable ->
+        update_table pos_table p fixable_level
 
-    (* 上がるのにも下がるのにも対応する backtraceがあるので *)
-    let pos_update t p_graph p fixable_level =
-      let pos_table = t.posTable in
-      if fixable_level = PredicateFixableLevel.all then
-        invalid_arg "pos_update: use pos_update2allfixable!"
-      else
-        match pos_table.(G.int_of_pLavel p) with
-        |Fixed _ -> invalid_arg "pos_update:attempt to update fixed predicate "
-        |AllFixable n ->
-          invalid_arg "pos_update: same fixable level"
-        |PartialFixable |ZeroFixable ->
-          let p_othere_unknown  = list_unfixed
-                              pos_table p (PG.pos_ps p_graph p)
-          in
-          update_affect t.posAffect p p_othere_unknown
-          
-          
-         
-      
+
+    let neg_update t p fixable_level =
+      let neg_table = t.negTable in
+      match neg_table.(G.int_of_pLavel p) with
+      |Fixed _ -> invalid_arg "neg_update:attempt to update fixed predicate "
+      |AllFixable (n, map) ->
+        remove_affect t.negAffect p map;
+        update_table neg_table p fixable_level
+      |PartialFixable |ZeroFixable ->
+        update_table neg_table p fixable_level
+             
   end
     
 
