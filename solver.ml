@@ -221,7 +221,7 @@ module PFixState = struct
                
   type t = {posTable: state array
            ;negTable: state array
-             
+           
            ;posAffect: int PMap.t array
            ;negAffect: int PMap.t array
 
@@ -382,7 +382,7 @@ module PFixState = struct
       |PartialFixable |ZeroFixable ->
         update_table neg_table p fixable_level
              
-  end
+end
     
 
 
@@ -462,8 +462,9 @@ module Fixablility = struct
 
 
   type t = |UnBound of int ref
-           |Bound of (int ref * bound)
-                   
+           |Bound of {waitNum: int ref
+                     ;firstWaitNum: int
+                     ;bound: bound}
   
 end
 
@@ -472,8 +473,22 @@ module FixablilityManager = struct
   
   exception Cons_pred_mismatch
           
-  type t = {table: ((G.cLavel * G.pLavel), Fixablility.t ) Hashtbl.t
-           ;affect: ((G.cLavel * G.pLavel) list) array }
+  type t = {table: ((G.pLavel * G.cLavel), Fixablility.t Stack.t) Hashtbl.t
+           ;affect: ((G.pLavel * G.cLavel), G.pLavel list) Hashtbl.t }
+  (* (p,c) ->q,q',...
+     pがfixした時に,constraint cでpを待っているpredicate
+  *)
+
+
+  let tell_constraint_p_fix p c =
+    
+    
+         
+
+  let fix t graph p fixing_cs othere_cs =        (*  pがfixしたことをcsに電波, csはunfix *)
+    List.iter
+      (fun c -> tell_constraint_p_fix p c)
+      othere_cs
   
 end
                           
