@@ -459,6 +459,8 @@ module CFixState = struct
 
   let is_fixed t c = t.isFix.(G.int_of_cLavel c)
 
+
+
 end
 
 
@@ -539,18 +541,12 @@ module Fixablility = struct
                      ;firstWaitNum: int
                      ;bound: bound}
 
+                   
   let try_to_fix assign = function
-    |Bound {waitNum = n; firstWaitNum = _;senv = senv; bound = bound}
-         when !n = 0 ->
-      (match bound with
-       |UpBound {env = env; vars = vars; bound = phi } ->  (* env|- p -> \phi *)
-         let qformula = Liq.env_substitute_F assign env
-                       |> Liq.env2formula_all
-                       |> Formula.remove_conjunction_toplevel_unknown
-         in
-         let free_vars = 
-      )
-         
+    |Bound {waitNum = n; firstWaitNum = _; bound = bound} when !n = 0 ->
+      Some (qformula_of_bound assign bound)
+    |_ ->
+      None
          
   
 end
@@ -567,11 +563,9 @@ module FixablilityManager = struct
   *)
 
 
-  let is_fixable t p c =
-    let fixablility_stack = Hashtbl.find t.table (p, c) in
-    match Stack.top fixablility_stack with
-    |Fixablility.Bound {waitNum = n; 
-      
+  let try_to_fix t assign p c =
+    let fixability_stack = Hashtbl.find t.table (p, c) in
+    Fixablility.try_to_fix assign (Stack.top fixability_stack)
          
     (*  pがfixしたことをcsに電波, csはunfix *)
     let fix t graph assign p priority
@@ -581,7 +575,17 @@ module FixablilityManager = struct
           (fun acc c ->
             if CFixState.is_fixed cfix_state c then
               acc               (* do nothing *)
-            else if 
+            else
+              (match try_to_fix t assign p c with
+               |Some qformula ->
+                 let () = CFixState.fix cfix_state p c
+                                        ~may_change:(pfixable_counter, queue)
+                 in
+                 (c, qformula)::acc
+               |None ->         (* (p,c) unfixable  *)
+                 (* tell predicate... *)
+                
+              
           []
           (G.pos_cs graph p)
   
