@@ -443,6 +443,9 @@ let rec positive_negative_unknown_p  = function
    |Union _ |Intersect _ |Diff _ |Member _ |Subset _
    ->  (S.empty, S.empty, S.empty)
 
+
+(*  *)
+
     
 
 
@@ -481,7 +484,12 @@ let rec list_or (es:t) =
   |Or (e1, Bool false) -> list_or e1
   |Or (e1,e2) -> (list_or e1)@(list_or e2)
   |e -> [e]
-           
+
+
+let remove_conjunction_toplevel_unknown phi =
+  list_and phi
+  |> List.filter (function |Unknown _ -> false |_ -> true)
+  |> and_list
 
 
 let genFvar s i = Var (s, (Id.genid i))

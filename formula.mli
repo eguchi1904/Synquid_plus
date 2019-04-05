@@ -85,6 +85,7 @@ val fv_sort_include_v : t -> (Id.t * sort) list
 val is_unknown_p : t -> bool
 val extract_unknown_p : t -> S.t
 val positive_negative_unknown_p : t -> (S.t * S.t * S.t)
+val remove_conjunction_toplevel_unknown : t -> t
   
 val and_list : t list -> t
 val list_and : t -> t list

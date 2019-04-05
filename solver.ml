@@ -43,7 +43,7 @@ sig
   type pNode = {lavel:int
                ;value:Id.t
                ;pos: cLavel list
-               ;neg: pLavel list
+               ;neg: cLavel list
                }
 
   type t = {cTable: cNode array; pTable: pNode array }
@@ -51,6 +51,10 @@ sig
   val pos_p: t -> cLavel -> pLavel
 
   val neg_ps: t -> cLavel ->pLavel list
+    
+  val pos_cs: t -> pLavel -> cLavel list
+    
+  val neg_cs: t -> pLavel -> cLavel list    
 
     
 end = struct
@@ -83,7 +87,11 @@ end = struct
   let neg_ps graph c_lav =
     graph.cTable.(c_lav).neg
 
+  let pos_cs graph p =
+    graph.pTable.(p).pos
 
+  let neg_cs graph p =
+    graph.pTable.(p).neg
 
 end
 
@@ -457,14 +465,93 @@ end
 module Fixablility = struct
 
   (* これはconstraint.mlに写しても良いかもな *)
-  type bound = |UpBound of {env: Liq.env; vars: S.t; bound: Formula.t }
-               |LowBound of {env: Liq.env; vars: S.t; bound: Formula.t }
+  type bound =
+    (* env|- (p with senv) -> \phi *)
+    (* env;p;delta'|- \phi1 -> \phi2 *)
+    |UpBound of {senv:Formula.Senv.t
+                ;env: Liq.env; vars: S.t
+                ;bound: (Liq.env * Formula.t) (* no unknown p in bound *)
+                }
+    (* env|- \phi -> (p with senv) *)
+    |LowBound of {senv:Formula.Senv.t
+                 ;env: Liq.env
+                 ;vars: S.t
+                 ;bound: Formula.t (* no unknown p in boud *)
+                 }
 
+  let qformula_of_bound assign = function
+    |UpBound {senv = senv; env = env; vars = vars; bound = (delta, phi) } ->  (* env|- p -> \phi *)
+      let env_phi = Liq.env_substitute_F assign env
+                             |> Liq.env2formula_all
+                             |> Formula.list_and
+                             |> List.filter (function |Formula.Unknown _ -> false
+                                                      | _ -> true
+                                            )
+      in
+      let delta_phi = Liq.env2formula_all delta (* delat contain no unknown p *)
+                      |> Formula.list_and
+      in
+      let qformula_premise = delta_phi@env_phi in
+      let qformula_fv =
+        List.fold_left
+          (fun acc phi -> S.union acc (Formula.fv_include_v phi))
+          S.empty
+          (phi::qformula_premise)
+      in
+      let local_senv = Liq.mk_sort_env (Liq.env_append env delta) in
+      (* (assert (S.for_all *)
+      (*            (fun x -> Formula.Senv.mem x senv ||Formula.Senv.mem x local_senv ) *)
+      (*            qformula_fv)); *)
+      let binding = List.filter
+                      (fun (x,sort) -> S.mem x qformula_fv)
+                      (Formula.Senv.reveal local_senv)
+      in
+      Formula.QAll (binding, qformula_premise, phi)
 
+    |LowBound {senv = senv; env = env; vars = vars; bound = phi } ->  (* env|- p -> \phi *)
+      let env_phi = Liq.env_substitute_F assign env
+                             |> Liq.env2formula_all
+                             |> Formula.list_and
+                             |> List.filter (function |Formula.Unknown _ -> false
+                                                      | _ -> true
+                                            )
+      in
+      let qformula_fv =
+        List.fold_left
+          (fun acc phi -> S.union acc (Formula.fv_include_v phi))
+          S.empty
+          (phi::env_phi)
+      in
+      let local_senv = Liq.mk_sort_env env in
+      (* (assert (S.for_all *)
+      (*            (fun x -> Formula.Senv.mem x senv ||Formula.Senv.mem x local_senv ) *)
+      (*            qformula_fv)); *)
+      let binding = List.filter
+                      (fun (x,sort) -> S.mem x qformula_fv)
+                      (Formula.Senv.reveal local_senv)
+      in
+      Formula.QExist (binding, phi::env_phi)
+
+      
+      
   type t = |UnBound of int ref
            |Bound of {waitNum: int ref
                      ;firstWaitNum: int
                      ;bound: bound}
+
+  let try_to_fix assign = function
+    |Bound {waitNum = n; firstWaitNum = _;senv = senv; bound = bound}
+         when !n = 0 ->
+      (match bound with
+       |UpBound {env = env; vars = vars; bound = phi } ->  (* env|- p -> \phi *)
+         let qformula = Liq.env_substitute_F assign env
+                       |> Liq.env2formula_all
+                       |> Formula.remove_conjunction_toplevel_unknown
+         in
+         let free_vars = 
+      )
+         
+         
   
 end
 
@@ -480,15 +567,23 @@ module FixablilityManager = struct
   *)
 
 
-  let tell_constraint_p_fix p c =
-    
-    
+  let is_fixable t p c =
+    let fixablility_stack = Hashtbl.find t.table (p, c) in
+    match Stack.top fixablility_stack with
+    |Fixablility.Bound {waitNum = n; 
+      
          
-
-  let fix t graph p fixing_cs othere_cs =        (*  pがfixしたことをcsに電波, csはunfix *)
-    List.iter
-      (fun c -> tell_constraint_p_fix p c)
-      othere_cs
+    (*  pがfixしたことをcsに電波, csはunfix *)
+    let fix t graph assign p priority
+            ~may_change:(cfix_state, pfix_state, pfixable_counter, queue) =
+      if priority.Priority.pol = Polarity.pos then
+        List.fold_left
+          (fun acc c ->
+            if CFixState.is_fixed cfix_state c then
+              acc               (* do nothing *)
+            else if 
+          []
+          (G.pos_cs graph p)
   
 end
                           

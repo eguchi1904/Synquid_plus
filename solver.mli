@@ -73,13 +73,7 @@ sig
     
 end
 
-module CFixState:
-sig
-  type t
 
-  val is_fixed: t -> G.cLavel -> bool
-
-end
      
 module PFixState:
 sig
@@ -110,7 +104,8 @@ sig
 
 end
      
-  (* hint *)
+(* hint *)
+
      
 module PFixableConstraintCounter:
 sig
@@ -127,16 +122,27 @@ sig
 
   val calc_priority: t -> G.pLavel -> Priority.t
 
-  val fix: t -> G.pLavel -> unit
+
 
 end
 
+
+module CFixState:
+sig
+  type t
+
+  val is_fixed: t -> G.cLavel -> bool
+
+end     
      
 
 module FixablilityManager:
 sig
   type t
-     
+
+  val fix: t -> G.t -> Formula.subst -> G.pLavel -> Priority.t 
+           -> may_change:(CFixState.t * PFixState.t * PFixableConstraintCounter.t * PriorityQueue.t) 
+           -> Formula.t list * G.cLavel list
 end
      
          
