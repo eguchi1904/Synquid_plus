@@ -464,7 +464,7 @@ module CFixState = struct
 end
 
 
-module Fixablility = struct
+module Fixability = struct
 
   (* これはconstraint.mlに写しても良いかもな *)
   type bound =
@@ -537,13 +537,14 @@ module Fixablility = struct
       
       
   type t = |UnBound of int ref
-           |Bound of {waitNum: int ref
+           |Bound of {waitNum: int ref (* waitNum >= 1 *)
                      ;firstWaitNum: int
                      ;bound: bound}
+           |Fixable of (Polarity.t * bound)
 
                    
   let try_to_fix assign = function
-    |Bound {waitNum = n; firstWaitNum = _; bound = bound} when !n = 0 ->
+    |Fixable bound ->
       Some (qformula_of_bound assign bound)
     |_ ->
       None
@@ -552,15 +553,37 @@ module Fixablility = struct
 end
 
 
-module FixablilityManager = struct
+module FixabilityManager = struct
   
   exception Cons_pred_mismatch
           
-  type t = {table: ((G.pLavel * G.cLavel), Fixablility.t Stack.t) Hashtbl.t
+  type t = {table: ((G.pLavel * G.cLavel), Fixability.t Stack.t) Hashtbl.t
            ;affect: ((G.pLavel * G.cLavel), G.pLavel list) Hashtbl.t }
   (* (p,c) ->q,q',...
      pがfixした時に,constraint cでpを待っているpredicate
-  *)
+   *)
+
+  let decr_wait_num graph q c fixability_stack
+                    ~may_change:(pfixable_counter, pfix_state, queue) = 
+    let fixability = Stack.top fixability_stack in
+    match Fixability.decr_wait_num with
+    |Some new_fixability ->
+      (Stack.push new_fixability fixability_stack);
+      (match new_fixability with
+       |Fixability.Fixable (pol,_) ->
+         PFixableConstraintCounter.add_fixable pfixable_counter q pol ~may_change:(pfix_state, queue)
+       |_ -> ())
+    |None -> ()
+           
+
+  let tell_constraint_predicate_is_fixed t graph assign p c
+                                         ~may_change:(pfixable_counter, pfix_state, queue) =
+    List.iter
+      (fun q -> let stack = (Hashtbl.find t.table (q,c)) in
+                decr_wait_num graph q c stack ~may_change:(pfixable_counter, pfix_state, queue)
+      )
+    (Hashtbl.find t.affect (p,c))
+
 
 
   let try_to_fix t assign p c =
