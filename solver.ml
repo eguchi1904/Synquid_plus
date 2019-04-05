@@ -544,11 +544,37 @@ module Fixability = struct
 
                    
   let try_to_fix assign = function
-    |Fixable bound ->
+    |Fixable (pol,bound) ->
       Some (qformula_of_bound assign bound)
     |_ ->
       None
-         
+
+
+  let decr_wait_num graph p c = function
+    |Fixable _ -> invalid_arg "Fixability.decr_wait_num: can not decrement"
+    |Bound {waitNum = wait_num; firstWaitNum = _; bound = bound } ->
+      let () = decr wait_num in
+      if !wait_num = 0 then
+        let new_wait_num = calc_wait_num bound in
+        if new_wait_num = 0 then
+          (match bound with
+           |UpBound _ -> Some (Fixable (Polarity.neg, bound))
+           |LowBound _ -> Some (Fixable (Polarity.pos, bound))
+          )
+        else
+          let () = wait_num := new_wait_num in
+          None
+      else
+        (let () = assert (!wait_num > 0) in
+         None)
+    |UnBound wait_num ->
+      let () = decr wait_num in
+      if !wait_num = 0 then
+        let new_bound  = mk_bound in (* ここは面倒そう *)
+        Some new_bound
+      else
+        None
+
   
 end
 
@@ -566,7 +592,7 @@ module FixabilityManager = struct
   let decr_wait_num graph q c fixability_stack
                     ~may_change:(pfixable_counter, pfix_state, queue) = 
     let fixability = Stack.top fixability_stack in
-    match Fixability.decr_wait_num with
+    match Fixability.decr_wait_num graph q c fixability with
     |Some new_fixability ->
       (Stack.push new_fixability fixability_stack);
       (match new_fixability with
