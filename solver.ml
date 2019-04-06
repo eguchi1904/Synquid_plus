@@ -471,18 +471,49 @@ module Fixability = struct
     (* env|- (p with senv) -> \phi *)
     (* env;p;delta'|- \phi1 -> \phi2 *)
     |UpBound of {senv:Formula.Senv.t
-                ;env: Liq.env; vars: S.t
+                ;pending_sort_subst: Formula.sort_subst
+                ;env: Liq.env
+                ;vars: S.t
                 ;bound: (Liq.env * Formula.t) (* no unknown p in bound *)
                 }
     (* env|- \phi -> (p with senv) *)
     |LowBound of {senv:Formula.Senv.t
+                 ;pending_sort_subst: Formula.sort_subst                 
                  ;env: Liq.env
                  ;vars: S.t
                  ;bound: Formula.t (* no unknown p in boud *)
                  }
 
 
-  let mk_flatten_subst sita =
+  let rec extract_subst senv acc_sita eq_list =
+    let open Formula in
+    match List.pop
+            (function |(x, Var (_,y)) -> not (Senv.mem y senv)
+                      | _ -> false)
+            eq_list
+    with
+    |Some ((x, Var (sort, y)), eq_list') ->
+      let y2x = M.singleton y (Var (sort, x)) in
+      let eq_list' = List.map (fun (x,e) -> (x, substitution y2x e)) eq_list' in
+      extract_subst senv (subst_compose y2x acc_sita) eq_list'
+    |Some _ -> assert false     (* popの条件から *)
+    |None -> acc_sita, eq_list
+
+  let mk_fresing_subst senv sita =
+    M.fold
+      (fun x e acc ->
+        let x_sort = try Formula.Senv.find x senv with _ -> assert false in
+        let x' = Id.genid x in
+        M.add x (Formula.Var (x_sort, x')) acc)
+      M.empty
+    sita
+        
+        
+  let mk_flatten_subst senv sita =
+    let freshing_sita = mk_fresing_subst senv sita in
+    let eq_list = M.bindings (Formula.subst_compose freshing_sita sita) in
+    let delta, eq_list' = extract_subst senv M.empty eq_list in
+    (Formula.subst_compose delta freshing_sita), eq_list'
     
                
   let mk_bound = function

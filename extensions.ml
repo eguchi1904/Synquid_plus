@@ -59,8 +59,13 @@ module List = struct
     List.filter (fun (y, v) -> x = y) table
     |> List.map snd
           
-      
-    
+  let rec pop f = function
+    |x::xs when f x -> Some (x, xs)
+    |x::xs ->
+      (match pop f xs with
+       |Some (y, xs') -> Some (y, x::xs')
+       |None -> None)
+    |[] -> None
           
 end
             
