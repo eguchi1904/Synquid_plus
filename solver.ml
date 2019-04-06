@@ -481,6 +481,16 @@ module Fixability = struct
                  ;bound: Formula.t (* no unknown p in boud *)
                  }
 
+
+  let mk_flatten_subst sita =
+    
+               
+  let mk_bound = function
+    |Constraint.SSub (env, e1, Formula.Unknown (senv, sort_sita, sita, p_id) ->
+                      
+
+                      
+
   let qformula_of_bound assign = function
     |UpBound {senv = senv; env = env; vars = vars; bound = (delta, phi) } ->  (* env|- p -> \phi *)
       let env_phi = Liq.env_substitute_F assign env
@@ -570,7 +580,7 @@ module Fixability = struct
     |UnBound wait_num ->
       let () = decr wait_num in
       if !wait_num = 0 then
-        let new_bound  = mk_bound in (* ここは面倒そう *)
+        let new_bound  = mk_bound in (* ここは面倒そう,boundを構成する *)
         Some new_bound
       else
         None
@@ -597,7 +607,8 @@ module FixabilityManager = struct
       (Stack.push new_fixability fixability_stack);
       (match new_fixability with
        |Fixability.Fixable (pol,_) ->
-         PFixableConstraintCounter.add_fixable pfixable_counter q pol ~may_change:(pfix_state, queue)
+         PFixableConstraintCounter.add_fixable pfixable_counter q pol
+                                               ~may_change:(pfix_state, queue)
        |_ -> ())
     |None -> ()
            

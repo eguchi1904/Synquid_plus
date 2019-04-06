@@ -720,7 +720,8 @@ and substitution (sita:subst) (t:t) =
 
   |Unknown (senv, sort_sita, sita1, i) when M.mem i sita ->
     let p = M.find i sita in
-    (sort_subst2formula sort_sita (substitution sita1 p))        (* pending substitution を展開する。 *)
+    sort_subst2formula sort_sita p |> substitution sita1
+    (* (sort_subst2formula sort_sita (substitution sita1 p)) *)        (* pending substitution を展開する。 *)
 
   |Unknown (senv, sort_sita, sita1, i) ->
 
