@@ -42,6 +42,7 @@ sig
 
   type pNode = {lavel:int
                ;value:Id.t
+               ;env:Liq.env
                ;pos: cLavel list
                ;neg: cLavel list
                }
@@ -54,7 +55,9 @@ sig
     
   val pos_cs: t -> pLavel -> cLavel list
     
-  val neg_cs: t -> pLavel -> cLavel list    
+  val neg_cs: t -> pLavel -> cLavel list
+
+  val get_p_env: t -> pLavel -> Liq.env
 
     
 end = struct
@@ -75,6 +78,7 @@ end = struct
 
   type pNode = {lavel:int
                ;value:Id.t
+               ;env: Liq.env
                ;pos: cLavel list
                ;neg: pLavel list
                }
@@ -92,6 +96,9 @@ end = struct
 
   let neg_cs graph p =
     graph.pTable.(p).neg
+
+  let get_p_env graph p =
+    graph.pTable.(p).env
 
 end
 
@@ -490,6 +497,9 @@ module Fixability = struct
                 ;require: (Liq.env * Formula.t) (* no unknown p in bound *)
                 }               
 
+  let predicate_polarity_of_bound = function
+    |LowBound _ -> Polarity.pos
+    |UpBound _ -> Polarity.neg
 
   let extract_necessary_predicate senv unknown env =
     Liq.env_fold
@@ -627,7 +637,6 @@ module Fixability = struct
          
          
          
-                      
 
   let qformula_of_bound assign = function
     |UpBound {localEnv = env; vars = vars; require = (delta, phi) } ->  (* env|- p -> \phi *)
@@ -686,26 +695,41 @@ module Fixability = struct
       
   type t = |UnBound of {waitNum: int ref
                        ;senv:Formula.Senv.t
-                       ;pending_subst: Formula.subst
-                       ;pending_sort_subst: Formula.sort_subst
+                       ;pendingSubst: Formula.subst
+                       ;pendingSortSubst: Formula.sort_subst
                        ;position: pPosition
                        }
            |Bound of {waitNum: int ref (* waitNum >= 1 *)
                      ;firstWaitNum: int
                      ;senv:Formula.Senv.t
-                     ;pending_sort_subst: Formula.sort_subst
+                     ;pendingSortSubst: Formula.sort_subst
                      ;bound: bound}
            |Fixable of (Polarity.t * bound)
 
 
-  let unbound_to_bound assign p_env = function
+  let upgrade_unbound assign p_env = function
     |UnBound {waitNum = n
              ;senv = senv
-             ;pending_subst = sita
-             ;pending_sort_subst = sort_sita
+             ;pendingSubst = sita
+             ;pendingSortSubst = sort_sita
              ;position = position } when !n = 0 ->
       let bound = mk_bound assign senv p_env sita position in
-      let wait_num = wait_predicate assign bound in
+      let wait_ps = wait_predicates assign senv bound in
+      let wait_num = S.cardinal wait_ps in
+      if wait_num = 0 then
+        let pol = predicate_polarity_of_bound bound in
+        (Fixable (pol, bound), wait_ps)
+      else
+        (Bound {waitNum = ref wait_num
+              ;firstWaitNum = wait_num
+              ;senv = senv
+              ;pendingSortSubst = sort_sita
+              ;bound = bound}
+        , wait_ps)
+      
+      
+    |UnBound _ -> invalid_arg "unbound_to_bound: not yet bounded"
+    |Bound _ |Fixable _ -> invalid_arg "unbound_to_bound: already bounded"
       
                      
                    
@@ -715,29 +739,36 @@ module Fixability = struct
     |_ ->
       None
 
-
-  let decr_wait_num graph p c = function
+  (* unboudのwaitnumをdecrementする。0になったらwait predicateを再計算し、新たなboundをreturnする *)
+  let decr_wait_num assign graph p c = function
     |Fixable _ -> invalid_arg "Fixability.decr_wait_num: can not decrement"
-    |Bound {waitNum = wait_num; firstWaitNum = _; bound = bound } ->
+    |Bound rc ->
+      let wait_num = rc.waitNum in
       let () = decr wait_num in
       if !wait_num = 0 then
-        let new_wait_num = calc_wait_num bound in
+        let new_wait_pc = wait_predicates assign rc.senv rc.bound in
+        let new_wait_num = S.cardinal new_wait_pc in
         if new_wait_num = 0 then
-          (match bound with
-           |UpBound _ -> Some (Fixable (Polarity.neg, bound))
-           |LowBound _ -> Some (Fixable (Polarity.pos, bound))
-          )
+          let pol = predicate_polarity_of_bound rc.bound in
+          Some (Fixable (pol, rc.bound), S.empty)
         else
-          let () = wait_num := new_wait_num in
-          None
+          Some (Bound {waitNum = ref new_wait_num
+                      ;firstWaitNum = new_wait_num
+                      ;senv = rc.senv
+                      ;pendingSortSubst = rc.pendingSortSubst
+                      ;bound = rc.bound}
+               ,new_wait_pc)
+               
       else
-        (let () = assert (!wait_num > 0) in
-         None)
-    |UnBound wait_num ->
+        None
+    |UnBound rc as unbound->
+      let wait_num = rc.waitNum in
       let () = decr wait_num in
       if !wait_num = 0 then
-        let new_bound  = mk_bound in (* ここは面倒そう,boundを構成する *)
-        Some new_bound
+        let new_bound_and_wait_pc  =
+          upgrade_unbound assign (G.get_p_env graph p) unbound
+        in
+        Some new_bound_and_wait_pc
       else
         None
 
