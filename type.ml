@@ -238,6 +238,15 @@ let rec env_mem (env:env) v =
 
 let env_append (env1:env) (env2:env):env =
   env1@env2
+
+let env_fold f_b f_p env seed =
+  List.fold_left
+    (fun acc -> function
+      |B x_sch -> f_b x_sch acc
+      |P p -> f_p p acc)
+    seed
+    env
+
   
 let env_suffix (env1:env) (env2:env) =
   List.suffix env1 env2

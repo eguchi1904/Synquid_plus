@@ -51,6 +51,7 @@ val env_add_schema : env -> Id.t * schema -> env
 val env_add_schema_list : env -> (Id.t * schema) list -> env
 val env_add_F : env -> Formula.t -> env
 val env_append : env -> env -> env
+val env_fold: ((Id.t * schema) -> 'a -> 'a) -> (Formula.t -> 'a -> 'a) ->  env -> 'a  -> 'a
 (* investigation *)
 val env_find : env-> Id.t -> schema
 val env_mem : env -> Id.t -> bool

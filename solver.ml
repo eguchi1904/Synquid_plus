@@ -491,6 +491,50 @@ module Fixability = struct
                 }               
 
 
+  let extract_necessary_predicate senv unknown env =
+    Liq.env_fold
+      (fun (x,sch) (acc_unknown, acc_p) ->
+        if  (S.mem x acc_unknown) then
+          match sch with
+          |([], [], Liq.TScalar (_, phi)) ->
+            let phi_fv = (Formula.fv phi) in (* = fv ([_v->x].phi) / {x}  *)
+            let new_unknown' = S.filter (fun x -> Formula.Senv.mem x senv) phi_fv  in
+            let acc_unknown' = S.union new_unknown' acc_unknown in
+            let acc_p' = S.union acc_p (Formula.extract_unknown_p phi) in
+            (acc_unknown', acc_p')
+          | _ -> (acc_unknown, acc_p)
+        else
+          (acc_unknown, acc_p)
+      )    
+      (fun phi (acc_unknown, acc_p) ->
+        let phi_fv = (Formula.fv_include_v phi) in
+        if S.is_empty (S.inter  phi_fv acc_unknown) then
+          (acc_unknown, acc_p)
+        else
+          let new_unknown' = S.filter (fun x -> Formula.Senv.mem x senv) phi_fv  in
+          let acc_unknown' = S.union new_unknown' acc_unknown in
+          let acc_p' = S.union acc_p (Formula.extract_unknown_p phi) in
+          (acc_unknown', acc_p')
+      )
+    env
+    (unknown, S.empty)
+
+  let rec iter_extract_necessary_predicate senv unknown env =
+    let unknown', necess_p = extract_necessary_predicate senv unknown env in
+    if unknown' = unknown then
+      necess_p
+    else
+      iter_extract_necessary_predicate senv unknown' env
+          
+    
+  let wait_predicates assign senv = function
+    |LowBound {localEnv = local_env; vars = vars; require = _}
+     |UpBound {localEnv = local_env; vars = vars; require = _ } ->
+      let local_env' = Liq.env_substitute_F assign local_env in
+      iter_extract_necessary_predicate senv vars local_env'
+
+      
+
   let rec extract_subst senv acc_sita eq_list =
     let open Formula in
     match List.pop
@@ -586,7 +630,7 @@ module Fixability = struct
                       
 
   let qformula_of_bound assign = function
-    |UpBound {senv = senv; env = env; vars = vars; bound = (delta, phi) } ->  (* env|- p -> \phi *)
+    |UpBound {localEnv = env; vars = vars; require = (delta, phi) } ->  (* env|- p -> \phi *)
       let env_phi = Liq.env_substitute_F assign env
                              |> Liq.env2formula_all
                              |> Formula.list_and
@@ -614,7 +658,7 @@ module Fixability = struct
       in
       Formula.QAll (binding, qformula_premise, phi)
 
-    |LowBound {senv = senv; env = env; vars = vars; bound = phi } ->  (* env|- p -> \phi *)
+    |LowBound {localEnv = env; vars = vars; require = phi } ->  (* env|- p -> \phi *)
       let env_phi = Liq.env_substitute_F assign env
                              |> Liq.env2formula_all
                              |> Formula.list_and
@@ -654,20 +698,14 @@ module Fixability = struct
            |Fixable of (Polarity.t * bound)
 
 
-  let unbound_to_bound p_env = function
+  let unbound_to_bound assign p_env = function
     |UnBound {waitNum = n
              ;senv = senv
              ;pending_subst = sita
              ;pending_sort_subst = sort_sita
              ;position = position } when !n = 0 ->
-      match position with
-      |Positive {env = cons_env; negFormula = e1 } ->
-        (match Liq.env_sffix cons_env env with
-         |None -> invalid_arg "Solver.unbound_to_bound: cons_env and env mismatch"
-         |Some local_env ->
-           
-        
-       
+      let bound = mk_bound assign senv p_env sita position in
+      let wait_num = wait_predicate assign bound in
       
                      
                    
