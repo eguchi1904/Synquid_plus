@@ -466,23 +466,29 @@ end
 
 module Fixability = struct
 
-  (* これはconstraint.mlに写しても良いかもな *)
-  type bound =
-    (* env|- (p with senv) -> \phi *)
-    (* env;p;delta'|- \phi1 -> \phi2 *)
-    |UpBound of {senv:Formula.Senv.t
-                ;pending_sort_subst: Formula.sort_subst
-                ;env: Liq.env
-                ;vars: S.t
-                ;bound: (Liq.env * Formula.t) (* no unknown p in bound *)
-                }
-    (* env|- \phi -> (p with senv) *)
-    |LowBound of {senv:Formula.Senv.t
-                 ;pending_sort_subst: Formula.sort_subst                 
-                 ;env: Liq.env
-                 ;vars: S.t
-                 ;bound: Formula.t (* no unknown p in boud *)
+  (* constraint中の、pの位置を保持する:　   \gamma;p;\delata |- e1 -> e2 etc *)
+  type pPosition =
+    |Positive of {env: Liq.env
+                 ;negFormula: Formula.t
+                (*  p is here *)
                  }
+    |Negative of {backEnv: Liq.env
+                (*  p is here *)                 
+                 ;frontEnv: Liq.env 
+                 ;posFormula:Formula.t}
+
+  type bound =
+    (* env|- \phi -> p *)
+    |LowBound of {localEnv: Liq.env
+                 ;vars: S.t
+                 ;require: Formula.t (* no unknown p in boud *)
+                 }
+    (* env|- p -> \phi *)
+    (* env;p;delta'|- \phi1 -> \phi2 *)
+    |UpBound of {localEnv: Liq.env
+                ;vars: S.t
+                ;require: (Liq.env * Formula.t) (* no unknown p in bound *)
+                }               
 
 
   let rec extract_subst senv acc_sita eq_list =
@@ -513,13 +519,70 @@ module Fixability = struct
     let freshing_sita = mk_fresing_subst senv sita in
     let eq_list = M.bindings (Formula.subst_compose freshing_sita sita) in
     let delta, eq_list' = extract_subst senv M.empty eq_list in
-    (Formula.subst_compose delta freshing_sita), eq_list'
+    let eq_phi = eq_list'
+                 |> List.map
+                      (fun (x,e) ->
+                        let x_sort = try Formula.Senv.find x senv with _ -> assert false in
+                        Formula.Eq (Formula.Var (x_sort, x), e))
+                 |> Formula.and_list
+    in
+               
+    (Formula.subst_compose delta freshing_sita), eq_phi
     
                
-  let mk_bound = function
-    |Constraint.SSub (env, e1, Formula.Unknown (senv, sort_sita, sita, p_id) ->
-                      
-
+  let mk_bound assign senv env pending_sita = function
+    |Positive {env = cons_env; negFormula = e1 } ->
+      (match Liq.env_suffix cons_env env with
+       |None -> invalid_arg "Solver.mk_bound: cons_env and env mismatch"
+       |Some local_env ->
+         let flatten_sita, eq_phi = mk_flatten_subst senv pending_sita in
+         let local_env' = Liq.env_substitute_F assign local_env (* ここはやらなくても良い *)
+                          |>Liq.env_substitute_F flatten_sita
+         in
+         let e1' = Formula.substitution assign e1 
+                   |>Formula.substitution flatten_sita
+         in
+         let require = Formula.And (e1', eq_phi) in
+         let vars = S.filter (fun x -> not (Formula.Senv.mem x senv))
+                             (Formula.fv require)
+         in
+         LowBound {localEnv = local_env'
+                  ;vars = vars
+                  ;require = require}
+      )
+    |Negative {backEnv = cons_back_env
+              ;frontEnv = cons_front_env
+              ;posFormula = e1} ->
+      (match Liq.env_suffix cons_back_env env with
+       |None -> invalid_arg "Solver.mk_bound: cons_env and env mismatch"
+       |Some local_env ->
+         let flatten_sita, eq_phi = mk_flatten_subst senv pending_sita in
+         let local_env' = Liq.env_substitute_F assign local_env (* ここはやらなくても良い *)
+                          |>Liq.env_substitute_F flatten_sita
+         in
+         let e1' = Formula.substitution assign e1 
+                   |>Formula.substitution flatten_sita
+         in
+         let cons_front_env' = Liq.env_substitute_F assign cons_front_env
+                               |>Liq.env_substitute_F flatten_sita
+         in
+         let require_env = Liq.env_add_F cons_front_env' eq_phi in
+         let require = (require_env, e1') in
+         let require_fv = Liq.env2formula_all require_env
+                        |> Formula.fv_include_v
+                        |>S.union (Formula.fv_include_v e1')
+         in
+         let vars = S.filter (fun x -> not (Formula.Senv.mem x senv))
+                             require_fv
+         in
+         UpBound {localEnv = local_env'
+                 ;vars = vars
+                 ;require = require})
+       (* ここで、env2formulaして、fvをとる、下のqformula_of_boundでも同じようにやる
+        しかし、envを持つ理由が汚い気がする*)
+         
+         
+         
                       
 
   let qformula_of_bound assign = function
@@ -577,12 +640,36 @@ module Fixability = struct
 
       
       
-  type t = |UnBound of int ref
+  type t = |UnBound of {waitNum: int ref
+                       ;senv:Formula.Senv.t
+                       ;pending_subst: Formula.subst
+                       ;pending_sort_subst: Formula.sort_subst
+                       ;position: pPosition
+                       }
            |Bound of {waitNum: int ref (* waitNum >= 1 *)
                      ;firstWaitNum: int
+                     ;senv:Formula.Senv.t
+                     ;pending_sort_subst: Formula.sort_subst
                      ;bound: bound}
            |Fixable of (Polarity.t * bound)
 
+
+  let unbound_to_bound p_env = function
+    |UnBound {waitNum = n
+             ;senv = senv
+             ;pending_subst = sita
+             ;pending_sort_subst = sort_sita
+             ;position = position } when !n = 0 ->
+      match position with
+      |Positive {env = cons_env; negFormula = e1 } ->
+        (match Liq.env_sffix cons_env env with
+         |None -> invalid_arg "Solver.unbound_to_bound: cons_env and env mismatch"
+         |Some local_env ->
+           
+        
+       
+      
+                     
                    
   let try_to_fix assign = function
     |Fixable (pol,bound) ->
