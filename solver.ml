@@ -184,7 +184,7 @@ end
 module Priority = struct
   (* the most important factor is fixable level *)
   type t = {fixLevel: PredicateFixableLevel.t
-           ;otherePCount: int
+           ;otherPCount: int
            ;fixableNum:int
            ;pol: Polarity.t
            ;lavel: G.pLavel }
@@ -290,7 +290,32 @@ module PFixState = struct
                |PartialFixable 
                |ZeroFixable
 
-               
+  let calc_priority state fixable_num pol p =
+    match state with
+    |Fixed _ -> invalid_arg "calc_priority: already fixed"
+    |AllFixable (n, _) ->
+      Priority.{fixLevel = PredicateFixableLevel.all
+               ;otherPCount = n
+               ;fixableNum = fixable_num
+               ;pol = pol
+               ;lavel = p
+      }
+    |PartialFixable ->
+      Priority.{fixLevel = PredicateFixableLevel.partial
+               ;otherPCount = 0
+               ;fixableNum = fixable_num
+               ;pol = pol
+               ;lavel = p
+      }
+    |ZeroFixable ->
+      Priority.{fixLevel = PredicateFixableLevel.zero
+               ;otherPCount = 0
+               ;fixableNum = fixable_num
+               ;pol = pol
+               ;lavel = p
+      }      
+
+    
                
   type t = {posTable: state array
            ;negTable: state array
@@ -307,6 +332,8 @@ module PFixState = struct
     | _ -> false
 
   let isnt_fixed t p = not (is_fixed t p)
+
+
          
   (* この時点で、pをfixしたことによる、fixableLevelの変化は反映されていないといけない *)
     let fix {posTable = pos_table
@@ -390,7 +417,7 @@ module PFixState = struct
     (* partial -> allfiable
        zero -> allfixable
        にupdateするときは特別, affect mapを必要とするため *)       
-    let pos_update2allfixable t p (othere_unknown_map: int PMap.t) =
+    let pos_update2allfixable' t p (othere_unknown_map: int PMap.t) = 
       let pos_table = t.posTable in
       match pos_table.(G.int_of_pLavel p) with
       |Fixed _ | AllFixable _ ->
@@ -402,10 +429,13 @@ module PFixState = struct
             othere_unknown_map
             0
         in
-        pos_table.(G.int_of_pLavel p) <- AllFixable (unknown_count, othere_unknown_map);
-        update_affect t.posAffect p othere_unknown_map
-
-    let neg_update2allfixable t p (othere_unknown_map: int PMap.t) =
+        let state =  AllFixable (unknown_count, othere_unknown_map) in
+        pos_table.(G.int_of_pLavel p) <- state;
+        (update_affect t.posAffect p othere_unknown_map);
+        state
+  
+        
+    let neg_update2allfixable' t p (othere_unknown_map: int PMap.t) = 
       let neg_table = t.negTable in
       match neg_table.(G.int_of_pLavel p) with
       |Fixed _ | AllFixable _ ->
@@ -417,9 +447,27 @@ module PFixState = struct
             othere_unknown_map
             0
         in
-        neg_table.(G.int_of_pLavel p) <- AllFixable (unknown_count, othere_unknown_map);
-        update_affect t.negAffect p othere_unknown_map        
+        let state = AllFixable (unknown_count, othere_unknown_map) in
+        neg_table.(G.int_of_pLavel p) <- state;
+        (update_affect t.negAffect p othere_unknown_map);
+        state
+        
+        
+    let pos_update2allfixable t p (othere_unknown_map: int PMap.t)
+                              fixable_num ~change:queue =
+      let updated_state = pos_update2allfixable' t p othere_unknown_map in
+      let updated_priority = calc_priority updated_state fixable_num Polarity.pos p in
+      PriorityQueue.update_pos queue p updated_priority
+      
+    
 
+    let neg_update2allfixable t p (othere_unknown_map: int PMap.t)
+                              fixable_num ~change:queue =
+      let updated_state = neg_update2allfixable' t p othere_unknown_map in
+      let updated_priority = calc_priority updated_state fixable_num Polarity.neg p in
+      PriorityQueue.update_neg queue p updated_priority
+      
+      
     (* backtraceでこうなることもあるね、
      affectから自分を消してから変更する*)
     (* let pos_update_from_allfixable t p fixable_level = *)
@@ -441,7 +489,7 @@ module PFixState = struct
         else
           assert false
         
-    let pos_update t p fixable_level =
+    let pos_update' t p fixable_level =
       let pos_table = t.posTable in
       match pos_table.(G.int_of_pLavel p) with
       |Fixed _ -> invalid_arg "pos_update:attempt to update fixed predicate "
@@ -452,7 +500,7 @@ module PFixState = struct
         update_table pos_table p fixable_level
 
 
-    let neg_update t p fixable_level =
+    let neg_update' t p fixable_level =
       let neg_table = t.negTable in
       match neg_table.(G.int_of_pLavel p) with
       |Fixed _ -> invalid_arg "neg_update:attempt to update fixed predicate "
@@ -461,6 +509,30 @@ module PFixState = struct
         update_table neg_table p fixable_level
       |PartialFixable |ZeroFixable ->
         update_table neg_table p fixable_level
+
+    let pos_update t p fixable_level
+                   fixable_num ~change:queue = 
+      (pos_update' t p fixable_level);
+       let priority =  Priority.{fixLevel = fixable_level
+                                ;otherPCount = 0
+                                ;fixableNum = fixable_num
+                                ;pol = Polarity.pos
+                                ;lavel = p
+                       }
+       in
+       PriorityQueue.update_pos queue p priority
+
+    let neg_update t p fixable_level
+                   fixable_num ~change:queue = 
+      (neg_update' t p fixable_level);
+       let priority =  Priority.{fixLevel = fixable_level
+                                ;otherPCount = 0
+                                ;fixableNum = fixable_num
+                                ;pol = Polarity.neg
+                                ;lavel = p
+                       }
+       in
+       PriorityQueue.update_neg queue p priority       
              
 end
     
@@ -509,16 +581,33 @@ end= struct
     if pol = Polarity.pos then
       let fix_ratio = t.posRatio.(G.int_of_pLavel p) in
       let unfixable = fix_ratio.unfixable in
-      let fixable = fi_ratio.fixable in
+      let fixable = fix_ratio.fixable in
       (decr unfixable);
       (incr fixable);
       if !unfixable = 0 then
         let map = calc_othere_p () in
-        let () = PFixState.pos_update2allfixable pfix_state p map in
-        PriorityQueue.update queue p (PFixState.calc_priority pfix_state fixable
-      else 
-        priorityqueでposとnegのminをとるのがよくね
-        
+        PFixState.pos_update2allfixable pfix_state p map
+                                        !fixable ~change:queue
+      else if !fixable = 1 then
+        PFixState.pos_update pfix_state p (to_fixable_level fix_ratio)
+                             !fixable ~change:queue
+      else
+        ()
+    else
+      let fix_ratio = t.negRatio.(G.int_of_pLavel p) in
+      let unfixable = fix_ratio.unfixable in
+      let fixable = fix_ratio.fixable in
+      (decr unfixable);
+      (incr fixable);
+      if !unfixable = 0 then
+        let map = calc_othere_p () in
+        PFixState.neg_update2allfixable pfix_state p map
+                                        !fixable ~change:queue
+      else if !fixable = 1 then
+        PFixState.neg_update pfix_state p (to_fixable_level fix_ratio)
+                             !fixable ~change:queue
+      else
+        ()      
         
       
     
