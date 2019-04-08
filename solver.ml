@@ -35,6 +35,7 @@ sig
 
   val int_of_pLavel: pLavel -> int
 
+
   type cNode = {lavel:int
                ;value:Constraint.simple_cons
                ;pos:pLavel
@@ -47,8 +48,13 @@ sig
                ;neg: cLavel list
                }
 
-  type t = {cTable: cNode array; pTable: pNode array }
+  type t = {cTable: cNode array;
+            pTable: pNode array;
+            pIdHash: (Id.t, pLavel) Hashtbl.t
+           }
 
+  val pLavel_of_id: t -> Id.t -> pLavel
+    
   val pos_p: t -> cLavel -> pLavel
 
   val neg_ps: t -> cLavel ->pLavel list
@@ -83,7 +89,14 @@ end = struct
                ;neg: pLavel list
                }
 
-  type t = {cTable: cNode array; pTable: pNode array }
+  type t = {cTable: cNode array;
+            pTable: pNode array
+            ;pIdHash: (Id.t, pLavel) Hashtbl.t
+           }
+
+  let pLavel_of_id t id =
+    try Hashtbl.find t.pIdHash id with
+      Not_found -> invalid_arg "pLavel_of_id: invalid id"
          
   let pos_p graph c_lav =
     graph.cTable.(c_lav).pos
@@ -107,7 +120,25 @@ module PMap =
     (struct
       type t = G.pLavel
       let compare = compare
-    end)    
+    end)
+
+module PSet = struct
+ include ( Set.Make
+                (struct
+                  type t = G.pLavel
+                  let compare = compare
+                end))
+  (* include PS *)
+
+  let of_id_Set graph id_set =
+    S.fold
+      (fun id acc ->
+        add (G.pLavel_of_id graph id) acc)
+    id_set
+    empty
+    
+end
+
   
 
 (* predicateだけからなるグラフ *)
@@ -243,6 +274,13 @@ module PFixState = struct
            }           
 
 
+  let is_fixed t p =
+    match t.posTable.(G.int_of_pLavel p) with
+    |Fixed _ -> true
+    | _ -> false
+
+  let isnt_fixed t p = not (is_fixed t p)
+         
   (* この時点で、pをfixしたことによる、fixableLevelの変化は反映されていないといけない *)
     let fix {posTable = pos_table
             ;negTable =  neg_table
@@ -740,17 +778,20 @@ module Fixability = struct
       None
 
   (* unboudのwaitnumをdecrementする。0になったらwait predicateを再計算し、新たなboundをreturnする *)
-  let decr_wait_num assign graph p c = function
+  let decr_wait_num assign graph p c ~change:fixability =
+    match fixability with
     |Fixable _ -> invalid_arg "Fixability.decr_wait_num: can not decrement"
     |Bound rc ->
       let wait_num = rc.waitNum in
       let () = decr wait_num in
       if !wait_num = 0 then
-        let new_wait_pc = wait_predicates assign rc.senv rc.bound in
-        let new_wait_num = S.cardinal new_wait_pc in
+        let new_wait_pc = wait_predicates assign rc.senv rc.bound
+                          |> PSet.of_id_Set graph
+        in
+        let new_wait_num = PSet.cardinal new_wait_pc in
         if new_wait_num = 0 then
           let pol = predicate_polarity_of_bound rc.bound in
-          Some (Fixable (pol, rc.bound), S.empty)
+          Some (Fixable (pol, rc.bound), PSet.empty)
         else
           Some (Bound {waitNum = ref new_wait_num
                       ;firstWaitNum = new_wait_num
@@ -765,10 +806,10 @@ module Fixability = struct
       let wait_num = rc.waitNum in
       let () = decr wait_num in
       if !wait_num = 0 then
-        let new_bound_and_wait_pc  =
+        let new_bound, wait_pc  =
           upgrade_unbound assign (G.get_p_env graph p) unbound
         in
-        Some new_bound_and_wait_pc
+        Some (new_bound, (PSet.of_id_Set graph wait_pc))
       else
         None
 
@@ -786,12 +827,25 @@ module FixabilityManager = struct
      pがfixした時に,constraint cでpを待っているpredicate
    *)
 
-  let decr_wait_num graph q c fixability_stack
-                    ~may_change:(pfixable_counter, pfix_state, queue) = 
+  let add_affect affect p c q =
+    match Hashtbl.find_opt affect (p,c) with
+    |Some l -> Hashtbl.replace affect (p,c) (q::l)
+    |None -> Hashtbl.add affect (p,c) [q]
+
+  let update_affect t p c wait_ps = (* p,cを解くためには、wait_psが必要等情報をadd *)
+    PSet.iter
+      (fun q -> add_affect t.affect q c p)
+      wait_ps
+    
+         
+  let decr_wait_num t assign graph q c 
+                    ~may_change:(pfixable_counter, pfix_state, queue) =
+    let fixability_stack = Hashtbl.find t.table (q,c) in
     let fixability = Stack.top fixability_stack in
-    match Fixability.decr_wait_num graph q c fixability with
-    |Some new_fixability ->
+    match Fixability.decr_wait_num assign graph q c ~change:fixability with
+    |Some (new_fixability, new_wait_ps) ->
       (Stack.push new_fixability fixability_stack);
+      (update_affect t q c new_wait_ps);
       (match new_fixability with
        |Fixability.Fixable (pol,_) ->
          PFixableConstraintCounter.add_fixable pfixable_counter q pol
@@ -803,10 +857,10 @@ module FixabilityManager = struct
   let tell_constraint_predicate_is_fixed t graph assign p c
                                          ~may_change:(pfixable_counter, pfix_state, queue) =
     List.iter
-      (fun q -> let stack = (Hashtbl.find t.table (q,c)) in
-                decr_wait_num graph q c stack ~may_change:(pfixable_counter, pfix_state, queue)
+      (fun q -> decr_wait_num t graph assign q c
+                              ~may_change:(pfixable_counter, pfix_state, queue)
       )
-    (Hashtbl.find t.affect (p,c))
+      (List.filter (PFixState.isnt_fixed pfix_state) (Hashtbl.find t.affect (p,c)) )
 
 
 
