@@ -184,6 +184,7 @@ end
 module Priority = struct
   (* the most important factor is fixable level *)
   type t = {fixLevel: PredicateFixableLevel.t
+           ;otherePCount: int
            ;fixableNum:int
            ;pol: Polarity.t
            ;lavel: G.pLavel }
@@ -196,11 +197,15 @@ sig
 
   type t
 
-  val pop: t -> (G.pLavel * Priority.t) option
+  val pop: t -> (G.pLavel * Polarity.t * Priority.t) option
 
-  val push: t -> G.pLavel -> Priority.t -> unit
+  val push_pos: t -> G.pLavel -> Priority.t -> unit
 
-  val update: t -> G.pLavel -> Priority.t -> unit
+  val push_neg: t -> G.pLavel -> Priority.t -> unit    
+
+  val update_pos: t -> G.pLavel -> Priority.t -> unit
+
+  val update_neg: t -> G.pLavel -> Priority.t -> unit    
     
 end  = struct
   
@@ -229,7 +234,9 @@ end  = struct
   end
 
       
-  type t = {table: Priority.t array
+  type t = {posTable: Priority.t array
+           ;negTable: Priority.t array
+           ;table: Priority.t array
            ;internalQueue: InternalQueue.t
            }
 
@@ -241,16 +248,36 @@ end  = struct
       let p = priority.Priority.lavel in
       let priority' =  table.(G.int_of_pLavel p) in
       if priority = priority' then
-        Some (p, priority)      (* table はpopされた時のものに保たれる *)
+        Some (p, priority.pol, priority)      (* table はpopされた時のものに保たれる *)
       else                        (* updated old element *)
         pop queue
 
 
-  let push {table = table; internalQueue = internal_queue} p priority = 
-    table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
-    InternalQueue.push internal_queue priority
+  let push_pos {posTable = pos_table
+               ;negTable = neg_table
+               ;table = table
+               ;internalQueue = internal_queue} p priority = 
+    pos_table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
+    if priority < neg_table.(G.int_of_pLavel p) then
+      (table.(G.int_of_pLavel p) <- priority;
+       InternalQueue.push internal_queue priority)
+    else
+      ()
 
-  let update = push
+  let push_neg {posTable = pos_table
+               ;negTable = neg_table
+               ;table = table
+               ;internalQueue = internal_queue} p priority = 
+    neg_table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
+    if priority < pos_table.(G.int_of_pLavel p) then
+      (table.(G.int_of_pLavel p) <- priority;
+       InternalQueue.push internal_queue priority)
+    else
+      ()    
+
+  let update_pos = push_pos
+
+  let update_neg = push_neg
       
       
 end
@@ -447,11 +474,6 @@ sig
  type fixRatio = {fixable: int ref ; unfixable: int ref }
 
 
- (* !isFIx = trueの時、他のレコードは無意味な値 *)
- type pInfo = {posRatio: fixRatio
-              ;negRatio: fixRatio
-               }               
-
   type t 
 
          (* val decr_pos_unfix: t -> G.pLavel -> unit *)
@@ -475,13 +497,31 @@ end= struct
       PredicateFixableLevel.zero
     
 
-  (* !isFIx = trueの時、他のレコードは無意味な値 *)
-  type pInfo ={posRatio: fixRatio
-              ;negRatio: fixRatio
-              }               
-
           
-  type t =  pInfo array
+  type t = {posRatio: fixRatio array
+           ;negRatio: fixRatio array
+           }               
+
+  (* 要求:
+     pはfixedではない、
+     unficable > 0 *)
+  let add_fixable t p pol (calc_othere_p:unit -> int PMap.t)  ~may_change:(pfix_state, queue) =
+    if pol = Polarity.pos then
+      let fix_ratio = t.posRatio.(G.int_of_pLavel p) in
+      let unfixable = fix_ratio.unfixable in
+      let fixable = fi_ratio.fixable in
+      (decr unfixable);
+      (incr fixable);
+      if !unfixable = 0 then
+        let map = calc_othere_p () in
+        let () = PFixState.pos_update2allfixable pfix_state p map in
+        PriorityQueue.update queue p (PFixState.calc_priority pfix_state fixable
+      else 
+        priorityqueでposとnegのminをとるのがよくね
+        
+        
+      
+    
 
          
 
