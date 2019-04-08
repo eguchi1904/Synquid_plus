@@ -574,7 +574,8 @@ sig
 
          (* val decr_neg_unfix: t -> G.pLavel -> unit *)
      
-
+  val add_fixable: t -> G.pLavel -> Polarity.t -> (unit -> int PMap.t) ->
+      may_change:(PFixState.t * PriorityQueue.t) -> unit
     
 end= struct
   
@@ -682,7 +683,15 @@ module Fixability = struct
     |UpBound of {localEnv: Liq.env
                 ;vars: S.t
                 ;require: (Liq.env * Formula.t) (* no unknown p in bound *)
-                }               
+                }
+
+  let unknown_in_localEnv assign = function
+    |LowBound {localEnv = local_env} |UpBound {localEnv = local_env} ->
+      S.filter
+        (fun x ->not (M.mem x assign))
+        (Liq.env_extract_unknown_p local_env)
+
+      
 
   let predicate_polarity_of_bound = function
     |LowBound _ -> Polarity.pos
@@ -894,6 +903,17 @@ module Fixability = struct
            |Fixable of (Polarity.t * bound)
 
 
+  let count_othere_p t graph assign =
+    match t with
+    |Bound rc ->
+      S.fold
+        (fun p acc ->
+          PMap.add (G.pLavel_of_id graph p) 1 acc) (* とりあえずここは今の所不正確 *)
+        (unknown_in_localEnv assign rc.bound)
+        PMap.empty
+    | _ -> invalid_arg "count_othere_p: not bounded"
+         
+                     
   let upgrade_unbound assign p_env = function
     |UnBound {waitNum = n
              ;senv = senv
@@ -968,14 +988,33 @@ end
 
 module FixabilityManager = struct
   
-  exception Cons_pred_mismatch
+  exception Cons_pred_mismatch of string
           
   type t = {table: ((G.pLavel * G.cLavel), Fixability.t Stack.t) Hashtbl.t
            ;affect: ((G.pLavel * G.cLavel), G.pLavel list) Hashtbl.t }
   (* (p,c) ->q,q',...
      pがfixした時に,constraint cでpを待っているpredicate
    *)
+  let count_other_unknown_from_cs t graph assign cfix_state p cs = 
+      List.fold_left
+        (fun acc_map c ->
+          if CFixState.is_fixed cfix_state c then
+            acc_map
+          else
+            let fixability = Stack.top (Hashtbl.find t.table (p, c)) in
+            let pmap = Fixability.count_othere_p fixability graph assign in
+            PMap.union (fun q i i' -> Some (i+i')) pmap acc_map)
+        PMap.empty
+        cs
 
+    
+  let count_other_unknown t graph assign cfix_state pol p =
+    if pol = Polarity.pos then
+      count_other_unknown_from_cs t graph assign cfix_state p (G.pos_cs graph p)
+    else
+      count_other_unknown_from_cs t graph assign cfix_state p (G.neg_cs graph p)
+    
+    
   let add_affect affect p c q =
     match Hashtbl.find_opt affect (p,c) with
     |Some l -> Hashtbl.replace affect (p,c) (q::l)
@@ -987,7 +1026,7 @@ module FixabilityManager = struct
       wait_ps
     
          
-  let decr_wait_num t assign graph q c 
+  let decr_wait_num t assign graph cfix_state q c 
                     ~may_change:(pfixable_counter, pfix_state, queue) =
     let fixability_stack = Hashtbl.find t.table (q,c) in
     let fixability = Stack.top fixability_stack in
@@ -995,9 +1034,12 @@ module FixabilityManager = struct
     |Some (new_fixability, new_wait_ps) ->
       (Stack.push new_fixability fixability_stack);
       (update_affect t q c new_wait_ps);
+      (* (q c)がFixableになった時の処理 *)
       (match new_fixability with
        |Fixability.Fixable (pol,_) ->
-         PFixableConstraintCounter.add_fixable pfixable_counter q pol
+         let calc = (fun () -> count_other_unknown t graph assign cfix_state pol q) in
+         (* qがallfixableになったら、calcを呼び出してothereUnknownの数 を集計する *)
+         PFixableConstraintCounter.add_fixable pfixable_counter q pol calc
                                                ~may_change:(pfix_state, queue)
        |_ -> ())
     |None -> ()
