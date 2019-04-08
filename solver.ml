@@ -654,6 +654,10 @@ module CFixState = struct
 
   let is_fixed t c = t.isFix.(G.int_of_cLavel c)
 
+  let fix t p c  = 
+    (t.isFix.(G.int_of_cLavel c) <- true)
+    
+
 
 
 end
@@ -696,6 +700,7 @@ module Fixability = struct
   let predicate_polarity_of_bound = function
     |LowBound _ -> Polarity.pos
     |UpBound _ -> Polarity.neg
+                
 
   let extract_necessary_predicate senv unknown env =
     Liq.env_fold
@@ -755,6 +760,7 @@ module Fixability = struct
     |Some _ -> assert false     (* popの条件から *)
     |None -> acc_sita, eq_list
 
+           
   let mk_fresing_subst senv sita =
     M.fold
       (fun x e acc ->
@@ -982,6 +988,9 @@ module Fixability = struct
       else
         None
 
+  let is_fixable = function
+    |Fixable _ -> true
+    | _ -> false
   
 end
 
@@ -992,9 +1001,15 @@ module FixabilityManager = struct
           
   type t = {table: ((G.pLavel * G.cLavel), Fixability.t Stack.t) Hashtbl.t
            ;affect: ((G.pLavel * G.cLavel), G.pLavel list) Hashtbl.t }
+
+  let is_fixable t p c =
+    let stack = Hashtbl.find t.table (p,c) in
+    Fixability.is_fixable (Stack.top stack )
+
   (* (p,c) ->q,q',...
      pがfixした時に,constraint cでpを待っているpredicate
    *)
+
   let count_other_unknown_from_cs t graph assign cfix_state p cs = 
       List.fold_left
         (fun acc_map c ->
@@ -1045,33 +1060,60 @@ module FixabilityManager = struct
     |None -> ()
            
 
-  let tell_constraint_predicate_is_fixed t graph assign p c
+  let tell_constraint_predicate_is_fixed t graph assign cfix_state p c
                                          ~may_change:(pfixable_counter, pfix_state, queue) =
     List.iter
-      (fun q -> decr_wait_num t graph assign q c
+      (fun q -> decr_wait_num t assign graph cfix_state q c 
                               ~may_change:(pfixable_counter, pfix_state, queue)
       )
       (List.filter (PFixState.isnt_fixed pfix_state) (Hashtbl.find t.affect (p,c)) )
 
 
+  let tell_predicate_constraint_is_fixed t c q pol
+                                         ~may_change:(pfixable_counter, pfix_state, queue) =
+    if is_fixable t q c then
+      PFixableConstraintCounter.remove_fixable pfixable_counter q pol
+                                               ~may_change:(pfix_state, queue)
+    else
+      PFixableConstraintCounter.remove_unfixable pfixable_counter q pol
+                                                 ~may_change:(pfix_state, queue)
+
+
+  let tell_related_predicate_constraint_is_fixed t graph p c
+                                                 ~may_change:(pfixable_counter, pfix_state, queue) =
+    let c_pos_p = (G.pos_p graph c) in
+    let () =
+      if PFixState.isnt_fixed pfix_state c_pos_p then
+        tell_predicate_constraint_is_fixed t c c_pos_p
+                                           ~may_change:(pfixable_counter, pfix_state, queue)
+      else ()
+    in
+    let unfixed_neg_p = (List.filter (PFixState.isnt_fixed pfix_state) (G.neg_ps graph c)) in
+  List.iter
+    (fun q -> tell_predicate_constraint_is_fixed t c q
+                                                 ~may_change:(pfixable_counter, pfix_state, queue))
+    unfixed_neg_p
+            
+            
+  
+          
+    
 
   let try_to_fix t assign p c =
     let fixability_stack = Hashtbl.find t.table (p, c) in
-    Fixablility.try_to_fix assign (Stack.top fixability_stack)
+    Fixability.try_to_fix assign (Stack.top fixability_stack)
          
     (*  pがfixしたことをcsに電波, csはunfix *)
     let fix t graph assign p priority
             ~may_change:(cfix_state, pfix_state, pfixable_counter, queue) =
       if priority.Priority.pol = Polarity.pos then
+        let unfixed_cs = List.filter (CFixState.is_fixed cfix_state) (G.pos_cs graph p) in
         List.fold_left
           (fun acc c ->
-            if CFixState.is_fixed cfix_state c then
-              acc               (* do nothing *)
-            else
-              (match try_to_fix t assign p c with
-               |Some qformula ->
-                 let () = CFixState.fix cfix_state p c
-                                        ~may_change:(pfixable_counter, queue)
+            (match try_to_fix t assign p c with
+             |Some qformula ->
+               let () = CFixState.fix cfix_state p c graph
+                                      ~may_change:(pfixable_counter, queue)
                  in
                  (c, qformula)::acc
                |None ->         (* (p,c) unfixable  *)
