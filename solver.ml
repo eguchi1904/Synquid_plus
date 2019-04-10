@@ -638,7 +638,13 @@ sig
          (* val decr_neg_unfix: t -> G.pLavel -> unit *)
      
   val unfixable2fixable: t -> G.pLavel -> Polarity.t -> (unit -> int PMap.t) ->
-      may_change:(PFixState.t * PriorityQueue.t) -> unit
+                         may_change:(PFixState.t * PriorityQueue.t) -> unit
+
+  val remove_fixable: t -> G.pLavel -> Polarity.t -> (unit -> int PMap.t) ->
+                      may_change:PFixState.t * PriorityQueue.t -> unit
+
+  val remove_unfixable: t -> G.pLavel -> Polarity.t -> (unit -> int PMap.t) ->
+                         may_change:PFixState.t * PriorityQueue.t -> unit
     
 end= struct
   
@@ -703,7 +709,7 @@ end= struct
 
 
   (* fixable--; unfixalbe (unchange)  *)
-  let remove_fixable t p pol (calc_othere_p:unit -> int PMap.t)
+  let remove_fixable t p pol (calc_removing_othere_p:unit -> int PMap.t)
                      ~may_change:(pfix_state, queue) =
     if pol = Polarity.pos then
       let fix_ratio = t.posRatio.(G.int_of_pLavel p) in
@@ -712,7 +718,7 @@ end= struct
       (assert (!fixable > 0));
       (decr fixable);
       if !unfixable = 0 then    (* allfixable -> allfixabl *)
-        let map = calc_othere_p () in
+        let map = calc_removing_othere_p () in
         PFixState.pos_decr_othere_p_form_allfixable pfix_state p map ~change:queue
       else if !fixable = 0 then (* unfixable > 0: * -> zero fixable *)
         PFixState.pos_update pfix_state p PredicateFixableLevel.zero ~change:queue
@@ -725,14 +731,40 @@ end= struct
       (assert (!fixable > 0));
       (decr fixable);
       if !unfixable = 0 then    (* allfixable -> allfixabl *)
-        let map = calc_othere_p () in
+        let map = calc_removing_othere_p () in
         PFixState.neg_decr_othere_p_form_allfixable pfix_state p map ~change:queue
       else if !fixable = 0 then (* unfixable > 0: * -> zero fixable *)
         PFixState.neg_update pfix_state p PredicateFixableLevel.zero ~change:queue
       else  (* unfixable > 0 && fixable > 0: partial -> partial *)
+        ()
+
+      
+  (* unfixable-- *)
+  let remove_unfixable t p pol (calc_othere_p:unit -> int PMap.t)
+                     ~may_change:(pfix_state, queue) =
+    if pol = Polarity.pos then
+      let fix_ratio = t.posRatio.(G.int_of_pLavel p) in
+      let unfixable = fix_ratio.unfixable in
+      let fixable = fix_ratio.fixable in
+      (assert (!unfixable > 0));
+      (decr unfixable);
+      if !unfixable = 0 then    (* (partial| zero) -> allfixable *)
+        let map = calc_othere_p () in
+        PFixState.pos_update2allfixable pfix_state p map !fixable ~change:queue
+      else                      (* partial -> partila or zero -> zero  *)
+        ()
+    else
+      let fix_ratio = t.negRatio.(G.int_of_pLavel p) in
+      let unfixable = fix_ratio.unfixable in
+      let fixable = fix_ratio.fixable in
+      (assert (!unfixable > 0));
+      (decr unfixable);
+      if !unfixable = 0 then    (* (partial| zero) -> allfixable *)
+        let map = calc_othere_p () in
+        PFixState.neg_update2allfixable pfix_state p map !fixable ~change:queue
+      else                      (* partial -> partila or zero -> zero  *)
         ()      
-
-
+      
 end
 
    
@@ -1108,24 +1140,31 @@ module FixabilityManager = struct
      pがfixした時に,constraint cでpを待っているpredicate
    *)
 
-  let count_other_unknown_from_cs t graph assign cfix_state p cs = 
+  (* p,c must be fixable *)
+  let count_other_unknown_in_c t graph assign p c =
+    let fixability =  Stack.top (Hashtbl.find t.table (p, c)) in
+     Fixability.count_othere_p fixability graph assign
+    
+
+  let count_other_unknown_in_cs t graph assign p cs = 
       List.fold_left
         (fun acc_map c ->
-          if CFixState.is_fixed cfix_state c then
-            acc_map
-          else
-            let fixability = Stack.top (Hashtbl.find t.table (p, c)) in
-            let pmap = Fixability.count_othere_p fixability graph assign in
-            PMap.union (fun q i i' -> Some (i+i')) pmap acc_map)
+          let pmap = count_other_unknown_in_c t graph assign p c in
+          PMap.union (fun q i i' -> Some (i+i')) pmap acc_map)
         PMap.empty
         cs
 
     
-  let count_other_unknown t graph assign cfix_state pol p =
+  let count_other_unknown_in_unfix_cs t graph assign cfix_state pol p =
     if pol = Polarity.pos then
-      count_other_unknown_from_cs t graph assign cfix_state p (G.pos_cs graph p)
+      (G.pos_cs graph p)
+      |> List.filter (fun c -> not (CFixState.is_fixed cfix_state c))
+      |> count_other_unknown_in_cs t graph assign  p
+
     else
-      count_other_unknown_from_cs t graph assign cfix_state p (G.neg_cs graph p)
+      (G.neg_cs graph p)
+      |> List.filter (fun c -> not (CFixState.is_fixed cfix_state c))
+      |> count_other_unknown_in_cs t graph assign  p      
     
     
   let add_affect affect p c q =
@@ -1150,7 +1189,9 @@ module FixabilityManager = struct
       (* (q c)がFixableになった時の処理 *)
       (match new_fixability with
        |Fixability.Fixable (pol,_) ->
-         let calc = (fun () -> count_other_unknown t graph assign cfix_state pol q) in
+         let calc = (fun () ->
+             count_other_unknown_in_unfix_cs t graph assign cfix_state pol q)
+         in
          (* qがallfixableになったら、calcを呼び出してothereUnknownの数 を集計する *)
          PFixableConstraintCounter.unfixable2fixable pfixable_counter q pol calc
                                                ~may_change:(pfix_state, queue)
@@ -1167,37 +1208,39 @@ module FixabilityManager = struct
       (List.filter (PFixState.isnt_fixed pfix_state) (Hashtbl.find t.affect (p,c)) )
 
 
+    
   let tell_predicate_constraint_is_fixed t graph assign cfix_state c q pol
                                          ~may_change:(pfixable_counter, pfix_state, queue) =
     if is_fixable t q c then
-      let pmap = count_other_unknown t assign graph cfix_state pol q in
-      PFixableConstraintCounter.remove_fixable pfixable_counter q pol
+      let gen_rm_pmap =(fun () -> count_other_unknown_in_c t graph assign q c) in
+      PFixableConstraintCounter.remove_fixable pfixable_counter q pol gen_rm_pmap
                                                ~may_change:(pfix_state, queue)
     else
-      PFixableConstraintCounter.remove_unfixable pfixable_counter q pol
+      let gen_pmap = (fun () -> count_other_unknown_in_unfix_cs
+                                  t graph assign cfix_state pol q)
+      in
+      PFixableConstraintCounter.remove_unfixable pfixable_counter q pol gen_pmap
                                                  ~may_change:(pfix_state, queue)
 
 
-  let tell_related_predicate_constraint_is_fixed t graph p c
+  (* この時点でcfix_stateは最新のものになっている必要がある *)
+  let tell_related_predicate_constraint_is_fixed t graph assign p c cfix_state
                                                  ~may_change:(pfixable_counter, pfix_state, queue) =
     let c_pos_p = (G.pos_p graph c) in
     let () =
       if PFixState.isnt_fixed pfix_state c_pos_p then
-        tell_predicate_constraint_is_fixed t c c_pos_p
+        tell_predicate_constraint_is_fixed t graph assign cfix_state c c_pos_p Polarity.pos
                                            ~may_change:(pfixable_counter, pfix_state, queue)
       else ()
     in
     let unfixed_neg_p = (List.filter (PFixState.isnt_fixed pfix_state) (G.neg_ps graph c)) in
   List.iter
-    (fun q -> tell_predicate_constraint_is_fixed t c q
+    (fun q -> tell_predicate_constraint_is_fixed t graph assign cfix_state c q Polarity.neg
                                                  ~may_change:(pfixable_counter, pfix_state, queue))
     unfixed_neg_p
             
             
   
-          
-    
-
   let try_to_fix t assign p c =
     let fixability_stack = Hashtbl.find t.table (p, c) in
     Fixability.try_to_fix assign (Stack.top fixability_stack)
