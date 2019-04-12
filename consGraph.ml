@@ -31,7 +31,11 @@ sig
            }
 
   val pLavel_of_id: t -> Id.t -> pLavel
-    
+
+  val id_of_pLavel: t -> pLavel -> Id.t
+
+  val cons_of_cLavel: t -> cLavel -> Constraint.simple_cons
+
   val pos_p: t -> cLavel -> pLavel
 
   val neg_ps: t -> cLavel ->pLavel list
@@ -74,6 +78,14 @@ end = struct
   let pLavel_of_id t id =
     try Hashtbl.find t.pIdHash id with
       Not_found -> invalid_arg "pLavel_of_id: invalid id"
+
+  let id_of_pLavel t p =
+    try t.pTable.(p).value with
+      _ ->  invalid_arg "invalid lavel"
+
+  let cons_of_cLavel t c =
+    try t.cTable.(c).value with
+      _ -> invalid_arg "invalid lavel"
          
   let pos_p graph c_lav =
     graph.cTable.(c_lav).pos

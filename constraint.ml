@@ -162,10 +162,11 @@ let unknown_p_in_simple_cons = function
                          
 let replace_unknown_p_to_top scons =
   let p_in_scons = unknown_p_in_simple_cons scons in
-  let sita = S.fold
-               (fun p sita -> M.add p (Formula.Bool true) sita)
-               p_in_scons
-               M.empty
+  let sita =
+    S.fold
+      (fun p sita -> M.add p (Formula.Bool true) sita)
+      p_in_scons
+      M.empty
   in
   subst_simple_cons sita scons
     
