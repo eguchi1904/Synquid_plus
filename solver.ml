@@ -1270,7 +1270,7 @@ module FixabilityManager = struct
        ~may_change:(pfixable_counter, pfix_state, queue))
     new_fixed_cs
 
-  let propageta_p_fixed_info t graph assign cfix_state p remain_unfix_cs
+  let propagate_p_fixed_info t graph assign cfix_state p remain_unfix_cs
                              ~may_change:(pfixable_counter, pfix_state, queue) = 
         List.iter
             (tell_constraint_predicate_is_fixed
@@ -1303,7 +1303,7 @@ module FixabilityManager = struct
                    ~may_change:(pfixable_counter, pfix_state, queue)
 
         in
-        let () = propageta_p_fixed_info
+        let () = propagate_p_fixed_info
                    t graph assign cfix_state p remain_unfix_cs
                    ~may_change:(pfixable_counter, pfix_state, queue) 
         in
@@ -1327,7 +1327,7 @@ module FixabilityManager = struct
                    t graph assign cfix_state p new_fixed_cs
                    ~may_change:(pfixable_counter, pfix_state, queue)
         in
-        let () = propageta_p_fixed_info
+        let () = propagate_p_fixed_info
                    t graph assign cfix_state p remain_unfix_cs
                    ~may_change:(pfixable_counter, pfix_state, queue)           
         in
