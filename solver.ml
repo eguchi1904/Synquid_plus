@@ -1226,16 +1226,17 @@ module FixabilityManager = struct
 
 
   (* この時点でcfix_stateは最新のものになっている必要がある *)
-  let tell_related_predicate_constraint_is_fixed t graph assign cfix_state c 
+  let tell_related_predicate_constraint_is_fixed t graph assign cfix_state p c 
                                                  ~may_change:(pfixable_counter, pfix_state, queue) =
+    let isnt_fix q = (PFixState.isnt_fixed pfix_state q || q = p) in
     let c_pos_p = (G.pos_p graph c) in
     let () =
-      if PFixState.isnt_fixed pfix_state c_pos_p then
+      if isnt_fix c_pos_p then
         tell_predicate_constraint_is_fixed t graph assign cfix_state c c_pos_p Polarity.pos
                                            ~may_change:(pfixable_counter, pfix_state, queue)
       else ()
     in
-    let unfixed_neg_p = (List.filter (PFixState.isnt_fixed pfix_state) (G.neg_ps graph c)) in
+    let unfixed_neg_p = (List.filter isnt_fix (G.neg_ps graph c)) in
   List.iter
     (fun q -> tell_predicate_constraint_is_fixed t graph assign cfix_state c q Polarity.neg
                                                  ~may_change:(pfixable_counter, pfix_state, queue))
@@ -1261,11 +1262,11 @@ module FixabilityManager = struct
       []
     cs
 
-  let propagate_c_fixed_info t graph assign cfix_state new_fixed_cs
+  let propagate_c_fixed_info t graph assign cfix_state p new_fixed_cs
                              ~may_change:(pfixable_counter, pfix_state, queue) = 
     List.iter     
     (tell_related_predicate_constraint_is_fixed
-       t graph assign cfix_state
+       t graph assign cfix_state p 
        ~may_change:(pfixable_counter, pfix_state, queue))
     new_fixed_cs
 
@@ -1297,8 +1298,8 @@ module FixabilityManager = struct
                                 unfixed_neg_cs
                                 unfixed_pos_cs
         in
-        let () = propagate_c_fixed_info
-                   t graph assign cfix_state new_fixed_cs
+        let () = propagate_c_fixed_info (* pをfixとつけていないという問題 *)
+                   t graph assign cfix_state p new_fixed_cs
                    ~may_change:(pfixable_counter, pfix_state, queue)
 
         in
@@ -1323,7 +1324,7 @@ module FixabilityManager = struct
         in
                                     
         let () = propagate_c_fixed_info
-                   t graph assign cfix_state new_fixed_cs
+                   t graph assign cfix_state p new_fixed_cs
                    ~may_change:(pfixable_counter, pfix_state, queue)
         in
         let () = propageta_p_fixed_info
@@ -1362,6 +1363,10 @@ end = struct
     match PriorityQueue.pop t.queue with
     |None -> None
     |Some (p, pol, priority) ->
+      (* この順序は怪しいかもな *)
+      let () = PFixState.fix t.pFixState p
+                             ~may_change:t.queue
+      in
       let sol = FixabilityManager.fix t.fixabilityManager
                                       graph assign p priority
                                       ~may_change:(t.cFixState,
