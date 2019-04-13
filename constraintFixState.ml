@@ -29,7 +29,7 @@ let fix t c =
 let is_zero_unknown t c =
   t.unknown_p_count.(G.int_of_cLavel c) = 0
 
-let is_only_upp_P t c =
+let is_only_upp_p t c =
   t.unknown_p_count.(G.int_of_cLavel c)  =
     t.unknown_up_p_count.(G.int_of_cLavel c)
   

@@ -92,13 +92,21 @@ end
 module DyState:
 sig
 
-  type t
+  type t = {fixabilityManager: FixabilityManager.t
+           ;cFixState: CFixState.t
+           ;pFixableCounter: PFixableConstraintCounter.t
+           ;pFixState: PFixState.t
+           ;queue: PriorityQueue.t
+           }
+
      
          (* val fix_constraint: t -> G.t -> G.pLavel -> G.cLavel -> unit *)
 
   val next: t -> G.t -> Formula.t M.t ->
             (G.pLavel * Polarity.t * (G.cLavel * Formula.qformula) list) option
-
+    
+  val add_fix_c: t -> G.t ->
+                 'a M.t -> G.pLavel -> G.cLavel -> unit
 end =  struct
 
   type t = {fixabilityManager: FixabilityManager.t
@@ -144,19 +152,56 @@ end =  struct
       
 end
 
-let check_validity assign cfix_state c_lavel c =
+type validityLevel =
+  |Valid
+  |UnValid
+  |Sat
+  |UnSat
+  |YetJudge
+  
+let check_validity graph assign state p c_lavel   =
+  let cfix_state = state.DyState.cFixState in
   if CFixState.is_zero_unknown cfix_state c_lavel then
-    let ok = Constraint.subst_simple_cons assign c
-             |>Constraint.is_valid_simple_cons_all
-    in
+    begin
+      let is_valid = G.cons_of_cLavel graph c_lavel
+               |> Constraint.subst_simple_cons assign 
+               |>Constraint.is_valid_simple_cons_all
+      in
+      if is_valid then
+        DyState.add_fix_c state graph assign p c_lavel
+      else
+        invalid_arg "not implimented yet" (* refineする *)
+    end
+  else if CFixState.is_only_upp_p cfix_state c_lavel then
+    begin
+      let is_sat = G.cons_of_cLavel graph c_lavel
+               |>Constraint.subst_simple_cons assign 
+               |>Constraint.replace_unknown_p_to_top (* ここでupp pを排除する *)
+               |>Constraint.is_satisifiable_simple_cons_all
+      in
+      if is_sat then
+        ()
+      else
+        invalid_arg "not implimented yet" (* refineする *)
+    end
+  else
+    ()
+    
     
     
      
-let check_validity_around_p graph assign cfix_state p =
-  
-  
+let check_validity_around_p graph assign p ~may_change:state =
+  let () = List.iter
+             (check_validity graph assign state p)
+             (G.pos_cs graph p)
+  in
+  let () = List.iter
+             (check_validity graph assign state p)
+             (G.neg_cs graph p)
+  in
+  ()
 
-
+  
 let rec iter_fix graph state qualify assign = (* stateは外に置きたいほんとは *)
   match DyState.next state graph assign with
   |Some (p, pol, sol) ->
@@ -175,6 +220,7 @@ let rec iter_fix graph state qualify assign = (* stateは外に置きたいほ�
     let p_assign = Formula.And (qualify_phi, qe_sol) in
     let assign' = M.add (G.id_of_pLavel graph p) p_assign assign in
     (* ここでvalidity等を検査すべき *)
+    let () = check_validity_around_p graph assign' p ~may_change:state  in
     iter_fix graph state qualify assign'
   |None -> assign
     
