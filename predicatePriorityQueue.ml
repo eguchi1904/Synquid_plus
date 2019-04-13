@@ -86,7 +86,8 @@ end  = struct
   end
 
       
-  type t = {posTable: Priority.t array
+  type t = {isUpp: bool array   (* neg fixのみのもの *)
+           ;posTable: Priority.t array
            ;negTable: Priority.t array
            ;table: Priority.t array
            ;internalQueue: InternalQueue.t
@@ -105,27 +106,43 @@ end  = struct
         pop queue
 
 
-  let push_pos {posTable = pos_table
+  let push_pos {isUpp = is_upp
+               ;posTable = pos_table
                ;negTable = neg_table
                ;table = table
-               ;internalQueue = internal_queue} p priority = 
-    pos_table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
-    if priority < neg_table.(G.int_of_pLavel p) then
-      (table.(G.int_of_pLavel p) <- priority;
-       InternalQueue.push internal_queue priority)
-    else
+               ;internalQueue = internal_queue} p priority =
+    if is_upp.(G.int_of_pLavel p) then
       ()
+    else
+      begin
+        pos_table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
+        if priority < neg_table.(G.int_of_pLavel p) then
+          (table.(G.int_of_pLavel p) <- priority;
+           InternalQueue.push internal_queue priority)
+        else
+          ()
+      end
 
-  let push_neg {posTable = pos_table
+  let push_neg {isUpp = is_upp
+               ;posTable = pos_table
                ;negTable = neg_table
                ;table = table
-               ;internalQueue = internal_queue} p priority = 
-    neg_table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
-    if priority < pos_table.(G.int_of_pLavel p) then
-      (table.(G.int_of_pLavel p) <- priority;
-       InternalQueue.push internal_queue priority)
+               ;internalQueue = internal_queue} p priority =
+    if is_upp.(G.int_of_pLavel p) then
+      begin
+        table.(G.int_of_pLavel p) <- priority;
+        InternalQueue.push internal_queue priority
+      end
     else
-      ()    
+      begin
+        neg_table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
+        if priority < pos_table.(G.int_of_pLavel p) then
+          (table.(G.int_of_pLavel p) <- priority;
+           InternalQueue.push internal_queue priority)
+        else
+          ()
+      end
+    
 
   let update_pos = push_pos
 

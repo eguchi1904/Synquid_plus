@@ -2,7 +2,7 @@ open Extensions
 open Constraint
 
 
-(* 雑に分割したので、moduleのopenが汚いな *)
+(* 雑に分割したので、moduleのopenが汚い *)
 module Liq = Type
 module G = ConsGraph.G
 module PMap = ConsGraph.PMap
