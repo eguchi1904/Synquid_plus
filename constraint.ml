@@ -113,8 +113,8 @@ let is_satisifiable_simple_cons_all = function
     let env_formula = Liq.env2formula_all env  in
     let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
     let z3_p,p_s = UseZ3.convert p in
-    let is_valid = UseZ3.is_valid z3_p in
-    is_valid
+    let is_sat = UseZ3.is_satisfiable z3_p in
+    is_sat
   |SWF (_, (senv, e)) ->
        let x_sort_list = Formula.fv_sort_include_v e in
        List.for_all (fun x_sort -> Formula.Senv.mem2 x_sort senv) x_sort_list
