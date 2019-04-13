@@ -88,7 +88,7 @@ let get t graph assign p cs =       (* csを満たすようなqualifierを返す
     
 
 end
-               
+                
 module DyState:
 sig
 
@@ -114,6 +114,7 @@ end =  struct
     match PriorityQueue.pop t.queue with
     |None -> None
     |Some (p, pol, priority) ->
+      
       let sol = FixabilityManager.fix t.fixabilityManager
                                       graph assign p priority
                                       ~may_change:(t.cFixState,
@@ -124,12 +125,36 @@ end =  struct
       (* Fixabilityに夜、fixstateの変化を反映した後に、fixをする *)
       let () = PFixState.fix t.pFixState p
                              ~may_change:t.queue
-      in      
+      in
+      let () = CFixState.prop_p_fix t.cFixState graph p
+      in
       Some (p, pol, sol)
+
+      
+  let add_fix_c t graph assign p c =
+    let () = CFixState.fix t.cFixState c in
+    FixabilityManager.tell_related_predicate_constraint_is_fixed
+      t.fixabilityManager graph assign t.cFixState p c
+      ~may_change:(t.pFixableCounter,
+                   t.pFixState,
+                   t.queue
+                  )
+
+    
       
 end
 
+let check_validity assign cfix_state c_lavel c =
+  if CFixState.is_zero_unknown cfix_state c_lavel then
+    let ok = Constraint.subst_simple_cons assign c
+             |>Constraint.is_valid_simple_cons_all
+    in
     
+    
+     
+let check_validity_around_p graph assign cfix_state p =
+  
+  
 
 
 let rec iter_fix graph state qualify assign = (* stateは外に置きたいほんとは *)

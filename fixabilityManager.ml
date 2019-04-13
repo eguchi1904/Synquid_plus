@@ -164,62 +164,61 @@ module CFixState = ConstraintFixState
 
       
     (*  pがfixしたことをcsに電波, csはunfix *)
-    let fix t graph assign p priority
-            ~may_change:(cfix_state, pfixable_counter, pfix_state, queue) =
-      let unfixed_pos_cs = List.filter (CFixState.isnt_fixed cfix_state) (G.pos_cs graph p) in
-      let unfixed_neg_cs =  List.filter (CFixState.isnt_fixed cfix_state) (G.pos_cs graph p) in
-      if priority.Priority.pol = Polarity.pos then
-        let solution_asc = gather_solution_from_cs t assign p unfixed_pos_cs
-                                                   ~change:cfix_state
-        in
-        let new_fixed_cs = List.map fst solution_asc in
-        let remain_unfix_cs = List.fold_left
-                                (fun acc c ->
-                                  if CFixState.isnt_fixed cfix_state c then
-                                    c::acc
-                                  else
-                                    acc)
-                                unfixed_neg_cs
-                                unfixed_pos_cs
-        in
-        let () = propagate_c_fixed_info (* pをfixとつけていないという問題 *)
-                   t graph assign cfix_state p new_fixed_cs
-                   ~may_change:(pfixable_counter, pfix_state, queue)
-
-        in
-        let () = propagate_p_fixed_info
-                   t graph assign cfix_state p remain_unfix_cs
-                   ~may_change:(pfixable_counter, pfix_state, queue) 
-        in
-        solution_asc
-      else
-        let solution_asc = gather_solution_from_cs t assign p unfixed_neg_cs
-                                                   ~change:cfix_state
-        in
-        let new_fixed_cs = List.map fst solution_asc in
-        let remain_unfix_cs = List.fold_left
-                                (fun acc c ->
-                                  if CFixState.isnt_fixed cfix_state c then
-                                    c::acc
-                                  else
-                                    acc)
-                                unfixed_pos_cs
-                                unfixed_neg_cs
-        in
-                                    
-        let () = propagate_c_fixed_info
-                   t graph assign cfix_state p new_fixed_cs
-                   ~may_change:(pfixable_counter, pfix_state, queue)
-        in
-        let () = propagate_p_fixed_info
-                   t graph assign cfix_state p remain_unfix_cs
+  let fix t graph assign p priority
+          ~may_change:(cfix_state, pfixable_counter, pfix_state, queue) =
+    let unfixed_pos_cs = List.filter (CFixState.isnt_fixed cfix_state) (G.pos_cs graph p) in
+    let unfixed_neg_cs =  List.filter (CFixState.isnt_fixed cfix_state) (G.pos_cs graph p) in
+    if priority.Priority.pol = Polarity.pos then
+      let solution_asc = gather_solution_from_cs t assign p unfixed_pos_cs
+                                                 ~change:cfix_state
+      in
+      let new_fixed_cs = List.map fst solution_asc in
+      let remain_unfix_cs = List.fold_left
+                              (fun acc c ->
+                                if CFixState.isnt_fixed cfix_state c then
+                                  c::acc
+                                else
+                                  acc)
+                              unfixed_neg_cs
+                              unfixed_pos_cs
+      in
+      (* ここ、 *)
+      let () = propagate_c_fixed_info (* pをfixとつけていないという問題 *)
+                 t graph assign cfix_state p new_fixed_cs
+                 ~may_change:(pfixable_counter, pfix_state, queue)
+             
+      in
+      let () = propagate_p_fixed_info
+                 t graph assign cfix_state p remain_unfix_cs
+                 ~may_change:(pfixable_counter, pfix_state, queue) 
+      in
+      solution_asc
+    else
+      let solution_asc = gather_solution_from_cs t assign p unfixed_neg_cs
+                                                 ~change:cfix_state
+      in
+      let new_fixed_cs = List.map fst solution_asc in
+      let remain_unfix_cs = List.fold_left
+                              (fun acc c ->
+                                if CFixState.isnt_fixed cfix_state c then
+                                  c::acc
+                                else
+                                  acc)
+                              unfixed_pos_cs
+                              unfixed_neg_cs
+      in
+      
+      let () = propagate_c_fixed_info
+                 t graph assign cfix_state p new_fixed_cs
+                 ~may_change:(pfixable_counter, pfix_state, queue)
+      in
+      let () = propagate_p_fixed_info
+                 t graph assign cfix_state p remain_unfix_cs
                    ~may_change:(pfixable_counter, pfix_state, queue)           
-        in
-        solution_asc        
-        
-        
-     
-
-                          
-                  
+      in
+      solution_asc        
+      
+      
+      
    
+      

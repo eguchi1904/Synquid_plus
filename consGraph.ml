@@ -20,6 +20,7 @@ sig
 
   type pNode = {lavel:int
                ;value:Id.t
+               ;isUpp: bool
                ;env:Liq.env
                ;pos: cLavel list
                ;neg: cLavel list
@@ -46,6 +47,8 @@ sig
 
   val get_p_env: t -> pLavel -> Liq.env
 
+  val is_upp_p: t -> pLavel -> bool
+
     
 end = struct
          
@@ -65,6 +68,7 @@ end = struct
 
   type pNode = {lavel:int
                ;value:Id.t
+               ;isUpp: bool               
                ;env: Liq.env
                ;pos: cLavel list
                ;neg: pLavel list
@@ -101,6 +105,9 @@ end = struct
 
   let get_p_env graph p =
     graph.pTable.(p).env
+
+  let is_upp_p t p =
+    t.pTable.(p).isUpp
 
 end
 
