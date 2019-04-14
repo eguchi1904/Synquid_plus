@@ -7,7 +7,10 @@ type cons = |WF of (Liq.env * Liq.t)
 
 (* synquidの型systemではunknown predicate が入ると、envからformulaの抽出の仕方が定まらないので、
 simple_consでも、type envを持つ必要がある *)
-type simple_cons = |SWF of Liq.env * (Formula.Senv.t * Formula.t) 
+                  
+type simple_cons =
+  (* SWF:: env,senv|-phi, envは、制約生成時の型環境。 *)
+  |SWF of Liq.env * (Formula.Senv.t * Formula.t) 
                    |SSub of (Liq.env * Formula.t * Formula.t)
                           
 
