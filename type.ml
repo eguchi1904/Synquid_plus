@@ -247,6 +247,24 @@ let env_fold f_b f_p env seed =
     seed
     env
 
+let env_pop (env:env) =
+  match env with
+  |x::xs -> xs
+  |[] -> []
+  
+let env_fold_trace f_b f_p env seed =
+  let acc, env = List.fold_left
+                   (fun (acc, trace) -> function
+                     |B x_sch -> (f_b trace x_sch acc, env_pop trace)
+                     |P p -> (f_p trace p acc, env_pop trace))
+                   (seed, env_pop env)
+                   env
+  in
+  (assert( env = []));
+  acc
+
+let env_rev  = List.rev
+
   
 let env_suffix (env1:env) (env2:env) =
   List.suffix env1 env2

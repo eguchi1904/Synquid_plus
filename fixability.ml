@@ -346,4 +346,116 @@ let is_fixable = function
   | _ -> false
        
 
+module Constructor = struct
 
+  let mk_negative_unbound ~back_env ~front_env ~pos_formula ~unknown_set (senv, sort_sita, sita, p) = 
+    let position = Negative {backEnv = back_env
+                            ;frontEnv = front_env
+                            ;posFormula = pos_formula}
+    in
+    UnBound {waitNum = ref (S.cardinal unknown_set)
+                            ;senv = senv
+                            ;pendingSubst = sita
+                            ;pendingSortSubst = sort_sita
+                            ;position = position}
+            
+  let gen_fixability_neg_from_formula graph ~back_env ~rev_front_env ~pos_formula ~unknown_set phi =
+    if not (S.is_empty unknown_set) then (* unbounded *)    
+      List.fold_left
+        (fun acc_map -> function
+          |Formula.Unknown (senv, sort_sita, sita, p) ->
+            let front_env = Liq.env_rev rev_front_env in
+            let unbound =
+              mk_negative_unbound
+                back_env front_env pos_formula unknown_set (senv, sort_sita, sita, p)
+            in
+            M.add p (unbound, unknown_set) acc_map
+          | _ -> acc_map
+        )
+        M.empty
+        (Formula.list_and phi)
+    else                  (* bounded *)
+      List.fold_left
+        (fun acc_map -> function
+          |Formula.Unknown (senv, sort_sita, sita, p) ->
+            let front_env = Liq.env_rev rev_front_env in            
+            let unbound =
+              mk_negative_unbound
+              back_env front_env pos_formula unknown_set (senv, sort_sita, sita, p)
+            in          
+            let env = G.pLavel_of_id graph p |> G.get_p_env graph in
+            let bound, wait_pc = upgrade_unbound M.empty env unbound in
+            M.add p (bound, wait_pc) acc_map
+          |_ -> acc_map)
+        M.empty
+        (Formula.list_and phi)
+    
+          
+    
+    
+  
+  let gen_fixability_map_neg graph env ~pos_formula ~unknown_set =
+    Liq.env_fold_trace
+      (fun back_env (x, sch) (acc_map, rev_front_env, unknown_set) ->
+        match sch with
+        |([], [], Liq.TScalar (_, phi)) ->
+          (match Liq.schema2sort sch with
+           |Some x_sort ->
+             let x_var = Formula.Var (x_sort, x) in
+             let phi' = (Formula.substitution (M.singleton Id.valueVar_id x_var) phi) in (* [x/_v]phi *)
+             let map = gen_fixability_neg_from_formula
+                         graph back_env rev_front_env pos_formula unknown_set phi'
+             in
+             let acc_map' = M.union (fun p m1 m2 -> Some m1) acc_map  map in
+             let rev_front_env' = Liq.env_add_schema rev_front_env (x, sch) in
+             let unknown_set' = S.union unknown_set (Formula.extract_unknown_p phi) in
+             (acc_map', rev_front_env', unknown_set')
+           |None -> invalid_arg "gen_fixability_neg_from_formula"
+          )
+        | _ -> (acc_map, rev_front_env, unknown_set)
+      )
+      (fun back_env phi (acc_map, rev_front_env, unknown_set) ->
+        let map = gen_fixability_neg_from_formula
+                    graph back_env rev_front_env pos_formula unknown_set phi
+        in
+        let acc_map' = M.union (fun p m1 m2 -> Some m1) acc_map  map in
+        let rev_front_env' = Liq.env_add_F rev_front_env phi in
+        let unknown_set' = S.union unknown_set (Formula.extract_unknown_p phi) in
+        (acc_map', rev_front_env', unknown_set')
+      )
+      env
+      (M.empty, Liq.env_empty, unknown_set)
+          
+          (* ここでaddするときには、accにもともとあるか確かめ、あれば先の方を優先するようにする *)
+            
+        
+        
+
+    
+  let gen_fixability_map graph c =
+    match c with
+    |Constraint.SSub (env, e1, (Formula.Unknown(senv, sort_sita, sita, p) as e2)) ->
+      let unknown_set = Formula.extract_unknown_p e1 in
+      let position = Positive {env = env; negFormula = e1 } in
+      let unbound = UnBound {waitNum = ref (S.cardinal unknown_set)
+                            ;senv = senv
+                            ;pendingSubst = sita
+                            ;pendingSortSubst = sort_sita
+                              ;position = position }
+      in      
+      if not (S.is_empty unknown_set) then
+        let env_e1 = Liq.env_add_F Liq.env_empty e1 in
+        gen_fixability_map_neg graph env_e1
+                               ~pos_formula:e2
+                               ~unknown_set:unknown_set
+      else
+        let env = G.pLavel_of_id graph p |> G.get_p_env graph in
+        let bound, wait_pc = upgrade_unbound M.empty env unbound in
+        let env_e1 = Liq.env_add_F Liq.env_empty e1 in
+        gen_fixability_map_neg graph env_e1
+                               ~pos_formula:e2
+                               ~unknown_set:unknown_set        
+
+
+        
+end

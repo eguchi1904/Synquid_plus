@@ -52,6 +52,8 @@ val env_add_schema_list : env -> (Id.t * schema) list -> env
 val env_add_F : env -> Formula.t -> env
 val env_append : env -> env -> env
 val env_fold: ((Id.t * schema) -> 'a -> 'a) -> (Formula.t -> 'a -> 'a) ->  env -> 'a  -> 'a
+val env_fold_trace: (env -> (Id.t * schema) -> 'a -> 'a) ->
+                    (env -> Formula.t -> 'a -> 'a) ->  env -> 'a  -> 'a  
 (* investigation *)
 val env_find : env-> Id.t -> schema
 val env_mem : env -> Id.t -> bool
@@ -61,6 +63,7 @@ val env_extract_unknown_p : env -> S.t
 val env2formula : env -> S.t -> Formula.t
 val env2formula_all : env -> Formula.t
 val mk_sort_env : env -> Formula.Senv.t
+val env_rev : env -> env
 val env_suffix : env -> env -> env option
   
   
