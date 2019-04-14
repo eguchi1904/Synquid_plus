@@ -113,12 +113,13 @@ module CFixState = ConstraintFixState
   let tell_related_predicate_constraint_is_fixed t graph assign cfix_state p c 
                                                  ~may_change:(pfixable_counter, pfix_state, queue) =
     let isnt_fix q = (PFixState.isnt_fixed pfix_state q || q = p) in
-    let c_pos_p = (G.pos_p graph c) in
+    let unfixed_pos_p = (List.filter isnt_fix (G.pos_ps graph c)) in    
     let () =
-      if isnt_fix c_pos_p then
-        tell_predicate_constraint_is_fixed t graph assign cfix_state c c_pos_p Polarity.pos
-                                           ~may_change:(pfixable_counter, pfix_state, queue)
-      else ()
+      List.iter
+        (fun q ->
+          tell_predicate_constraint_is_fixed t graph assign cfix_state c q Polarity.pos
+                                             ~may_change:(pfixable_counter, pfix_state, queue))
+      unfixed_pos_p
     in
     let unfixed_neg_p = (List.filter isnt_fix (G.neg_ps graph c)) in
   List.iter
