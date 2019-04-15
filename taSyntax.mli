@@ -44,3 +44,5 @@ val replace_f: Id.t M.t  ->('a f) -> ('a f)
   
                
 val fv: 'a t -> S.t
+
+val get_auxi_anno: 'a t -> 'a M.t

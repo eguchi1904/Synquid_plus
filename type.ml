@@ -172,6 +172,8 @@ and sort2type_base = function
 
 (* type polymorphic predicate polymorphic *)
 let mk_mono_schmea t :schema = ([],[],t)
+
+let schema2ty ((_,_,t):schema) = t
 (* contextual type *)
 let rec schema2string ((ts,ps,t):schema) =
   match ps with

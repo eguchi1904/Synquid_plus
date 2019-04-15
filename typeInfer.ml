@@ -22,7 +22,7 @@ exception LiqErr of string
 let liqInfer z3_env dinfos qualifiers env ta_t =
   let st_infer = Sys.time () in
   (print_string (TaSyn.syn2string Ml.string_of_sch ta_t));
-  let tmp, cs = ConsGen.cons_gen_infer dinfos env ta_t in
+  let ta_t', tmp, cs = ConsGen.cons_gen_infer dinfos env ta_t in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs) in
@@ -39,7 +39,7 @@ let liqInfer z3_env dinfos qualifiers env ta_t =
 let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   let st_infer = Sys.time () in
   (print_string (TaSyn.syn2string Ml.string_of_sch ta_t));
-  let (_, cs) = cons_gen dinfos env ta_t req_ty in
+  let (ta_t', cs) = cons_gen dinfos env ta_t req_ty in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs) in
@@ -86,7 +86,7 @@ let f_check z3_env dinfos qualifiers env t (_,_,req_ty)=
   
 let liqInferEterm z3_env dinfos qualifiers env ta_e =
   (* (print_string (TaSyn.syn2string Ml.string_of_sch ta_t)); *)
-  let (Liq.TLet(cenv, tmp), cs) = cons_gen_e dinfos env ta_e in
+  let (ta_e', Liq.TLet(cenv, tmp), cs) = cons_gen_e dinfos env ta_e in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs) in

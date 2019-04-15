@@ -273,3 +273,63 @@ and replace_f env  =function
   
 
     
+
+  
+  
+let rec get_auxi_anno t = match t with
+  |PLet ((x, anno), t1, t2) ->
+    M.union
+      (fun g anno1 anno2 -> (assert (anno1 = anno2));Some anno1)
+      (get_auxi_anno t1)
+      (get_auxi_anno t2)
+  |PE e -> get_auxi_anno_e  e
+  |PI b -> get_auxi_anno_b  b
+  |PF fundec -> get_auxi_anno_f fundec
+  |PHole -> M.empty
+
+and get_auxi_anno_e  = function
+  |PSymbol (i, xs) -> M.empty
+  |PAuxi (i, anno) -> M.singleton i anno
+  |PInnerFun f_in -> get_auxi_anno_f f_in
+  |PAppFo (e1,e2) ->
+    M.union
+      (fun g anno1 anno2 -> (assert (anno1 = anno2));Some anno1)
+      (get_auxi_anno_e e1)
+      (get_auxi_anno_e e2)
+  |PAppHo (e1, fterm) ->
+    M.union
+      (fun g anno1 anno2 -> (assert (anno1 = anno2));Some anno1)
+      (get_auxi_anno_e e1)
+      (get_auxi_anno_f fterm)
+
+and get_auxi_anno_b  = function
+  |PIf (e,t1,t2) ->
+    M.union
+      (fun g anno1 anno2 -> (assert (anno1 = anno2));Some anno1)
+      (get_auxi_anno t1)
+      (get_auxi_anno t2)
+    |>
+      M.union
+        (fun g anno1 anno2 -> (assert (anno1 = anno2));Some anno1)
+        (get_auxi_anno_e e)   
+
+  |PMatch (e, cases) ->
+    List.fold_left
+      (fun acc case ->
+        M.union (fun g anno1 anno2 -> (assert (anno1 = anno2));Some anno1)
+                (get_auxi_anno_case case)
+                acc
+      )
+      (get_auxi_anno_e e)
+      cases
+   
+   
+and get_auxi_anno_f  = function
+  |PFun ((x, anno), t) ->
+    get_auxi_anno t
+  |PFix ((f_name, sch, inst_tys), body) ->
+    get_auxi_anno_f body
+
+and get_auxi_anno_case  {constructor = cons; argNames = xs; body = t} =
+  get_auxi_anno t
+

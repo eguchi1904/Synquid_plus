@@ -109,13 +109,13 @@ let rec cons_gen dinfos env t req_ty =
     let () = log_tmp x new_tmp_x in
     (* disable let polimorphism for predicate *)
     let env2 =  (Liq.env_add_schema env (x, new_tmp_x_sch)) in
-    let (_, c1) = cons_gen dinfos env2 t1 new_tmp_x in
+    let (t1', c1) = cons_gen dinfos env2 t1 new_tmp_x in
     (* let env2 =  (Liq.env_add env (x, tmp1)) in *)
-    let (_, c2) = cons_gen dinfos env2 t2 req_ty in
-    (req_ty, new_c@c1@c2)
+    let (t2', c2) = cons_gen dinfos env2 t2 req_ty in
+    (TaSyn.PLet ((x, new_tmp_x_sch), t1', t2'), new_c@c1@c2)
  |TaSyn.PLet ((x, (alist, ty)), t1, t2) ->
    let new_tmp_x = fresh  (Liq.mk_sort_env env) dinfos ty in
-   let (_, c1) = cons_gen dinfos env t1 new_tmp_x in
+   let (t1', c1) = cons_gen dinfos env t1 new_tmp_x in
     (* disable let polimorphism for predicate *)
    let new_tmp_x_sch = (alist, [], new_tmp_x) in
    let new_c =  [WF (env, new_tmp_x)] in
@@ -124,16 +124,20 @@ let rec cons_gen dinfos env t req_ty =
    let () = log_tmp x new_tmp_x in
    let env2 =  (Liq.env_add_schema env (x, new_tmp_x_sch )) in
     (* let env2 =  (Liq.env_add env (x, tmp1)) in *)
-   let (_, c2) = cons_gen dinfos env2 t2 req_ty in
-
-   (req_ty, new_c@c1@c2)    
+   let (t2', c2) = cons_gen dinfos env2 t2 req_ty in
+   (TaSyn.PLet ((x, new_tmp_x_sch), t1',t2'), new_c@c1@c2)
+   
  |TaSyn.PE e ->
-   let ((Liq.TLet (c_env, tmp_e)), c) = cons_gen_e dinfos env e in
+   let (e', (Liq.TLet (c_env, tmp_e)), c) = cons_gen_e dinfos env e in
    let new_c = [Sub ((Liq.env_append env c_env), tmp_e, req_ty)] in
    let () = log_cons "" new_c in
-   (req_ty, new_c@c )
-  |TaSyn.PI b -> cons_gen_b dinfos env b req_ty
-  |TaSyn.PF f -> cons_gen_f dinfos env f req_ty
+   (TaSyn.PE e', new_c@c )
+ |TaSyn.PI b ->
+   let b', c = cons_gen_b dinfos env b req_ty in
+   (TaSyn.PI b', c)
+ |TaSyn.PF f ->
+   let f', c = cons_gen_f dinfos env f req_ty in
+   (TaSyn.PF f', c)
   |TaSyn.PHole -> assert false
 
 and cons_gen_e dinfos env e =
@@ -141,9 +145,9 @@ and cons_gen_e dinfos env e =
   |TaSyn.PAppFo (e1, e2) ->
     (match cons_gen_e dinfos env e1 with
      (* e1 :: x:tmp_in -> tmp_out *)
-     |((Liq.TLet (c_env1, (Liq.TFun ((x, tmp_in), tmp_out) ) )), c1) ->
+     |e1', (Liq.TLet (c_env1, (Liq.TFun ((x, tmp_in), tmp_out) ) )), c1 ->
        let open Formula in
-       let Liq.TLet (c_env2, tmp2), c2 = cons_gen_e dinfos env e2 in
+       let e2', Liq.TLet (c_env2, tmp2), c2 = cons_gen_e dinfos env e2 in
        (match tmp2 with
         | Liq.TScalar (b, Eq (Var (_, valvar), e2_value))
              when  valvar = Id.valueVar_id ->
@@ -154,7 +158,8 @@ and cons_gen_e dinfos env e =
            let e1_ty_str =  (Liq.t2string_sort (Liq.TFun ((x, tmp_in), tmp_out) )) in
            let () = log_place(Printf.sprintf "application:%s" e1_ty_str) (TaSyntax.PE e) in 
            let () = log_cons "" new_c in
-           ((Liq.TLet (c_env, tmp_out')),
+           (TaSyn.PAppFo (e1',e2'),
+            (Liq.TLet (c_env, tmp_out')),
             new_c@(c1@c2)
            )
         | Liq.TScalar (b, Eq (e2_value, (Var (_, valvar))))
@@ -166,7 +171,8 @@ and cons_gen_e dinfos env e =
            let e1_ty_str =  (Liq.t2string_sort (Liq.TFun ((x, tmp_in), tmp_out) )) in           
            let () = log_place (Printf.sprintf "application:%s" e1_ty_str)  (TaSyntax.PE e) in 
            let () = log_cons "" new_c in
-           ((Liq.TLet (c_env, tmp_out')),
+           (TaSyn.PAppFo (e1',e2'),
+            (Liq.TLet (c_env, tmp_out')),
             new_c@(c1@c2)
            )
         | Liq.TScalar (b, tmp2_phi) ->   
@@ -189,22 +195,23 @@ and cons_gen_e dinfos env e =
           let e1_ty_str =  (Liq.t2string_sort (Liq.TFun ((x, tmp_in), tmp_out) )) in           
            let () = log_place (Printf.sprintf "application:%s" e1_ty_str)  (TaSyntax.PE e) in           
           let () = log_cons "" new_c in
-          ((Liq.TLet (c_env, tmp_out')),
+          (TaSyn.PAppFo (e1',e2'),
+           (Liq.TLet (c_env, tmp_out')),
            new_c@(c1@c2)
           )
         | Liq.TFun _ -> assert false
         | Liq.TBot -> assert false
        )
        
-     |((Liq.TLet (_, ty)), _) ->
+     |e2',(Liq.TLet (_, ty)), _ ->
        (Printf.printf "exspect:function type but got\n%s" (Liq.t2string ty));
        assert false
     )
   |TaSyn.PAppHo (e1, f1)  ->
-    let tmp_f1 =  fresh   (Liq.mk_sort_env env) dinfos (Ml.ta_infer_f (Ml.shape_env env) f1)  in
-    let (_, c_f1) = cons_gen_f dinfos env f1 tmp_f1 in
+    let tmp_f1 =  fresh (Liq.mk_sort_env env) dinfos (Ml.ta_infer_f (Ml.shape_env env) f1)  in
+    let (f1', c_f1) = cons_gen_f dinfos env f1 tmp_f1 in
     (match cons_gen_e dinfos env e1 with
-     |((Liq.TLet (c_env1, Liq.TFun ((x, tmp_in), tmp_out) )), c_e1) ->
+     |e1', (Liq.TLet (c_env1, Liq.TFun ((x, tmp_in), tmp_out) )), c_e1 ->
        let new_c =    [(Sub (Liq.env_append env c_env1, tmp_f1, tmp_in));
                        WF (env, tmp_f1)]
        in
@@ -212,7 +219,8 @@ and cons_gen_e dinfos env e =
        let () = log_place "application(higher order)" (TaSyntax.PE e) in 
        let () = log_tmp "appHO arg" tmp_f1 in
        let () = log_cons "" new_c in
-       (Liq.TLet (c_env1, tmp_out),
+       (TaSyn.PAppHo (e1', f1'),
+         Liq.TLet (c_env1, tmp_out),
         new_c@(c_f1@c_e1)
        )
      |_ -> assert false
@@ -229,7 +237,8 @@ and cons_gen_e dinfos env e =
        let open Formula in
        (match Liq.b2sort b with
         |Some b_sort ->
-          (Liq.TLet (Liq.env_empty, Liq.TScalar (b, (Eq
+          (TaSyn.PSymbol (x, []),
+            Liq.TLet (Liq.env_empty, Liq.TScalar (b, (Eq
                                                        (Var (b_sort, Id.valueVar_id),
                                                         Var (b_sort, x))))),
            [])
@@ -256,7 +265,7 @@ and cons_gen_e dinfos env e =
            (fun (p, shape) -> (p, (Formula.sort_subst_to_shape a_sort_sita shape )))
            plist
        in
-       let unknown_pa_and_c_pa_list =
+       let unknown_pa_and_c_pa_list: (Formula.pa * Constraint.cons) list = 
          List.map
            (fun (p, (arg_sort, rets)) ->
              let (args, p) = Formula.genUnknownPa_shape  (Liq.mk_sort_env env) (arg_sort, rets) p in
@@ -296,25 +305,42 @@ and cons_gen_e dinfos env e =
        let () = List.iter (log_tmp ("instantiate:"^x)) tys_tmp in
        let new_c =  c_pa_list@c_tys in
        let () = log_cons "" new_c in
-       (Liq.TLet (Liq.env_empty, ty_x'),new_c))
+       let schs_tmp = List.map Liq.mk_mono_schmea tys_tmp in
+       (TaSyn.PSymbol (x, schs_tmp), (* Formula.tのinstantiateの情報が入っていない *)
+         Liq.TLet (Liq.env_empty, ty_x'),
+         new_c))
 
   |TaSyn.PInnerFun f_in ->
      let tmp_f =  fresh (Liq.mk_sort_env env) dinfos (Ml.ta_infer_f (Ml.shape_env env) f_in)  in
-     let (_, c_f) = cons_gen_f dinfos env f_in tmp_f in
+     let (f_in', c_f) = cons_gen_f dinfos env f_in tmp_f in
      let new_c = [WF (env, tmp_f)] in
   (* logging *)
      let () = log_place "inner function" (TaSyntax.PF f_in) in
      let () = log_tmp "inner function" tmp_f in
      let () = log_cons "" new_c in
-     (Liq.TLet (Liq.env_empty, tmp_f), new_c@c_f)
-  |TaSyn.PAuxi _ -> assert false
+     (TaSyn.PInnerFun f_in',
+      Liq.TLet (Liq.env_empty, tmp_f),
+      new_c@c_f)
+     
+  |TaSyn.PAuxi (g, sch) ->     
+    let ty = Ml.ty_in_schema sch in
+    let g_tmp = fresh (Liq.mk_sort_env env) dinfos ty in
+    let new_c = [WF (env, g_tmp)] in
+    let () = log_tmp "auxi" g_tmp in
+    let () = log_cons "" new_c in
+    let g_sch = Liq.mk_mono_schmea g_tmp in
+    (TaSyn.PAuxi (g, g_sch),
+     Liq.TLet (Liq.env_empty, g_tmp),
+     new_c)
+    
+
 
 and cons_gen_b dinfos env b req_ty =
   match b with
   |TaSyn.PIf (e1, t2, t3) ->
     (* logging *)
     let () = log_place "if judgement" (TaSyntax.PE e1) in 
-    let ((Liq.TLet (c_env1, tmp1)), c1) = cons_gen_e dinfos env e1 in
+    let (e1', (Liq.TLet (c_env1, tmp1)), c1) = cons_gen_e dinfos env e1 in
     (match tmp1 with
      |Liq.TScalar (Liq.TBool, phi) ->
        let phi_true =           (* [true/_v]phi *)
@@ -331,11 +357,11 @@ and cons_gen_b dinfos env b req_ty =
        let env_false = Liq.env_add_F (Liq.env_append c_env1 env) phi_false in
        (* logging *)
        let () = log_place "if true" t2 in 
-       let (_, c2) = cons_gen dinfos env_true t2 req_ty in
+       let (t2', c2) = cons_gen dinfos env_true t2 req_ty in
        (* logging *)
        let () = log_place "if false" t3 in 
-       let (_, c3) = cons_gen dinfos env_false t3 req_ty in
-       (req_ty,
+       let (t3', c3) = cons_gen dinfos env_false t3 req_ty in
+       (TaSyn.PIf (e1', t2', t3'),
         c1@c2@c3)
      | _ -> assert false
 
@@ -344,9 +370,11 @@ and cons_gen_b dinfos env b req_ty =
     (Printf.printf "match temp:\n%s\n" (Liq.t2string req_ty));
     (* logging *)
     let () = log_place "match scru" (TaSyntax.PE e1) in 
-    let (e1_tmp, c1) = cons_gen_e dinfos env e1 in
-    let case_list_c = List.map (cons_gen_case dinfos env req_ty e1_tmp) case_list in
-    (req_ty,
+    let (e1', e1_tmp, c1) = cons_gen_e dinfos env e1 in
+    let case_list', case_list_c = List.map (cons_gen_case dinfos env req_ty e1_tmp) case_list
+                                  |> List.split
+    in
+    (TaSyn.PMatch (e1', case_list'),
      (List.concat case_list_c)@c1)
     
 
@@ -381,8 +409,12 @@ and cons_gen_case dinfos env req_ty e_tmp  {TaSyn.constructor= con;
                     (M.singleton Id.valueVar_id z_var) phi)
     in
     
-    let (tmp_t, c_t) = cons_gen dinfos env' t req_ty in
-    c_t
+    let (t', c_t) = cons_gen dinfos env' t req_ty in
+    let x_sch_list' = List.map (fun (x,ty) -> (x, Liq.mk_mono_schmea ty)) x_t_list in
+    {TaSyn.constructor = con;
+     TaSyn.argNames = x_sch_list';
+     TaSyn.body = t'},
+      c_t
   | _ -> assert false
 
 and cons_gen_f dinfos env f req_ty =
@@ -398,23 +430,26 @@ and cons_gen_f dinfos env f req_ty =
        (match Liq.type2sort req_ty_in with
         |None ->                   (* x' and x do not occur in req_ty_out  *)
           let env' =  (Liq.env_add env (x, req_ty_in)) in
-          let (_, c_t) = cons_gen dinfos env' t req_ty_out in
-          (req_ty, c_t)
+          let (t', c_t) = cons_gen dinfos env' t req_ty_out in
+          (TaSyn.PFun ((x, Liq.mk_mono_schmea req_ty_in), t'),
+            c_t)
         |Some x_sort -> 
           (* let x_var = Formula.Var (x_sort, x) in *)
           (* let x'_var = Formula.Var (x_sort, x') in *)
 
           let env' =  (Liq.env_add env (x', req_ty_in)) in
           (* adjust argument variable to require type *)
-          let t' = TaSyn.replace (M.singleton x x') t in (* [x->x'] *)
+          let replaced_t = TaSyn.replace (M.singleton x x') t in (* [x->x'] *)
           (* let x2x'_sita = M.singleton  x x'_var in *)
           (* let x'2x_sita = M.singleton  x' x_var in *)
           (* let req_ty_out' = (Liq.substitute_F x'2x_sita req_ty_out) in *)
           (* [x' -> x]req_ty_out *)
-          let (_, c_t) = cons_gen dinfos env' t' req_ty_out in
-          (req_ty,((* List.map (subst_cons x2x'_sita) *) c_t))
+          let (t', c_t) = cons_gen dinfos env' replaced_t req_ty_out in
+          (TaSyn.PFun ((x', Liq.mk_mono_schmea req_ty_in), t'),
+           c_t)
        )
      |_ -> assert false)
+   
   |TaSyn.PFix ((fname, sch_f, inst_schs), f_body) ->
     let mlty_of_fix = Ml.ta_infer_f (Ml.shape_env env) f in
     assert (mlty_of_fix = Ml.shape req_ty);
@@ -428,8 +463,11 @@ and cons_gen_f dinfos env f req_ty =
     (*  応急処置*)
     (* (assert ((List.length bvs_in_anno) = (List.length bvs))); (\*  *\) *)
     let req_sch = (var_in_inst_schs, [], req_ty) in
-    cons_gen_f dinfos (Liq.env_add_schema env (fname, req_sch)) f_body req_ty
-
+    let f_body',c =  cons_gen_f dinfos (Liq.env_add_schema env (fname, req_sch)) f_body req_ty in
+    (TaSyn.PFix ((fname, req_sch, []), f_body'), (* このannotationは適当 *)
+     c)
+    
+    
     
 
 let cons_gen_infer dinfos env t  =
@@ -437,7 +475,7 @@ let cons_gen_infer dinfos env t  =
   let new_c =  (WF (env, tmp)) in
   let () = log_tmp "toplevel" tmp in
   let () = log_cons "" [new_c] in
-  let (_, cs) = cons_gen dinfos env t tmp in
+  let (t', cs) = cons_gen dinfos env t tmp in
   let cs = new_c::cs in
-  (tmp, cs)
+  (t', tmp, cs)
   
