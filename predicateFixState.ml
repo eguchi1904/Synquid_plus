@@ -243,9 +243,11 @@ let neg_update2allfixable t p (othere_unknown_map: int PMap.t)
 
 let update_table table p fixable_level =
   if fixable_level = PredicateFixableLevel.partial then
-    table.(G.int_of_pLavel p) <- PartialFixable
+    let () = table.(G.int_of_pLavel p) <- PartialFixable in
+    PartialFixable
   else if fixable_level = PredicateFixableLevel.zero then
-    table.(G.int_of_pLavel p) <- ZeroFixable
+    let () = table.(G.int_of_pLavel p) <- ZeroFixable in
+    ZeroFixable
   else if fixable_level = PredicateFixableLevel.all then
     invalid_arg "update: use update2allfixable!"            
   else
@@ -274,7 +276,7 @@ let neg_update' t p fixable_level =
 
 let pos_update t p fixable_level
                ~change:queue = 
-  (pos_update' t p fixable_level);
+  let _ = (pos_update' t p fixable_level) in
   let priority = Priority.{ fixLevel = fixable_level
                            ;otherPCount = 0
                            ;fixableNum = 0 (* dummy *)
@@ -286,7 +288,7 @@ let pos_update t p fixable_level
 
 let neg_update t p fixable_level
                ~change:queue = 
-  (neg_update' t p fixable_level);
+  let _ = (neg_update' t p fixable_level) in
   let priority = Priority.{ fixLevel = fixable_level
                            ;otherPCount = 0
                            ;fixableNum = 0 (* dummy *)
@@ -346,3 +348,56 @@ let neg_decr_othere_p_form_allfixable t p (rm_map:int PMap.t) ~change:queue =
   
 
   
+module Constructor = struct
+
+  let dummy_state = ZeroFixable
+  
+  let create size = {posTable = Array.make size dummy_state
+                    ;negTable = Array.make size dummy_state
+                    ;posAffect = Array.make size PMap.empty
+                    ;negAffect = Array.make size PMap.empty
+                    }
+
+  let pos_registor t p fixable_level ~change:queue =
+    let state = update_table t.posTable p fixable_level in (* fixable_level = allの時はinvalid *)
+    let priority = calc_priority state Polarity.pos p in
+    PriorityQueue.push_pos queue p priority
+
+    
+    
+  let neg_registor t p fixable_level ~change:queue =
+    let state = update_table t.negTable p fixable_level in (* fixable_level = allの時はinvalid *)
+    let priority = calc_priority state Polarity.neg p in
+    PriorityQueue.push_pos queue p priority
+
+  let pos_registor_allfixable t p (othere_unknown_map: int PMap.t) fixable_num
+                              ~change:queue
+    = 
+    let unknown_count = count_unknown othere_unknown_map in
+    let state = AllFixable {fixableNum = ref fixable_num
+                           ;otherPCount = ref unknown_count
+                           ;otherPMap = othere_unknown_map}
+    in
+    let () = t.posTable.(G.int_of_pLavel p) <- state in
+    let () = update_affect t.posAffect p othere_unknown_map in
+    let priority = calc_priority state Polarity.pos p in
+    PriorityQueue.push_pos queue p priority    
+
+
+    
+  let neg_registor_allfixable t p (othere_unknown_map: int PMap.t) fixable_num 
+                              ~change:queue
+    =
+    let unknown_count = count_unknown othere_unknown_map in
+    let state = AllFixable {fixableNum = ref fixable_num
+                           ;otherPCount = ref unknown_count
+                           ;otherPMap = othere_unknown_map}
+    in
+    let () = t.negTable.(G.int_of_pLavel p) <- state in
+    let () = update_affect t.negAffect p othere_unknown_map in
+    let priority = calc_priority state Polarity.neg p in
+    PriorityQueue.push_pos queue p priority        
+
+
+
+end

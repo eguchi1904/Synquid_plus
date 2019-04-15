@@ -128,3 +128,38 @@ let remove_unfixable t p pol (calc_othere_p:unit -> int PMap.t)
       ()      
     
 
+module Constructor = struct
+
+  let dummy_ratio = {fixable = ref (-1) ; unfixable = ref (-1) } 
+
+  let create size = {posRatio = Array.make size dummy_ratio;
+                     negRatio = Array.make size dummy_ratio }
+
+
+  let pos_registor t p fixable_c unfixable_c (calc_other:unit -> int PMap.t)
+                   ~change:(pfix_state, queue) = 
+    let fix_ratio = {fixable = ref fixable_c; unfixable = ref unfixable_c } in
+    let () = t.posRatio.(G.int_of_pLavel p) <- fix_ratio in
+    (* pfix_stateへの反映 *) 
+    let fixable_lev = to_fixable_level fix_ratio in
+    if fixable_lev  = PredicateFixableLevel.all then
+      let map = calc_other () in
+      PFixState.Constructor.pos_registor_allfixable pfix_state p map fixable_c ~change:queue
+    else
+      PFixState.Constructor.pos_registor pfix_state p fixable_lev ~change:queue
+
+
+  let neg_registor t p fixable_c unfixable_c (calc_other:unit -> int PMap.t)
+                   ~change:(pfix_state, queue) = 
+    let fix_ratio = {fixable = ref fixable_c; unfixable = ref unfixable_c } in
+    let () = t.posRatio.(G.int_of_pLavel p) <- fix_ratio in
+    (* pfix_stateへの反映 *)
+    let fixable_lev = to_fixable_level fix_ratio in
+    if fixable_lev  = PredicateFixableLevel.all then
+      let map = calc_other () in
+      PFixState.Constructor.neg_registor_allfixable pfix_state p map fixable_c ~change:queue
+    else
+
+      PFixState.Constructor.neg_registor pfix_state p fixable_lev ~change:queue
+    
+end

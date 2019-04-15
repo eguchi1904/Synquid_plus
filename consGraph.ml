@@ -12,6 +12,8 @@ sig
 
   val int_of_pLavel: pLavel -> int
 
+  val def_pLavel: pLavel
+
 
   type cNode = {lavel:int
                ;value:Constraint.simple_cons
@@ -64,6 +66,8 @@ end = struct
   type pLavel = int
 
   let int_of_pLavel x = x
+                      
+  let def_pLavel = 0
               
 
   type cNode = {lavel:int
