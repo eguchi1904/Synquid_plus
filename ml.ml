@@ -226,7 +226,7 @@ let unify2 ty1 ty2 = unify [(ty1, ty2)] subst_empty
 
 let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x)))
    
-let rec  infer_t env e = match e with
+let rec infer_t env e = match e with
   |Syn.PLet (x, t1, t2) ->
     let alpha = MLVar (Id.genid "alpha") in (* for recursive definition*)
     let (ta_t1, ty1, c1) = infer_t (add_env x (ty_of_schema alpha) env) t1 in
@@ -272,7 +272,9 @@ and infer_e env e = match e with
      with
        Not_found -> raise (ML_Inf_Err (Printf.sprintf "%s is not in scope" x))
     )
-  |Syn.PAuxi _ -> raise (ML_Inf_Err "encounter unknown auxiliary function")
+  |Syn.PAuxi g ->
+    let alpha = MLVar (Id.genid "'a") in
+    (TaSyn.PAuxi (g, (ty_of_schema alpha)), alpha, [])
   |Syn.PInnerFun f_in ->
     let (ta_f_in, ty_f_in, c) = infer_f env f_in in
     (TaSyn.PInnerFun ta_f_in, ty_f_in, c)

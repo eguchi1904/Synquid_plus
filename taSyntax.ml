@@ -6,7 +6,7 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
                                  
  and 'a e =                        (* E-term *)
    |PSymbol of (Id.t *  'a list)     (* x[t1,t2, ... ] *)
-   |PAuxi of Id.t               (* auxiliary function *)
+   |PAuxi of (Id.t * 'a)              (* auxiliary function *)
    |PInnerFun of 'a f
    |PAppFo of 'a e * 'a e
    |PAppHo of 'a e * 'a f       (* redundant *)
@@ -32,7 +32,7 @@ let rec remove_annotations = function
 
 and remove_annotations_e = function
   |PSymbol (x, _) -> Syntax.PSymbol x
-  |PAuxi i -> Syntax.PAuxi i
+  |PAuxi (i, _) -> Syntax.PAuxi i
   |PInnerFun f_in -> Syntax.PInnerFun (remove_annotations_f f_in)
   |PAppFo (e1, e2)-> Syntax.PAppFo (remove_annotations_e e1, remove_annotations_e e2)
   |PAppHo (e1, f2) -> Syntax.PAppHo (remove_annotations_e e1, remove_annotations_f f2)
@@ -152,7 +152,7 @@ and syn2string_e f = function
                                      i
                                      (String.concat "," (List.map f xs))
   |PInnerFun f_in -> Printf.sprintf "(%s)" (syn2string_f f f_in)
-  |PAuxi i -> i
+  |PAuxi (i, anno) -> Printf.sprintf "%s:%s"  i (f anno)
   |PAppFo (e1,e2) -> Printf.sprintf "%s (%s)" (syn2string_e f e1) (syn2string_e f e2)
   |PAppHo (e1, fterm) -> Printf.sprintf "%s (%s)" (syn2string_e f e1) (syn2string_f f fterm)
 
@@ -199,7 +199,7 @@ let rec fv t = match t with
 
 and fv_e  = function
   |PSymbol (i, xs) -> S.singleton i
-  |PAuxi i -> S.singleton i
+  |PAuxi (i,_) -> S.singleton i
   |PInnerFun f_in -> fv_f f_in
   |PAppFo (e1,e2) -> (S.union (fv_e e1) (fv_e e2))
   |PAppHo (e1, fterm) -> (S.union (fv_e e1) (fv_f fterm))
