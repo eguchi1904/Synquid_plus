@@ -34,6 +34,8 @@ sig
             pIdHash: (Id.t, pLavel) Hashtbl.t
            }
 
+  val create: S.t -> Constraint.simple_cons list -> t
+
   val iter_p: (pLavel -> unit) -> t -> unit
 
   val fold_c: (cLavel -> 'a -> 'a) -> t -> 'a -> 'a
@@ -330,6 +332,8 @@ end = struct
       
     end
 
+  let create = Constructor.f
+             
     
 
 end

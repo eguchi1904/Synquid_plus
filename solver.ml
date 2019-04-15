@@ -63,6 +63,21 @@ module QualifierAssign = struct
 
   type t = Formula.t array
 
+  let create graph qualifier_assign =
+    let p_num = G.pNode_num graph in
+    let t = Array.make p_num (Formula.Bool true) in
+    let () = G.iter_p
+               (fun p_lav ->
+                 let p = G.id_of_pLavel graph p_lav in
+                 match M.find_opt p qualifier_assign with
+                 |Some p_quali ->
+                   t.(G.int_of_pLavel p_lav) <- p_quali
+                 |None -> ())
+               graph
+    in
+    t
+    
+
   let refine_qualifiers assign p cs = (* p \in assign *)
     List.fold_left
       (fun acc_assign c ->
@@ -216,7 +231,7 @@ let check_validity_around_p graph assign p ~may_change:state =
   ()
 
   
-let rec iter_fix graph state qualify assign = (* stateは外に置きたいほんとは *)
+let rec iter_fix graph state (qualify:QualifierAssign.t) assign = (* stateは外に置きたいほんとは *)
   match DyState.next state graph assign with
   |Some (p, pol, sol) ->
     let fixed_cs = List.map fst sol
@@ -243,7 +258,12 @@ let rec iter_fix graph state qualify assign = (* stateは外に置きたいほ�
       
     
         
-    
+let f up_ps cs qualify_assign =
+  let graph = G.create up_ps cs in
+  let state = DyState.create up_ps graph in
+  let qualify = QualifierAssign.create graph qualify_assign in
+  let assign = iter_fix graph state qualify M.empty in
+  assign
 
 
       
