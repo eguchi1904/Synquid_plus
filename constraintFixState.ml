@@ -57,6 +57,35 @@ let prop_p_fix t graph p =
              (List.filter (isnt_fixed t) (G.neg_cs graph p))
   in
   ()
-        
-          
+
+
+let create_p_counts up_ps graph  =
+  let c_num = G.cNode_num graph in  
+  let p_count = Array.make c_num 0 in
+  let up_p_count = Array.make c_num 0 in
+  let () = G.fold_c
+             (fun c_lav () ->
+               let c = G.cons_of_cLavel graph c_lav in
+               let unknown_ps = Constraint.unknown_p_in_simple_cons c in
+               let unknown_up_ps = S.inter unknown_ps up_ps in
+               (p_count.(G.int_of_cLavel c_lav) <- S.cardinal unknown_ps);
+               (up_p_count.(G.int_of_cLavel c_lav) <- S.cardinal unknown_up_ps))
+             graph
+             ()
+  in
+  (p_count, up_p_count)
+      
+
+
+  
+
+let create up_ps graph =
+  let p_count, up_p_count = create_p_counts up_ps graph in
+  {isFix = Array.make (G.cNode_num graph) false
+  ;unknown_p_count = p_count
+  ;unknown_up_p_count = up_p_count
+  }
+
+  
+  
 

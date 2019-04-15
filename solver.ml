@@ -99,7 +99,7 @@ sig
            ;queue: PriorityQueue.t
            }
 
-     
+  val create: S.t -> G.t -> t
          (* val fix_constraint: t -> G.t -> G.pLavel -> G.cLavel -> unit *)
 
   val next: t -> G.t -> Formula.t M.t ->
@@ -115,7 +115,21 @@ end =  struct
            ;pFixState: PFixState.t
            ;queue: PriorityQueue.t
            }
-         
+
+  (* 初期状態を作成する *)
+  let create up_ps graph =
+    let up_plav_set = PSet.of_id_Set graph up_ps in
+    let fixability_manager, fixable_count, pfix_state, queue
+      =  FixabilityManager.Constructor.f up_plav_set graph
+    in
+    let cfix_state = CFixState.create up_ps graph in
+    {fixabilityManager = fixability_manager
+           ;cFixState = cfix_state
+           ;pFixableCounter = fixable_count
+           ;pFixState = pfix_state
+           ;queue = queue
+           }    
+    
 
 
   let next t graph assign =

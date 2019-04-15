@@ -34,6 +34,10 @@ sig
             pIdHash: (Id.t, pLavel) Hashtbl.t
            }
 
+  val iter_p: (pLavel -> unit) -> t -> unit
+
+  val fold_c: (cLavel -> 'a -> 'a) -> t -> 'a -> 'a
+         
   val pNode_num: t -> int
     
   val cNode_num: t -> int    
@@ -89,7 +93,22 @@ end = struct
             ;pIdHash: (Id.t, pLavel) Hashtbl.t
            }
 
+  let iter_p f t =
+    for p = 0 to t.pNodeNum - 1 do
+      f p
+    done
+
+  let fold_c f t seed =
+    let acc = ref seed in
+    let () = for c = 0 to t.cNodeNum - 1 do
+               acc := f c !acc
+             done
+    in
+    !acc      
+    
+
   let pNode_num t = t.pNodeNum
+                  
   let cNode_num t = t.cNodeNum
                   
   let pLavel_of_id t id =

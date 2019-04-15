@@ -185,7 +185,7 @@ let fix t graph assign p priority
                             unfixed_pos_cs
     in
     (* ここ、 *)
-    let () = propagate_c_fixed_info (* pをfixとつけていないという問題 *)
+    let () = propagate_c_fixed_info
                t graph assign cfix_state p new_fixed_cs
                ~may_change:(pfixable_counter, pfix_state, queue)
            
@@ -234,15 +234,15 @@ module Constructor = struct
     ()
       
 
-  let gen_t graph (cs: G.cLavel list) =
+  let gen_t graph = 
     let fixability_map:(Fixability.t * S.t) M.t CMap.t =
-      List.fold_left
-        (fun acc c_lav ->
+      G.fold_c
+        (fun c_lav acc ->
           let c = G.cons_of_cLavel graph c_lav in
           let m =  Fixability.Constructor.gen_fixability_map graph c in
           CMap.add c_lav m acc)
+        graph
         CMap.empty
-        cs
     in
     (* initialize *)
     let t = {table = Hashtbl.create (2*G.cNode_num graph);
@@ -260,16 +260,68 @@ module Constructor = struct
     in
     t
 
-  let f graph  (cs: G.cLavel list) =
-    let t = gen_t graph cs in
+  let pos_count_fixable_unfixable t graph p =
+    List.fold_left
+      (fun (fixable, unfixable) c ->
+        if is_fixable t p c then
+          (fixable + 1, unfixable)
+        else
+          (fixable, unfixable + 1)
+      )
+      (0, 0)
+      (G.pos_cs graph p)
+
+
+  let neg_count_fixable_unfixable t graph p =
+    List.fold_left
+      (fun (fixable, unfixable) c ->
+        if is_fixable t p c then
+          (fixable + 1, unfixable)
+        else
+          (fixable, unfixable + 1)
+      )
+      (0, 0)
+      (G.neg_cs graph p)
     
-    
-    
-    
-            
+
+  (* この時点で、tの初期化は完了している *)
+  let pos_registor graph t ~change:(fixable_count, pfix_state, queue) =
+    G.iter_p
+      (fun p ->
+        let gen_pmap = (fun () -> count_other_unknown_in_cs t graph M.empty p
+                                                            (G.pos_cs graph p)
+                       )
+        in
+        let fixable, unfixable = pos_count_fixable_unfixable t graph p in
+        PFixableConstraintCounter.Constructor.pos_registor fixable_count p fixable unfixable gen_pmap
+                                                           ~change:(pfix_state, queue)
+      )
+      graph
+
+  (* この時点で、tの初期化は完了している *)
+  let neg_registor graph t ~change:(fixable_count, pfix_state, queue) =
+    G.iter_p
+      (fun p ->
+        let gen_pmap = (fun () -> count_other_unknown_in_cs t graph M.empty p
+                                                            (G.neg_cs graph p)
+                       )
+        in
+        let fixable, unfixable = neg_count_fixable_unfixable t graph p in
+        PFixableConstraintCounter.Constructor.neg_registor fixable_count p fixable unfixable gen_pmap
+                                                           ~change:(pfix_state, queue)
+      )
+    graph    
         
-    
-    
-      
+
+  let f up_p_set graph =
+    let t = gen_t graph in
+    let p_num = G.pNode_num graph in
+    (* 以下を初期化 *)
+    let fixable_count = PFixableConstraintCounter.Constructor.create p_num in
+    let pfix_state = PFixState.Constructor.create p_num in
+    let queue = PriorityQueue.create up_p_set p_num in
+    let () = pos_registor graph t ~change:(fixable_count, pfix_state, queue) in
+    let () = neg_registor graph t ~change:(fixable_count, pfix_state, queue) in    
+    (t, fixable_count, pfix_state, queue)
     
 end

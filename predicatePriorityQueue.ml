@@ -66,7 +66,9 @@ sig
 
   val update_pos: t -> G.pLavel -> Priority.t -> unit
 
-  val update_neg: t -> G.pLavel -> Priority.t -> unit    
+  val update_neg: t -> G.pLavel -> Priority.t -> unit
+
+  val create: PSet.t -> int -> t
     
 end  = struct
   
