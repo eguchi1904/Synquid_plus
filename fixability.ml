@@ -383,7 +383,7 @@ module Constructor = struct
               mk_negative_unbound
               back_env front_env pos_formula unknown_set (senv, sort_sita, sita, p)
             in          
-            let env = G.pLavel_of_id graph p |> G.get_p_env graph in
+            let env  = G.pLavel_of_id graph p |> G.get_p_env graph in
             let bound, wait_pc = upgrade_unbound M.empty env unbound in
             M.add p (bound, wait_pc) acc_map
           |_ -> acc_map)

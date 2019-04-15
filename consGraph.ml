@@ -27,11 +27,15 @@ sig
                ;neg: cLavel list
                }
 
-  type t = {cTable: cNode array;
-            pTable: pNode array;
+  type t = {cTable: cNode array; cNodeNum: int;
+            pTable: pNode array; pNodeNum: int;
             pIdHash: (Id.t, pLavel) Hashtbl.t
            }
 
+  val pNode_num: t -> int
+    
+  val cNode_num: t -> int    
+    
   val pLavel_of_id: t -> Id.t -> pLavel
 
   val id_of_pLavel: t -> pLavel -> Id.t
@@ -76,11 +80,14 @@ end = struct
                ;neg: pLavel list
                }
 
-  type t = {cTable: cNode array;
-            pTable: pNode array
+  type t = {cTable: cNode array; cNodeNum: int;
+            pTable: pNode array; pNodeNum: int
             ;pIdHash: (Id.t, pLavel) Hashtbl.t
            }
 
+  let pNode_num t = t.pNodeNum
+  let cNode_num t = t.cNodeNum
+                  
   let pLavel_of_id t id =
     try Hashtbl.find t.pIdHash id with
       Not_found -> invalid_arg "pLavel_of_id: invalid id"
@@ -274,8 +281,8 @@ end = struct
       let p_table =
         mk_p_table up_ps (!plav_count) p_hash p_map p_env_array p_senv_array
       in
-      {cTable = c_table
-      ;pTable = p_table
+      {cTable = c_table; cNodeNum = !clav_count
+      ;pTable = p_table; pNodeNum = !plav_count
       ;pIdHash = p_hash
       }
       
@@ -328,6 +335,12 @@ module PSet = struct
     
 end
 
+module CMap = 
+  Map.Make
+    (struct
+      type t = G.cLavel
+      let compare = compare
+    end)
   
 
 (* predicateだけからなるグラフ *)
