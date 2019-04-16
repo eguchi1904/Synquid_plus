@@ -260,11 +260,12 @@ let check_validity_around_p graph assign p ~may_change:state =
   ()
 
 
-(* qeせずとも成立しているものは除く *)
+
 let get_qfree_sol graph assign p_lav sol pol =
   let p = G.id_of_pLavel graph p_lav in
-  let qfree_list =
-    if pol = Polarity.neg then
+  if pol = Polarity.neg then
+    (* qeせずとも成立しているものは除く *)
+    let qfree_list =    
       List.fold_left
         (fun acc (c_lav, q_phi) ->
           let c = G.cons_of_cLavel graph c_lav in
@@ -277,13 +278,17 @@ let get_qfree_sol graph assign p_lav sol pol =
           else (Qe.f q_phi)::acc)
         []
         sol
-    else
+    in
+    Formula.and_list qfree_list
+  else
+    let qfree_list =
       List.fold_left
         (fun acc (c_lav, q_phi) -> (Qe.f q_phi)::acc)
         []
         sol
-  in
-  Formula.and_list qfree_list
+    in
+    Formula.or_list qfree_list
+
         
 let log_och = open_out "solver.log"
 

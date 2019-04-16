@@ -318,8 +318,8 @@ and cons_gen_e dinfos env e =
      
   |TaSyn.PAuxi (g, sch) ->     
     let ty = Ml.ty_in_schema sch in
-    let g_tmp = fresh (Liq.mk_sort_env env) dinfos ty in
-    let new_c = [WF (env, g_tmp)] in
+    let g_tmp = fresh Formula.Senv.empty dinfos ty in
+    let new_c = [WF (Liq.env_empty, g_tmp)] in (* とりあえずemptyにしたが *)
     let () = log_tmp "auxi" g_tmp in
     let () = log_cons "" new_c in
     let g_sch = Liq.mk_mono_schmea g_tmp in

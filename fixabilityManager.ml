@@ -89,12 +89,12 @@ let decr_wait_num t assign graph cfix_state q c
     (update_affect t q c new_wait_ps);
     (* (q c)がFixableになった時の処理 *)
     (match new_fixability with
-     |Fixability.Fixable (pol,_) ->
+     |Fixability.Fixable rc ->
        let calc = (fun () ->
-           count_other_unknown_in_unfix_cs t graph assign cfix_state pol q)
+           count_other_unknown_in_unfix_cs t graph assign cfix_state rc.pol q)
        in
        (* qがallfixableになったら、calcを呼び出してothereUnknownの数 を集計する *)
-       PFixableConstraintCounter.unfixable2fixable pfixable_counter q pol calc
+       PFixableConstraintCounter.unfixable2fixable pfixable_counter q rc.pol calc
                                                    ~may_change:(pfix_state, queue)
      |_ -> ())
   |None -> ()

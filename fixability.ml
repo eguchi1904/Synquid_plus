@@ -194,7 +194,7 @@ let mk_bound assign senv env pending_sita = function
    
    
 
-let qformula_of_bound assign = function
+let qformula_of_bound senv assign = function
   |UpBound {localEnv = env; vars = vars; require = (delta, phi) } ->  (* env|- p -> \phi *)
     let env_phi = Liq.env_substitute_F assign env
                   |> Liq.env2formula_all
@@ -209,17 +209,14 @@ let qformula_of_bound assign = function
     let qformula_premise = delta_phi@env_phi in
     let qformula_fv =
       List.fold_left
-        (fun acc phi -> S.union acc (Formula.fv_include_v phi))
-        S.empty
+        (fun acc phi ->
+          (Formula.fv_sort_include_v phi)@acc)
+        []
         (phi::qformula_premise)
+      |> List.uniq      
     in
-    let local_senv = Liq.mk_sort_env (Liq.env_append env delta) in
-    (* (assert (S.for_all *)
-    (*            (fun x -> Formula.Senv.mem x senv ||Formula.Senv.mem x local_senv ) *)
-    (*            qformula_fv)); *)
-    let binding = List.filter
-                    (fun (x,sort) -> S.mem x qformula_fv)
-                    (Formula.Senv.reveal local_senv)
+    let binding =
+      List.filter (fun (x,sch) -> not (Formula.Senv.mem x senv)) qformula_fv
     in
     Formula.QAll (binding, qformula_premise, phi)
 
@@ -233,17 +230,14 @@ let qformula_of_bound assign = function
     in
     let qformula_fv =
       List.fold_left
-        (fun acc phi -> S.union acc (Formula.fv_include_v phi))
-        S.empty
+        (fun acc phi ->
+          (Formula.fv_sort_include_v phi)@acc)
+        []      
         (phi::env_phi)
+    |> List.uniq
     in
-    let local_senv = Liq.mk_sort_env env in
-    (* (assert (S.for_all *)
-    (*            (fun x -> Formula.Senv.mem x senv ||Formula.Senv.mem x local_senv ) *)
-    (*            qformula_fv)); *)
-    let binding = List.filter
-                    (fun (x,sort) -> S.mem x qformula_fv)
-                    (Formula.Senv.reveal local_senv)
+    let binding =
+      List.filter (fun (x,sch) -> not (Formula.Senv.mem x senv)) qformula_fv
     in
     Formula.QExist (binding, phi::env_phi)
 
@@ -260,7 +254,11 @@ type t = |UnBound of {waitNum: int ref
                    ;senv:Formula.Senv.t
                    ;pendingSortSubst: Formula.sort_subst
                    ;bound: bound}
-         |Fixable of (Polarity.t * bound)
+         |Fixable of {senv:Formula.Senv.t
+                     ;pendingSortSubst: Formula.sort_subst
+                     ;pol: Polarity.t
+                     ;bound: bound}
+
 
 let of_string = function
   |UnBound _ -> "UnBound"
@@ -276,11 +274,11 @@ let count_othere_p t graph assign =
         PMap.add (G.pLavel_of_id graph p) 1 acc) (* とりあえずここは今の所不正確 *)
       (unknown_in_localEnv assign rc.bound)
       PMap.empty
-  |Fixable (pol, bound ) ->
+  |Fixable rc ->
     S.fold
       (fun p acc ->
         PMap.add (G.pLavel_of_id graph p) 1 acc) (* とりあえずここは今の所不正確 *)
-      (unknown_in_localEnv assign bound)
+      (unknown_in_localEnv assign rc.bound)
       PMap.empty    
   | _ -> invalid_arg "count_othere_p: not bounded"
        
@@ -296,7 +294,12 @@ let upgrade_unbound assign p_env = function
     let wait_num = S.cardinal wait_ps in
     if wait_num = 0 then
       let pol = predicate_polarity_of_bound bound in
-      (Fixable (pol, bound), wait_ps)
+      let fixable = Fixable {senv = senv
+                            ;pendingSortSubst = sort_sita
+                            ;pol = pol
+                            ;bound = bound}
+      in
+      (fixable, S.empty)      
     else
       (Bound {waitNum = ref wait_num
              ;firstWaitNum = wait_num
@@ -312,8 +315,9 @@ let upgrade_unbound assign p_env = function
                        
                        
 let try_to_fix assign = function
-  |Fixable (pol,bound) ->
-    Some (qformula_of_bound assign bound)
+  |Fixable rc ->
+    (* ここで、sort_sitaを逆に適用する必要があるかも *)
+    Some (qformula_of_bound rc.senv assign rc.bound)
   |_ ->
     None
 
@@ -331,7 +335,12 @@ let decr_wait_num assign graph p c ~change:fixability =
       let new_wait_num = PSet.cardinal new_wait_pc in
       if new_wait_num = 0 then
         let pol = predicate_polarity_of_bound rc.bound in
-        Some (Fixable (pol, rc.bound), PSet.empty)
+        let fixable = Fixable {senv = rc.senv
+                              ;pendingSortSubst = rc.pendingSortSubst
+                              ;pol = pol
+                              ;bound = rc.bound}
+        in
+        Some (fixable, PSet.empty)
       else
         Some (Bound {waitNum = ref new_wait_num
                     ;firstWaitNum = new_wait_num
