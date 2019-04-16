@@ -265,27 +265,21 @@ and cons_gen_e dinfos env e =
            (fun (p, shape) -> (p, (Formula.sort_subst_to_shape a_sort_sita shape )))
            plist
        in
-       let unknown_pa_and_c_pa_list: (Formula.pa * Constraint.cons) list = 
+       let unknown_pa_list: Formula.pa list = 
          List.map
            (fun (p, (arg_sort, rets)) ->
-             let (args, p) = Formula.genUnknownPa_shape  (Liq.mk_sort_env env) (arg_sort, rets) p in
+             let (args, body) = Formula.genUnknownPa_shape  (Liq.mk_sort_env env) (arg_sort, rets) p in
              (* make well formedness constraints *)
-             let arg_env= List.map (fun (x, sort) -> (x, Liq.sort2type sort))
-                                   args
-             in
-             let env' = Liq.env_add_list env arg_env in
-             let wf_con = WF (env', Liq.TScalar ((Liq.sort2type_base rets), p)) in
-             (args, p), wf_con
+             (args, body)
            )
            plist
        in
-       let unknown_pa_list, c_pa_list = List.split unknown_pa_and_c_pa_list in
 
        (* typeのinstantiate *)
        let tys_tmp = List.map (fresh (Liq.mk_sort_env env) dinfos) tys in
-       let c_tys = List.map (fun ty -> WF (env, ty)) tys_tmp in
-
        let ty_x' = Liq.instantiate_implicit x_liq_sch tys_tmp unknown_pa_list in
+       (* ty_x'のwell formedness: ここで、新しく生成したunknown_paなどのwellformednessが保証される *)
+       let wellformedness_ty_x' = WF (env, ty_x') in       
        let  a_sort_sita_list = M.bindings a_sort_sita in
        let () = Printf.printf "a_list_sort:%s"
                               (String.concat ","
@@ -303,7 +297,7 @@ and cons_gen_e dinfos env e =
        (* logging *)
        let () = List.iter (log_pa_tmp ("instantiate:"^x)) unknown_pa_list in
        let () = List.iter (log_tmp ("instantiate:"^x)) tys_tmp in
-       let new_c =  c_pa_list@c_tys in
+       let new_c =  [wellformedness_ty_x'] in
        let () = log_cons "" new_c in
        let schs_tmp = List.map Liq.mk_mono_schmea tys_tmp in
        (TaSyn.PSymbol (x, schs_tmp), (* Formula.tのinstantiateの情報が入っていない *)

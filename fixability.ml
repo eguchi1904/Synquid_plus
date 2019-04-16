@@ -138,7 +138,8 @@ let mk_flatten_subst senv sita =
   
   (Formula.subst_compose delta freshing_sita), eq_phi
   
-  
+
+(* envはpが定義されたところでの環境 *)
 let mk_bound assign senv env pending_sita = function
   |Positive {env = cons_env; negFormula = e1 } ->
     (match Liq.env_suffix cons_env env with

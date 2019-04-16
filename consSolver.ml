@@ -208,7 +208,7 @@ let rec init_p_assignment const_var_sita (qualifiers: Qualifier.t list) (cs:simp
   let () = log_assingment "line756" p_assign in
   let k_set_list = S.elements k_set in
   let p_assign_list = M.bindings p_assign in
-  (assert (S.for_all (fun k -> M.mem k p_assign) k_set));
+  let () = S.iter (fun k -> assert (M.mem k p_assign)) k_set in
   let p_assign = M.map (List.uniq_f Formula_eq.f) p_assign in
   let p_assign = M.map
                    (fun p_list -> List.filter (fun p -> UseZ3.satisfiable_but_not_valid (fst (UseZ3.convert p))) p_list)

@@ -238,6 +238,7 @@ end = struct
        
       |[] -> ()
 
+           
     let rec scan_wf_cs p_hash p_env_array p_senv_array = function
       |Constraint.SWF (env, (senv, Formula.Unknown (_,_,_,p)))::other ->
         let p_lav = Hashtbl.find p_hash p in
@@ -333,8 +334,6 @@ end = struct
       let () = scan_sub_cs p_hash c_array p_map c_map sub_cs in
       let p_env_array = Array.make p_count Liq.env_empty in
       let p_senv_array = Array.make p_count Formula.Senv.empty in
-
-
       (* initialize p_env_array p_senv_array *)
       let () = scan_wf_cs p_hash p_env_array p_senv_array wf_cs in
       mk_graph up_ps p_hash c_array p_map c_map p_env_array p_senv_array

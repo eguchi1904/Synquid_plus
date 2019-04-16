@@ -309,7 +309,7 @@ let env_fold_trace f_b f_p env seed =
 
 let env_rev  = List.rev
 
-  
+(* env1のがでかい *)
 let env_suffix (env1:env) (env2:env) =
   List.suffix env1 env2
 

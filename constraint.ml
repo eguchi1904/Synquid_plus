@@ -408,12 +408,41 @@ let rec split_cons' top_env (c:cons) =
     assert false        (* shape miss match *)
        
 
+
+
+let rec separate_unknown_simple_cons = function
+  |SWF (env, (senv, phi))->
+    let unknown_p_list, others =
+      Formula.list_and phi
+      |> List.partition (function |Formula.Unknown _ -> true
+                                  | _                -> false
+                        )
+    in
+    let unknown_p_wf_cons_list = List.map (fun p -> SWF (env, (senv, p))) unknown_p_list in
+    let otheres_p_wf_cons = SWF(env, (senv, (Formula.and_list others))) in
+    otheres_p_wf_cons :: unknown_p_wf_cons_list
+  |SSub (env, phi1, result) ->
+    let unknown_p_list, others =
+      Formula.list_and result
+      |> List.partition (function |Formula.Unknown _ -> true
+                                  | _                -> false
+                        )
+    in
+    let unknown_p_sub_cons_list = List.map (fun p -> SSub (env, phi1, p)) unknown_p_list in
+    let ohthers_p_sub_cons = SSub (env, phi1, (Formula.and_list others)) in
+    ohthers_p_sub_cons :: unknown_p_sub_cons_list
+                        
 let split_cons c =
   match c with
   |WF (env, ty) ->
-    let ret = split_cons' env c in (ignore (List.for_all assert_p_well_formedness ret));ret
-  |Sub (env, ty1, ty2) -> split_cons' env c
-
+    let ret = split_cons' env c in
+    let () = ignore (List.for_all assert_p_well_formedness ret) in
+    List.map separate_unknown_simple_cons ret
+    |> List.concat
+  |Sub (env, ty1, ty2) ->
+    split_cons' env c
+    |> List.map separate_unknown_simple_cons 
+    |> List.concat   
 
 (* -------------------------------------------------- *)
 (* pp *)
