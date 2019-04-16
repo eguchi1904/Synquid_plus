@@ -25,6 +25,7 @@ val id2TAny : Id.t -> t
   
 val extract_unknown_p : t -> S.t
 val extract_unknown_p_base : basetype -> S.t
+val positive_negative_unknown_p: t -> S.t * S.t * S.t
 val t2string : t -> string
 val b2string : basetype -> string
 val t2string_sort : t -> string

@@ -16,6 +16,21 @@ exception LiqErr of string
 (* -------------------------------------------------- *)
 (* main *)
 (* -------------------------------------------------- *)  
+let extract_up ta_t =
+  let auxi_ty_map = TaSyn.get_auxi_anno ta_t
+                  |> M.map Liq.schema2ty
+                in
+  let up_ps =
+    M.fold
+      (fun g ty acc ->
+        let pos_ps, _, _ = Liq.positive_negative_unknown_p ty
+        in
+        S.union pos_ps acc)
+      auxi_ty_map
+      S.empty
+  in
+  (auxi_ty_map, up_ps)
+  
   
   
     
@@ -40,6 +55,7 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   let st_infer = Sys.time () in
   (print_string (TaSyn.syn2string Ml.string_of_sch ta_t));
   let (ta_t', cs) = cons_gen dinfos env ta_t req_ty in
+  let auxi_ty_map, up_ps = extract_up ta_t' in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs) in
@@ -51,15 +67,17 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   (* let p_candi = init_p_assignment const_var_sita qualifiers simple_cs S.empty in *)
   (* logging *)
     try
-      let p_assign = ConsSolver.find_predicate z3_env qualifiers simple_cs env req_ty in      
-
+      (* let p_assign = ConsSolver.find_predicate z3_env qualifiers simple_cs env req_ty in *)
+      let p_assign = Solver.f up_ps qualifiers simple_cs in
+      let auxi_ty_map = M.map (Liq.substitute_F p_assign) auxi_ty_map in
+      
     (* logging *)
     (* let () = log_assingment "solved assignment" p_assign in *)
     (* let () = log_simple_cons "solved constraint" simple_cs in *)
-    let sita = M.map (fun tlist -> Formula.and_list tlist) p_assign in
+    (* let sita = M.map (fun tlist -> Formula.and_list tlist) p_assign in *)
     let ed_infer = Sys.time () in
     let () = (Printf.printf "\n\nLiq_check:%f\n\n" (ed_infer -. st_infer )) in
-    true
+    Ok (M.bindings auxi_ty_map)
   with
     ConsSolver.SolvingErr mes ->
     let ed_infer = Sys.time () in

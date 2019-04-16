@@ -61,6 +61,20 @@ let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t *
                   f_name
                   (Type.schema2string t));
   f_name, tmp, (g  data_infos qualifiers env tmp t)
+
+let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t * ((Id.t * Type.schema) list))
+  =
+  let init_env = (Type.env_add_schema_list Type.env_empty (cons_env@fundecs)) in
+  let (ts,ps,f_ty) as f_sch = List.assoc f_name fundecs in
+  let z3_env = UseZ3.mk_z3_env () in  
+  match TypeInfer.f_check z3_env data_infos qualifiers init_env tmp f_sch with
+  |Ok auxi_ty_list ->
+    let auxi_sch_list:(Id.t * Type.schema) list =
+      List.map (fun (g,ty) -> (g, (ts,ps,ty))) auxi_ty_list in
+    f_name, tmp, auxi_sch_list
+  |Error _ -> invalid_arg "check fail: not implimented"
+    
+    
   
 
 (* synquidに渡せる形式のファイルを出力する 

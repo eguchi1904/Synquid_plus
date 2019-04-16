@@ -278,9 +278,10 @@ let rec iter_fix graph state (qualify:QualifierAssign.t) assign = (* stateは外
       
     
         
-let f up_ps cs qualify_assign =
+let f up_ps qualifyers cs =
   let graph = G.create up_ps cs in
   let state = DyState.create up_ps graph in
+  let qualify_assign = M.empty in (* とりあえず *)
   let qualify = QualifierAssign.create graph qualify_assign in
   let assign = iter_fix graph state qualify M.empty in
   assign

@@ -67,6 +67,48 @@ and extract_unknown_p_base = function
     S.union ts_set ps_set
   |TInt|TBool -> S.empty
 
+let rec positive_negative_unknown_p = function
+  |TScalar (b, p) ->
+    Formula.union_positive_negative_unknown_p_sets
+      (positive_negative_unknown_p_base b)
+      (Formula.positive_negative_unknown_p p)
+  |TFun((x, t1), t2) ->
+    let pos_ps1, neg_ps1, other_ps1 = positive_negative_unknown_p t1 in
+    Formula.union_positive_negative_unknown_p_sets
+      (neg_ps1, pos_ps1, other_ps1)
+      (positive_negative_unknown_p t2)
+  |TBot -> (S.empty, S.empty, S.empty)
+
+and positive_negative_unknown_p_base = function
+  |TAny _ -> (S.empty, S.empty, S.empty)
+  |TVar _ -> assert false
+  |TData (_, ts, ps) ->
+    let pos_ts, neg_ts, othere_ts =
+      List.fold_left
+        (fun acc t -> Formula.union_positive_negative_unknown_p_sets
+                        (positive_negative_unknown_p t)
+                        acc
+        )
+        (S.empty, S.empty, S.empty)
+        ts
+    in
+    let pos_ps, neg_ps, other_ps =
+      List.fold_left
+        (fun acc (arg,phi) -> Formula.union_positive_negative_unknown_p_sets
+                                (Formula.positive_negative_unknown_p phi)
+                                acc)
+        (S.empty, S.empty, S.empty)
+        ps
+    in
+    Formula.union_positive_negative_unknown_p_sets
+      (pos_ts, neg_ts, othere_ts)
+      (pos_ps, neg_ps, other_ps)
+  |TInt|TBool -> (S.empty, S.empty, S.empty)
+          
+    
+
+      
+
           
 
 
