@@ -31,11 +31,18 @@ sig
   val all: t
   val partial: t        (* partial is_hinted *)
   val zero:  t           (* zero is_hinted *)
+  val to_string: t -> string
 end = struct
   type t =  int
   let all  = 0
   let partial  = 1
   let zero  = 2
+
+  let to_string t =
+    if t = all then "all"
+    else if t = partial then "partial"
+    else if t = zero then "zero"
+    else assert false
 end
 
     
@@ -47,6 +54,15 @@ module Priority = struct
            ;pol: Polarity.t
            ;lavel: G.pLavel }
 
+  let to_string graph t =
+    Printf.sprintf "{%s; otherPCouunt:%d; fixableNum:%d; %s; %s}"
+                   (PredicateFixableLevel.to_string t.fixLevel)
+                   t.otherPCount
+                   t.fixableNum
+                   (Polarity.of_string t.pol)
+                   (G.id_of_pLavel graph t.lavel)
+
+    
   (* priorityの値が小さい方が優先順位が低い
    言葉の意味が反転してしまっている*)
   let max = {fixLevel = PredicateFixableLevel.zero
@@ -63,6 +79,8 @@ module PriorityQueue:
 sig
 
   type t
+
+  val to_string: G.t -> t -> string 
 
   val pop: t -> (G.pLavel * Polarity.t * Priority.t) option
 
@@ -117,6 +135,26 @@ end  = struct
            ;table: Priority.t array
            ;internalQueue: InternalQueue.t
            }
+
+  let to_string graph t =
+    G.fold_p
+      (fun p acc_str ->
+        let p = G.int_of_pLavel p in
+        let pos_priority = t.posTable.(p) in
+        let neg_priority = t.negTable.(p) in
+        let min_priority = t.table.(p) in
+        let str = Printf.sprintf " pos - %s\n neg - %s\n min - %s\n"
+                                 (Priority.to_string graph pos_priority)
+                                 (Priority.to_string graph neg_priority)
+                                 (Priority.to_string graph min_priority)
+        in
+        acc_str ^ "\n\n" ^str)
+      graph
+    ""
+    
+        
+        
+
 
 
   let create_isUpp up_ps size =

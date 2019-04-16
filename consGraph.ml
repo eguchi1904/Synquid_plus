@@ -41,6 +41,8 @@ sig
   val iter_p: (pLavel -> unit) -> t -> unit
 
   val fold_c: (cLavel -> 'a -> 'a) -> t -> 'a -> 'a
+
+  val fold_p: (pLavel -> 'a -> 'a) -> t -> 'a -> 'a
          
   val pNode_num: t -> int
     

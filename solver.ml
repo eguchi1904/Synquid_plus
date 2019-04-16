@@ -140,10 +140,16 @@ end =  struct
   let of_string graph t =
     let fix_manager_str = FixabilityManager.of_string graph t.fixabilityManager in
     let pfixable_counter_str = PFixableConstraintCounter.of_string graph t.pFixableCounter in
-    Printf.sprintf
-      "\nFixabiliy Manager\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n%s\n predicate fixable counter\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n%s"
-      fix_manager_str
-    pfixable_counter_str
+    let queue_str = PriorityQueue.to_string graph t.queue in
+    "\nFixabiliy Manager\n"
+    ^"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+    ^ fix_manager_str
+    ^"\n predicate fixable counter"
+    ^"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+    ^ pfixable_counter_str
+    ^"\n queue\n"
+    ^"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+    ^ queue_str
 
   let log_dystate_och = open_out "dyState.log"
                       
