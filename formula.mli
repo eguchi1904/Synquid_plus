@@ -76,6 +76,7 @@ val p2string : t -> string
 val sort2string : sort -> Id.t
 val pashape2string : pa_shape -> Id.t
 val p2string_with_sort : t -> string
+val qformula2string : qformula -> string
 val fv : t -> S.t
 val fv_include_v : t -> S.t
 

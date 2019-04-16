@@ -46,13 +46,13 @@ let scons2string = function
     in
     Printf.sprintf "SWF\n--------------------------------------------------\n%s\n--------------------------------------------------\n%s\n"
                    senv_str
-                   (Formula.p2string_with_sort e1)
+                   (Formula.p2string e1)
     
   |SSub (env, e1, e2) ->
     Printf.sprintf "--------------------------------------------------\n%s\n--------------------------------------------------\n%s <:%s\n"
                    (Liq.env2string env)
-                   (Formula.p2string_with_sort e1)
-                   (Formula.p2string_with_sort e2)
+                   (Formula.p2string e1)
+                   (Formula.p2string e2)
 
  
 let inst_scons sita = function

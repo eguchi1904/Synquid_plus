@@ -103,6 +103,8 @@ let get t graph assign p cs =       (* csを満たすようなqualifierを返す
     
 
 end
+
+
                 
 module DyState:
 sig
@@ -113,6 +115,10 @@ sig
            ;pFixState: PFixState.t
            ;queue: PriorityQueue.t
            }
+
+  val of_string: G.t -> t -> string
+
+  val log: G.t -> string -> t -> unit
 
   val create: S.t -> G.t -> t
          (* val fix_constraint: t -> G.t -> G.pLavel -> G.cLavel -> unit *)
@@ -131,6 +137,23 @@ end =  struct
            ;queue: PriorityQueue.t
            }
 
+  let of_string graph t =
+    let fix_manager_str = FixabilityManager.of_string graph t.fixabilityManager in
+    let pfixable_counter_str = PFixableConstraintCounter.of_string graph t.pFixableCounter in
+    Printf.sprintf
+      "\nFixabiliy Manager\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n%s\n predicate fixable counter\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n%s"
+      fix_manager_str
+    pfixable_counter_str
+
+  let log_dystate_och = open_out "dyState.log"
+                      
+  let log graph mes t =
+    Printf.fprintf
+      log_dystate_och
+      "%s\n--------------------------------------------------%s\n--------------------------------------------------\n\n\n\n"
+      mes
+      (of_string graph t)
+  
   (* 初期状態を作成する *)
   let create up_ps graph =
     let up_plav_set = PSet.of_id_Set graph up_ps in
@@ -249,14 +272,51 @@ let get_qfree_sol graph assign p_lav sol =
   in
   Formula.and_list qfree_list
         
-      
+let log_och = open_out "solver.log"
+
+let log_assign mes assign =
+  let assign_list = M.bindings assign in
+  let assign_str =
+    List.map (fun (k_i, e) ->
+        Printf.sprintf "  %s -> [ %s ]" k_i (Formula.p2string e))
+             assign_list
+    |> String.concat "\n"
+  in
+  Printf.fprintf
+    log_och
+    "%s:\n\n%s\n\n\n\n\n\n\n\n"
+    mes
+    assign_str
+
+let log_poped graph assign fixed_cs (p, pol, sol) =
+  let fixed_cs = List.map (Constraint.subst_simple_cons assign) fixed_cs in
+  let fixed_cs_str = Constraint.scons_list_to_string fixed_cs in
+  let sol_str =
+    List.map (fun (c, qf) -> Printf.sprintf "%d:\n%s"
+                                            (G.int_of_cLavel c)
+                                            (Formula.qformula2string qf)
+             )
+             sol
+    |> String.concat "------------------------------\n"
+  in
+  Printf.fprintf
+    log_och
+    "\n\n\n\npoped p:%d (%s)\n --- polarity = %s\nfixing constraints\n%s\nqformula is\n %s "
+    (G.int_of_pLavel p)
+    (G.id_of_pLavel graph p)
+    (Polarity.of_string pol)
+    fixed_cs_str
+  sol_str
+  
 
 let rec iter_fix graph state (qualify:QualifierAssign.t) assign = (* stateは外に置きたいほんとは *)
   match DyState.next state graph assign with
   |Some (p, pol, sol) ->
+    let () = DyState.log graph ("pop:"^(G.id_of_pLavel graph p)) state in
     let fixed_cs = List.map fst sol
                  |> List.map (G.cons_of_cLavel graph)
     in
+    let () = log_poped graph assign fixed_cs (p, pol, sol) in    
     let qualify_phi =
       if pol = Polarity.pos then
         QualifierAssign.get qualify graph assign p fixed_cs
@@ -270,6 +330,8 @@ let rec iter_fix graph state (qualify:QualifierAssign.t) assign = (* stateは外
     let assign' = M.add (G.id_of_pLavel graph p) p_assign assign in
     (* ここでvalidity等を検査すべき *)
     let () = check_validity_around_p graph assign' p ~may_change:state  in
+    (* logging *)
+    let () = log_assign "" assign' in
     iter_fix graph state qualify assign'
   |None -> assign
     
@@ -280,6 +342,7 @@ let rec iter_fix graph state (qualify:QualifierAssign.t) assign = (* stateは外
         
 let f up_ps qualifyers cs =
   let graph = G.create up_ps cs in
+  let () = G.log graph in
   let state = DyState.create up_ps graph in
   let qualify_assign = M.empty in (* とりあえず *)
   let qualify = QualifierAssign.create graph qualify_assign in

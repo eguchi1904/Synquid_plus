@@ -26,7 +26,26 @@ let to_fixable_level  {fixable = fixable; unfixable =unfixable} =
   
 type t = {posRatio: fixRatio array
          ;negRatio: fixRatio array
-         }               
+         }
+
+let of_string graph t =
+  let ratio_array2str arr =
+    let _,str = Array.fold_left
+                  (fun (i,acc_str) {fixable = fixable; unfixable =unfixable} ->
+                    let p_id = G.id_of_int graph i in
+                    let str = Printf.sprintf "%s -> {fixable = %d; unfixable = %d}\n" p_id !fixable !unfixable in
+                    (i+1,acc_str^str))
+                  (0,"")
+                  arr
+    in
+    str
+  in
+  Printf.sprintf
+    "Pos ratio\n--------------------------------------------------\n%s\nNeg ratio\n--------------------------------------------------\n%s"
+    (ratio_array2str t.posRatio)
+    (ratio_array2str t.negRatio)
+  
+        
 
 (* 要求:
      pはfixedではない、

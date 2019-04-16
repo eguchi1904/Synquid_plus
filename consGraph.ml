@@ -34,6 +34,8 @@ sig
             pIdHash: (Id.t, pLavel) Hashtbl.t
            }
 
+  val log: t -> unit
+
   val create: S.t -> Constraint.simple_cons list -> t
 
   val iter_p: (pLavel -> unit) -> t -> unit
@@ -47,6 +49,8 @@ sig
   val pLavel_of_id: t -> Id.t -> pLavel
 
   val id_of_pLavel: t -> pLavel -> Id.t
+
+  val id_of_int: t -> int -> Id.t    
 
   val cons_of_cLavel: t -> cLavel -> Constraint.simple_cons
 
@@ -95,6 +99,31 @@ end = struct
             ;pIdHash: (Id.t, pLavel) Hashtbl.t
            }
 
+  let string_of_cTable c_table =
+    let _, str = Array.fold_left
+                   (fun (i,acc_str) (cnode:cNode) ->
+                     let const_str = Constraint.scons2string cnode.value in
+                     let str = Printf.sprintf "\n\n\n%d -> \n%s" i const_str in
+                     (i+1, acc_str^str))
+                   (0, "")
+                   c_table
+    in
+    str
+
+  let to_string t =
+    string_of_cTable t.cTable
+    
+
+  let log_och = open_out "graph.log"
+              
+  let log t =
+    Printf.fprintf
+      log_och
+    "Graph:\n constraint table\n==================================================\n%s"
+      (to_string t)
+    
+
+
   let iter_p f t =
     for p = 0 to t.pNodeNum - 1 do
       f p
@@ -120,6 +149,8 @@ end = struct
   let id_of_pLavel t p =
     try t.pTable.(p).value with
       _ ->  invalid_arg "invalid lavel"
+
+  let id_of_int = id_of_pLavel
 
   let cons_of_cLavel t c =
     try t.cTable.(c).value with

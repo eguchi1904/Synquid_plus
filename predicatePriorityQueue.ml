@@ -12,10 +12,16 @@ sig
   type t = private int
   val pos: t
   val neg: t
+  val of_string: t -> string
 end = struct
   type t = int
   let pos = 1
   let neg = 0                   (*  negativeのが優先順位高いかな *)
+  let of_string pol =
+    if pol = pos then "pos"
+    else if pol = neg  then "neg"
+    else
+      assert false
 end
 
     

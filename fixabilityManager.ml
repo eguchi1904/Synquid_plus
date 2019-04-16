@@ -19,6 +19,20 @@ exception Cons_pred_mismatch of string
 type t = {table: ((G.pLavel * G.cLavel), Fixability.t Stack.t) Hashtbl.t
          ;affect: ((G.pLavel * G.cLavel), G.pLavel list) Hashtbl.t }
 
+let of_string graph t =
+  Hashtbl.fold
+    (fun (p,c) stack acc_str ->
+      try
+        let fixability = Stack.top stack  in
+        let str = Printf.sprintf "\n(%s, c:%d) -> %s" (G.id_of_pLavel graph p) (G.int_of_cLavel c) (Fixability.of_string fixability) in
+        (acc_str^str)
+      with
+        _ -> acc_str
+    )
+  t.table
+  ""
+      
+
 let is_fixable t p c =
   let stack = Hashtbl.find t.table (p,c) in
   Fixability.is_fixable (Stack.top stack )

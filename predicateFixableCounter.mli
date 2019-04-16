@@ -10,7 +10,9 @@ type fixRatio = {fixable: int ref ; unfixable: int ref }
 
 type t  =private {posRatio: fixRatio array
                  ;negRatio: fixRatio array
-                 }               
+                 }
+               
+val of_string:G.t -> t -> string
    
 (* val decr_pos_unfix: t -> G.pLavel -> unit *)
    

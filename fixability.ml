@@ -262,6 +262,11 @@ type t = |UnBound of {waitNum: int ref
                    ;bound: bound}
          |Fixable of (Polarity.t * bound)
 
+let of_string = function
+  |UnBound _ -> "UnBound"
+  |Bound _ -> "Bound"
+  |Fixable _ -> "Fixable"
+
 
 let count_othere_p t graph assign =
   match t with

@@ -150,7 +150,7 @@ let eta_shape ((arg,t):pa) =
 
 type pa_shape = (sort list) * sort
 
-
+    
 
 let rec p2string = function
   |Bool b -> if b = true then "True" else "False"
@@ -166,9 +166,11 @@ let rec p2string = function
     in
     let senv_str = List.map fst (Senv.reveal senv) |> String.concat "," in
     if sita_list = [] then
-      Printf.sprintf "senv:[%s].P[%s]" senv_str id
+      (* Printf.sprintf "senv:[%s].P[%s]" senv_str id *)
+      Printf.sprintf "P[%s]" id
     else
-      Printf.sprintf "senv:[%s].sita:[%s].P[%s]" senv_str (String.concat ";" sita_str_list) id              
+      Printf.sprintf "sita:[%s].P[%s]" (String.concat ";" sita_str_list) id
+      (* Printf.sprintf "senv:[%s].sita:[%s].P[%s]" senv_str (String.concat ";" sita_str_list) id               *)
   |Cons (_,id,ts)|UF (_,id,ts) ->
     let ts_string = String.concat " " (List.map p2string ts) in
     Printf.sprintf "(%s %s)" id ts_string
@@ -292,6 +294,22 @@ let rec p2string_with_sort = function
   |Not t ->
     Printf.sprintf "!(%s)" (p2string_with_sort t )
    
+
+let qformula2string = function
+  |QAll (binds, es, e) ->
+    let binds_str =
+      List.map fst binds |> String.concat "," |> (fun s -> Printf.sprintf "[%s]" s)
+    in
+    let es_str = List.map p2string es |> String.concat "; " in
+    let e_str = p2string e in
+    Printf.sprintf "FORALL%s.[%s] -> %s" binds_str es_str e_str
+  |QExist (binds, es) ->
+    let binds_str =
+      List.map fst binds |> String.concat "," |> (fun s -> Printf.sprintf "[%s]" s)
+    in
+    let es_str = List.map p2string es |> String.concat "; " in
+    Printf.sprintf "EXIST%s.%s" binds_str es_str
+    
 
 
    
