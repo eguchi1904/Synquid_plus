@@ -152,7 +152,7 @@ module Constructor = struct
   let neg_registor t p fixable_c unfixable_c (calc_other:unit -> int PMap.t)
                    ~change:(pfix_state, queue) = 
     let fix_ratio = {fixable = ref fixable_c; unfixable = ref unfixable_c } in
-    let () = t.posRatio.(G.int_of_pLavel p) <- fix_ratio in
+    let () = t.negRatio.(G.int_of_pLavel p) <- fix_ratio in
     (* pfix_stateへの反映 *)
     let fixable_lev = to_fixable_level fix_ratio in
     if fixable_lev  = PredicateFixableLevel.all then

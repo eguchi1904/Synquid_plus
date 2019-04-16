@@ -170,12 +170,14 @@ end = struct
 
     let add_pos adj_map k v =
       let l = adj_map.pos.(k) in
-      adj_map.pos.(k) <- (v::l)
+      if not (List.mem v l) then
+        adj_map.pos.(k) <- (v::l)
 
     let add_neg adj_map k v =
       let l = adj_map.neg.(k) in
-      adj_map.neg.(k) <- (v::l)
-
+      if not (List.mem v l) then      
+        adj_map.neg.(k) <- (v::l)
+      
     let add_p_map p_hash p_map c_lav pos_ps neg_ps othere_ps =
         let () = S.iter
                    (fun p ->
@@ -221,7 +223,7 @@ end = struct
         ()        
       
     (* p_map, c_mapを作成 *)
-    let rec scan_sub_cs p_hash c_array p_map c_map  =function
+    let rec scan_sub_cs p_hash c_array (p_map:pLavel adj_map) c_map  =function
       |(Constraint.SSub _) as c::other ->
         let pos_ps, neg_ps, othere_ps =
           Constraint.positive_negative_unknown_p c
@@ -315,19 +317,26 @@ end = struct
       
                    
     let f up_ps cs =
+      let sub_cs, wf_cs = List.partition
+                            (function
+                             |Constraint.SSub _ -> true
+                             |Constraint.SWF _ -> false) cs
+      in
       let p_hash = Hashtbl.create 1000 in
-      let p_count = !plav_count in
-      let c_count = List.length cs in
       let () = mk_p_hash p_hash cs in
+      let p_count = !plav_count in
+      let c_count = List.length sub_cs in      
       let c_array = Array.make c_count (List.hd cs) in
-      let p_map = create_adj_map p_count in
-      let c_map = create_adj_map p_count  in
+      let p_map:pLavel adj_map = create_adj_map p_count in
+      let c_map:cLavel adj_map = create_adj_map c_count  in
       (* initialize c_array, p_map, c_map *)
-      let () = scan_sub_cs p_hash c_array p_map c_map cs in
+      let () = scan_sub_cs p_hash c_array p_map c_map sub_cs in
       let p_env_array = Array.make p_count Liq.env_empty in
       let p_senv_array = Array.make p_count Formula.Senv.empty in
+
+
       (* initialize p_env_array p_senv_array *)
-      let () = scan_wf_cs p_hash p_env_array p_senv_array cs in
+      let () = scan_wf_cs p_hash p_env_array p_senv_array wf_cs in
       mk_graph up_ps p_hash c_array p_map c_map p_env_array p_senv_array
       
     end

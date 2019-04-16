@@ -113,7 +113,7 @@ let tell_predicate_constraint_is_fixed t graph assign cfix_state c q pol
 (* この時点でcfix_stateは最新のものになっている必要がある *)
 let tell_related_predicate_constraint_is_fixed t graph assign cfix_state p c 
                                                ~may_change:(pfixable_counter, pfix_state, queue) =
-  let isnt_fix q = (PFixState.isnt_fixed pfix_state q || q = p) in
+  let isnt_fix q = (PFixState.isnt_fixed pfix_state q && q <> p) in
   let unfixed_pos_p = (List.filter isnt_fix (G.pos_ps graph c)) in    
   let () =
     List.iter
@@ -232,7 +232,19 @@ module Constructor = struct
     let () = Hashtbl.add t.table (p,c) stack in
     let () = update_affect t p c wait_pc in
     ()
-      
+
+  (* 可能な（p - c）の組に空のaffectを追加する *)
+  let add_empty_affect graph affect =
+    G.iter_p
+      (fun p ->
+        List.iter
+          (fun c ->
+            Hashtbl.add affect (p,c) [])
+          ((G.pos_cs graph p)@(G.neg_cs graph p))
+      )
+    graph
+    
+    
 
   let gen_t graph = 
     let fixability_map:(Fixability.t * S.t) M.t CMap.t =
@@ -245,9 +257,10 @@ module Constructor = struct
         CMap.empty
     in
     (* initialize *)
-    let t = {table = Hashtbl.create (2*G.cNode_num graph);
+    let t = {table = Hashtbl.create (2*(G.cNode_num graph) * (G.pNode_num graph ));
              affect = Hashtbl.create ((G.cNode_num graph) * (G.pNode_num graph))}
     in
+    let () = add_empty_affect graph t.affect in
     let () = CMap.iter
                (fun c (map:(Fixability.t * S.t) M.t) ->
                  M.iter

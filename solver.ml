@@ -134,8 +134,8 @@ end =  struct
   (* 初期状態を作成する *)
   let create up_ps graph =
     let up_plav_set = PSet.of_id_Set graph up_ps in
-    let fixability_manager, fixable_count, pfix_state, queue
-      =  FixabilityManager.Constructor.f up_plav_set graph
+    let fixability_manager, fixable_count, pfix_state, queue = 
+      FixabilityManager.Constructor.f up_plav_set graph
     in
     let cfix_state = CFixState.create up_ps graph in
     {fixabilityManager = fixability_manager
@@ -250,7 +250,7 @@ let get_qfree_sol graph assign p_lav sol =
   Formula.and_list qfree_list
         
       
-  
+
 let rec iter_fix graph state (qualify:QualifierAssign.t) assign = (* stateは外に置きたいほんとは *)
   match DyState.next state graph assign with
   |Some (p, pol, sol) ->
@@ -284,6 +284,7 @@ let f up_ps qualifyers cs =
   let qualify_assign = M.empty in (* とりあえず *)
   let qualify = QualifierAssign.create graph qualify_assign in
   let assign = iter_fix graph state qualify M.empty in
+  let sita_debug = M.bindings assign in
   assign
 
 

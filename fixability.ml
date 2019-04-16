@@ -270,6 +270,12 @@ let count_othere_p t graph assign =
         PMap.add (G.pLavel_of_id graph p) 1 acc) (* とりあえずここは今の所不正確 *)
       (unknown_in_localEnv assign rc.bound)
       PMap.empty
+  |Fixable (pol, bound ) ->
+    S.fold
+      (fun p acc ->
+        PMap.add (G.pLavel_of_id graph p) 1 acc) (* とりあえずここは今の所不正確 *)
+      (unknown_in_localEnv assign bound)
+      PMap.empty    
   | _ -> invalid_arg "count_othere_p: not bounded"
        
        
@@ -438,7 +444,7 @@ module Constructor = struct
     match c with
     |Constraint.SSub (env, e1, (Formula.Unknown(senv, sort_sita, sita, p) as e2)) ->
       let unknown_set = Formula.extract_unknown_p e1 in
-      let env_e1 = Liq.env_add_F Liq.env_empty e1 in      
+      let env_e1 = Liq.env_add_F env e1 in      
       let neg_map = gen_fixability_map_neg graph env_e1
                                ~pos_formula:e2
                                ~unknown_set:unknown_set
@@ -449,7 +455,7 @@ module Constructor = struct
                             ;senv = senv
                             ;pendingSubst = sita
                             ;pendingSortSubst = sort_sita
-                              ;position = position }
+                            ;position = position }
       in      
       if not (S.is_empty unknown_set) then 
         M.add p (unbound, unknown_set) neg_map
@@ -459,7 +465,7 @@ module Constructor = struct
         M.add p (bound, wait_pc) neg_map
     |Constraint.SSub (env, e1, e2) ->
       (assert (S.is_empty (Formula.extract_unknown_p e2)) );
-      let env_e1 = Liq.env_add_F Liq.env_empty e1 in            
+      let env_e1 = Liq.env_add_F env e1 in            
       gen_fixability_map_neg graph env_e1
                              ~pos_formula:e2
                              ~unknown_set:S.empty

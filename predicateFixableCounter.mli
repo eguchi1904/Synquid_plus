@@ -8,7 +8,9 @@ module PriorityQueue = PredicatePriorityQueue.PriorityQueue
 type fixRatio = {fixable: int ref ; unfixable: int ref }
 
 
-type t 
+type t  =private {posRatio: fixRatio array
+                 ;negRatio: fixRatio array
+                 }               
    
 (* val decr_pos_unfix: t -> G.pLavel -> unit *)
    

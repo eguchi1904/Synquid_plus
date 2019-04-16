@@ -52,7 +52,7 @@ type t = {posTable: state array
 
          }           
 
-
+(* これはposTableのみを見ているが、fixedすると、postableもnegtableも Fixedになるので OK*)
 let is_fixed t p =
   match t.posTable.(G.int_of_pLavel p) with
   |Fixed _ -> true
@@ -341,9 +341,9 @@ let pos_decr_othere_p_form_allfixable t p (rm_map:int PMap.t) ~change:queue =
 
   
 let neg_decr_othere_p_form_allfixable t p (rm_map:int PMap.t) ~change:queue =
-  let updated_sate = pos_decr_othere_p_form_allfixable' t p rm_map in
+  let updated_sate = neg_decr_othere_p_form_allfixable' t p rm_map in
   let updated_priority = calc_priority updated_sate Polarity.neg p in
-  PriorityQueue.update_pos queue p updated_priority        
+  PriorityQueue.update_neg queue p updated_priority        
   
   
 
@@ -368,7 +368,7 @@ module Constructor = struct
   let neg_registor t p fixable_level ~change:queue =
     let state = update_table t.negTable p fixable_level in (* fixable_level = allの時はinvalid *)
     let priority = calc_priority state Polarity.neg p in
-    PriorityQueue.push_pos queue p priority
+    PriorityQueue.push_neg queue p priority
 
   let pos_registor_allfixable t p (othere_unknown_map: int PMap.t) fixable_num
                               ~change:queue
@@ -396,7 +396,7 @@ module Constructor = struct
     let () = t.negTable.(G.int_of_pLavel p) <- state in
     let () = update_affect t.negAffect p othere_unknown_map in
     let priority = calc_priority state Polarity.neg p in
-    PriorityQueue.push_pos queue p priority        
+    PriorityQueue.push_neg queue p priority        
 
 
 

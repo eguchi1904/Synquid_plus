@@ -66,7 +66,7 @@ let rec access_annotation_t (f:'a -> 'a) (t:'a t) = match t with
 
 and access_annotation_e f e = match e with
   |PSymbol (x, ty_list) -> PSymbol (x, List.map f ty_list)
-  |PAuxi i -> PAuxi i
+  |PAuxi (g,anno) -> PAuxi (g, f anno)
   |PInnerFun f_in -> PInnerFun (access_annotation_f f f_in)
   |PAppFo (e1, e2)-> PAppFo (access_annotation_e f  e1, access_annotation_e f e2)
   |PAppHo (e1, f2) -> PAppHo (access_annotation_e f e1, access_annotation_f f f2)
@@ -103,7 +103,7 @@ and substitute_e (x:Id.t) (dest:'a e) (e:'a e) =  match e with
   |PSymbol (i, sch) when i = x ->  dest
   |PSymbol (i, sch) -> PSymbol (i, sch)
   |PInnerFun f_in -> PInnerFun (substitute_f x dest f_in)
-  |PAuxi i -> PAuxi i
+  |PAuxi (g, sch) -> PAuxi (g,sch)
   |PAppFo (e1, e2) -> PAppFo (substitute_e x dest e1, substitute_e x dest e2)
   |PAppHo (e1, f2) -> PAppHo (substitute_e x dest e1, substitute_f x dest f2)
 

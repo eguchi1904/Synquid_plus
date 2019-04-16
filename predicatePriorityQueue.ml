@@ -69,6 +69,7 @@ sig
   val update_neg: t -> G.pLavel -> Priority.t -> unit
 
   val create: PSet.t -> int -> t
+
     
 end  = struct
   
@@ -83,6 +84,7 @@ end  = struct
     val pop: t ->  Priority.t option
 
     val push: t -> Priority.t -> unit
+
 
   end = struct
 
@@ -99,6 +101,7 @@ end  = struct
       
     let push heap priority= Heap.add heap priority
 
+
   end
 
       
@@ -108,6 +111,7 @@ end  = struct
            ;table: Priority.t array
            ;internalQueue: InternalQueue.t
            }
+
 
   let create_isUpp up_ps size =
     let arr = Array.make size false in
@@ -147,6 +151,7 @@ end  = struct
                ;negTable = neg_table
                ;table = table
                ;internalQueue = internal_queue} p priority =
+    
     if is_upp.(G.int_of_pLavel p) then
       ()
     else
