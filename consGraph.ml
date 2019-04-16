@@ -195,7 +195,12 @@ end = struct
     t
     ""        
             
-        
+  let string_of_id_pLavle t =
+    Hashtbl.fold
+      (fun p_id pLavel acc_str ->
+        ("\n" ^ p_id ^ "->" ^ (string_of_int pLavel) ^ acc_str))
+      t.pIdHash
+    ""
         
     
   let to_string t =
@@ -207,6 +212,8 @@ end = struct
     ^"\n\n\n"
     ^" [cLavel<----> constraint] map\n"
     ^(string_of_c_value t.cTable)
+    ^ "[pLavel<----> p_id] map\n"
+    ^(string_of_id_pLavle t)
     
 
   let log_och = open_out "graph.log"

@@ -183,7 +183,7 @@ let propagate_p_fixed_info t graph assign cfix_state p remain_unfix_cs
 let fix t graph assign p priority
         ~may_change:(cfix_state, pfixable_counter, pfix_state, queue) =
   let unfixed_pos_cs = List.filter (CFixState.isnt_fixed cfix_state) (G.pos_cs graph p) in
-  let unfixed_neg_cs =  List.filter (CFixState.isnt_fixed cfix_state) (G.pos_cs graph p) in
+  let unfixed_neg_cs =  List.filter (CFixState.isnt_fixed cfix_state) (G.neg_cs graph p) in
   if priority.Priority.pol = Polarity.pos then
     let solution_asc = gather_solution_from_cs t assign p unfixed_pos_cs
                                                ~change:cfix_state
