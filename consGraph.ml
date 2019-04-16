@@ -91,7 +91,7 @@ end = struct
                ;env: Liq.env
                ;senv:Formula.Senv.t               
                ;pos: cLavel list
-               ;neg: pLavel list
+               ;neg: cLavel list
                }
 
   type t = {cTable: cNode array; cNodeNum: int;
@@ -99,35 +99,19 @@ end = struct
             ;pIdHash: (Id.t, pLavel) Hashtbl.t
            }
 
-  let string_of_cTable c_table =
-    let _, str = Array.fold_left
-                   (fun (i,acc_str) (cnode:cNode) ->
-                     let const_str = Constraint.scons2string cnode.value in
-                     let str = Printf.sprintf "\n\n\n%d -> \n%s" i const_str in
-                     (i+1, acc_str^str))
-                   (0, "")
-                   c_table
-    in
-    str
-
-  let to_string t =
-    string_of_cTable t.cTable
-    
-
-  let log_och = open_out "graph.log"
-              
-  let log t =
-    Printf.fprintf
-      log_och
-    "Graph:\n constraint table\n==================================================\n%s"
-      (to_string t)
-    
-
 
   let iter_p f t =
     for p = 0 to t.pNodeNum - 1 do
       f p
     done
+
+  let fold_p f t seed =
+    let acc = ref seed in
+    let () = for p = 0 to t.pNodeNum - 1 do
+               acc:= f p !acc
+             done
+    in
+    !acc
 
   let fold_c f t seed =
     let acc = ref seed in
@@ -135,13 +119,8 @@ end = struct
                acc := f c !acc
              done
     in
-    !acc      
+    !acc
     
-
-  let pNode_num t = t.pNodeNum
-                  
-  let cNode_num t = t.cNodeNum
-                  
   let pLavel_of_id t id =
     try Hashtbl.find t.pIdHash id with
       Not_found -> invalid_arg "pLavel_of_id: invalid id"
@@ -155,6 +134,93 @@ end = struct
   let cons_of_cLavel t c =
     try t.cTable.(c).value with
       _ -> invalid_arg "invalid lavel"
+    
+    
+  let string_of_c_value c_table =
+    let _, str = Array.fold_left
+                   (fun (i,acc_str) (cnode:cNode) ->
+                     let const_str = Constraint.scons2string cnode.value in
+                     let str = Printf.sprintf "\n\n\n%d -> \n%s" i const_str in
+                     (i+1, acc_str^str))
+                   (0, "")
+                   c_table
+    in
+    str
+
+  let string_of_dependency_p t =
+    fold_p
+      (fun p acc_str ->
+        let pos_cs = t.pTable.(p).pos in
+        let neg_cs = t.pTable.(p).neg in
+        let pos_cs_str = pos_cs
+                         |> List.map string_of_int
+                         |> String.concat ","
+        in
+        let neg_cs_str = neg_cs
+                         |> List.map string_of_int
+                         |> String.concat ","
+        in
+        let str = Printf.sprintf
+                    "\n%s -pos->[%s]; -neg->[%s]"
+                    (id_of_pLavel t p)
+                    pos_cs_str
+                    neg_cs_str
+        in
+        acc_str^str)
+    t
+    ""
+
+  let string_of_dependency_c t =
+    fold_c
+      (fun c acc_str ->
+        let pos_ps = t.cTable.(c).pos in
+        let neg_ps = t.cTable.(c).neg in
+        let pos_ps_str = pos_ps
+                         |> List.map (id_of_pLavel t)                       
+                         |> String.concat ","
+        in
+        let neg_ps_str = neg_ps
+                         |> List.map (id_of_pLavel t)
+                         |> String.concat ","
+        in
+        let str = Printf.sprintf
+                    "\n%d -pos->[%s]; -neg->[%s]"
+                    c
+                    pos_ps_str
+                    neg_ps_str
+        in
+        acc_str^str)
+    t
+    ""        
+            
+        
+        
+    
+  let to_string t =
+    "dependency of predicate\n--------------------------------------------------\n"
+    ^(string_of_dependency_p t)
+    ^"\n"
+    ^"dependency of constraint\n--------------------------------------------------"
+    ^(string_of_dependency_c t)
+    ^"\n\n\n"
+    ^" [cLavel<----> constraint] map\n"
+    ^(string_of_c_value t.cTable)
+    
+
+  let log_och = open_out "graph.log"
+              
+  let log t =
+    Printf.fprintf
+      log_och
+    "Graph:\n constraint table\n==================================================\n%s"
+      (to_string t)
+    
+
+
+  let pNode_num t = t.pNodeNum
+                  
+  let cNode_num t = t.cNodeNum
+                  
          
   let pos_ps graph c_lav =
     graph.cTable.(c_lav).pos
@@ -220,14 +286,14 @@ end = struct
                    (fun p ->
                      let p_lav = Hashtbl.find p_hash p in
                      add_neg p_map p_lav c_lav)
-                   pos_ps
+                   neg_ps
         in
         let () = S.iter
                (fun p ->
                  let p_lav = Hashtbl.find p_hash p in
                  (add_neg p_map p_lav c_lav);
                  (add_pos p_map p_lav c_lav))
-               pos_ps
+               othere_ps
         in
         ()
         
@@ -242,14 +308,14 @@ end = struct
                    (fun p ->
                      let p_lav = Hashtbl.find p_hash p in
                      add_neg c_map c_lav p_lav)
-                   pos_ps
+                   neg_ps
         in
         let () = S.iter
                (fun p ->
                  let p_lav = Hashtbl.find p_hash p in
                  (add_neg c_map c_lav p_lav);
                  (add_pos c_map c_lav p_lav))
-               pos_ps
+               othere_ps
         in
         ()        
       
@@ -259,6 +325,9 @@ end = struct
         let pos_ps, neg_ps, othere_ps =
           Constraint.positive_negative_unknown_p c
         in
+        let pos_ps_list = S.elements pos_ps in
+        let neg_ps_list = S.elements neg_ps in
+        let othere_ps_list = S.elements othere_ps in        
         let c_lav = add_c_array c_array c in
         let () = add_p_map p_hash p_map c_lav pos_ps neg_ps othere_ps in
         let () = add_c_map p_hash c_map c_lav pos_ps neg_ps othere_ps in

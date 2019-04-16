@@ -255,20 +255,27 @@ let check_validity_around_p graph assign p ~may_change:state =
 
 
 (* qeせずとも成立しているものは除く *)
-let get_qfree_sol graph assign p_lav sol =
+let get_qfree_sol graph assign p_lav sol pol =
   let p = G.id_of_pLavel graph p_lav in
-  let qfree_list = List.fold_left
-                     (fun acc (c_lav, q_phi) ->
-                       let c = G.cons_of_cLavel graph c_lav in
-                       let assign' = M.add p (Formula.Bool true) assign in
-                       let already_valid = Constraint.subst_simple_cons assign' c
-                                           |>Constraint.replace_unknown_p_to_top
-                                           |>Constraint.is_valid_simple_cons
-                       in
-                       if already_valid then acc
-                       else (Qe.f q_phi)::acc)
-                     []
-                     sol
+  let qfree_list =
+    if pol = Polarity.neg then
+      List.fold_left
+        (fun acc (c_lav, q_phi) ->
+          let c = G.cons_of_cLavel graph c_lav in
+          let assign' = M.add p (Formula.Bool true) assign in
+          let already_valid = Constraint.subst_simple_cons assign' c
+                              |>Constraint.replace_unknown_p_to_top
+                              |>Constraint.is_valid_simple_cons
+          in
+          if already_valid then acc
+          else (Qe.f q_phi)::acc)
+        []
+        sol
+    else
+      List.fold_left
+        (fun acc (c_lav, q_phi) -> (Qe.f q_phi)::acc)
+        []
+        sol
   in
   Formula.and_list qfree_list
         
@@ -323,7 +330,7 @@ let rec iter_fix graph state (qualify:QualifierAssign.t) assign = (* stateは外
       else
         QualifierAssign.get qualify graph assign p []
     in
-    let qe_sol =  get_qfree_sol graph assign p sol (* List.map Qe.f (List.map snd sol) *)
+    let qe_sol = get_qfree_sol graph assign p sol pol (* List.map Qe.f (List.map snd sol) *)
                  (* |> Formula.and_list *)
     in
     let p_assign = Formula.And (qualify_phi, qe_sol) in
