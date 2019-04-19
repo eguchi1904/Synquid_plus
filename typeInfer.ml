@@ -86,15 +86,15 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
 
 
 let f  z3_env dinfos qualifiers env t =
-  let inlined_t = Syntax.inline_rec_fun M.empty t in
-  let (ta_t, ml_ty) = Ml.infer (Ml.shape_env env) inlined_t in
+  (* let inlined_t = Syntax.inline_rec_fun M.empty t in *)
+  let (ta_t, ml_ty) = Ml.infer (Ml.shape_env env) t in
   liqInfer z3_env dinfos qualifiers env ta_t
   
 
 let f_check z3_env dinfos qualifiers env t (_,_,req_ty)=
-  let inlined_t = Syntax.inline_rec_fun M.empty t in
+  (* let inlined_t = Syntax.inline_rec_fun M.empty t in *)
   (* let t = Syntax.alpha M.empty t in *)
-  let ta_t = Ml.check (Ml.shape_env env) inlined_t (Ml.shape req_ty) in
+  let ta_t = Ml.check (Ml.shape_env env) t (Ml.shape req_ty) in
   (* req_ty を、ml_tyに合わせる必要があるな *)
   (* それか要求を通せる何か、これは辛いな。 *)
   liqCheck z3_env dinfos qualifiers env ta_t req_ty

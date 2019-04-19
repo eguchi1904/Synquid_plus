@@ -146,7 +146,7 @@ let output2file output_file  (data_info_map, minfos, fundecs, defs) =
   (* 以下で、入力ファイルを書き込み *)
   close_out outchan
 
-let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x)))
+(* let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x))) *)
 (* let qualifiers = *)
 (*   let open Formula in *)
 (*   let valVar = Var (IntS, Id.valueVar_id) in *)

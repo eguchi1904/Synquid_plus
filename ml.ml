@@ -224,7 +224,7 @@ let rec unify c sita = match c with
 
 let unify2 ty1 ty2 = unify [(ty1, ty2)] subst_empty
 
-let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x)))
+(* let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x))) *)
    
 let rec infer_t env e = match e with
   |Syn.PLet (x, t1, t2) ->

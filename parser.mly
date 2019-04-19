@@ -193,9 +193,10 @@ cargs:
 m3:/* query */
 | ID nl EQUAL nl prg nl
 {
- match $5 with
-  |PF f -> ($1, PF (PFix ($1, f)))
-  | _ -> ($1, $5)
+ if S.mem $1 (Syntax.fv $5) then (* recursive def *)
+     ($1, PLet ($1, $5, (PE (PSymbol $1))) )
+ else
+     ($1, $5)
 }
 
 m4: /* qualifier */

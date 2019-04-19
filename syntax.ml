@@ -100,7 +100,7 @@ let mk_case a b c = {constructor=a; argNames=b; body=c }
 
 let rec syn2string = function
   |PLet (x, t1, t2) ->
-    Printf.sprintf "let %s = %s \n %s"
+    Printf.sprintf "let %s = %s \nin\n %s\n"
                    x
                    (syn2string t1)
                    (syn2string t2)   
