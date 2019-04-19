@@ -123,6 +123,14 @@ let mk_fresing_subst senv sita =
     M.empty
     sita
   
+
+let mk_replace_table sita =
+  M.map
+    (function |Formula.Var (sort, x) -> (x, sort)
+              |_ -> invalid_arg "mk_replace_table: not varible to varialbe substitution"
+    )
+  sita
+  
   
 let mk_flatten_subst senv sita =
   let freshing_sita = mk_fresing_subst senv sita in
@@ -135,8 +143,8 @@ let mk_flatten_subst senv sita =
                       Formula.Eq (Formula.Var (x_sort, x), e))
                |> Formula.and_list
   in
-  
-  (Formula.subst_compose delta freshing_sita), eq_phi
+  Formula.subst_compose delta freshing_sita
+  , eq_phi
   
 
 (* envはpが定義されたところでの環境 *)
@@ -146,8 +154,9 @@ let mk_bound assign senv env pending_sita = function
      |None -> invalid_arg "Solver.mk_bound: cons_env and env mismatch"
      |Some local_env ->
        let flatten_sita, eq_phi = mk_flatten_subst senv pending_sita in
+       let flatten_replace = mk_replace_table flatten_sita in
        let local_env' = Liq.env_substitute_F assign local_env (* ここはやらなくても良い *)
-                        |>Liq.env_substitute_F flatten_sita
+                        |>Liq.env_replace flatten_replace     (* envの変数をreplaceするための関数 *)
        in
        let e1' = Formula.substitution assign e1 
                  |>Formula.substitution flatten_sita
@@ -167,8 +176,10 @@ let mk_bound assign senv env pending_sita = function
      |None -> invalid_arg "Solver.mk_bound: cons_env and env mismatch"
      |Some local_env ->
        let flatten_sita, eq_phi = mk_flatten_subst senv pending_sita in
+       let flatten_replace = mk_replace_table flatten_sita in       
+       let flatten_sita_debug = M.bindings flatten_sita in
        let local_env' = Liq.env_substitute_F assign local_env (* ここはやらなくても良い *)
-                        |>Liq.env_substitute_F flatten_sita
+                        |>Liq.env_replace flatten_replace
        in
        let e1' = Formula.substitution assign e1 
                  |>Formula.substitution flatten_sita

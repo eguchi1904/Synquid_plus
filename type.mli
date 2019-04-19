@@ -77,7 +77,7 @@ val substitute_F : Formula.subst -> t -> t
 val substitute_T : subst -> t -> t
 val substitute_pa : Formula.pa M.t -> t -> t
 val env_substitute_F : Formula.subst -> env -> env
-val replace_F : Id.t -> Id.t -> t -> t
+
 val sort_subst2type : Formula.sort M.t -> t -> t
 val alpha_fresh : t -> t
 val instantiate_implicit : schema -> t list -> Formula.pa list -> t
@@ -88,3 +88,10 @@ val mk_valid : Id.t -> basetype -> Formula.t
 val mk_subst_for_const_var : env -> Formula.t M.t
 val t_alpha_convert : t -> Id.t list -> t
 val refresh_refinment : t -> t
+
+(* -------------------------------------------------- *)
+(* substitution *)
+(* -------------------------------------------------- *)
+val replace_F : Id.t -> Id.t -> t -> t
+val env_replace: (Id.t * Formula.sort) M.t -> env -> env
+  

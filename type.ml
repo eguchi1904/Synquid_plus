@@ -456,6 +456,38 @@ let rec env_substitute_F (sita:Formula.subst) (env:env) :env=
       env
       env_empty
 
+
+(* 環境の先頭から置換していく *)
+let rec env_replace (replace_table:(Id.t * Formula.sort) M.t) (env:env) = 
+  let env', _, _ = List.fold_right
+                  (fun env_elm (acc, acc_replace_table, acc_subst) ->
+                    match env_elm with
+                    |P p -> (env_add_F acc (Formula.substitution acc_subst p)),
+                            acc_replace_table,
+                            acc_subst
+                    |B (x, (arg1, arg2, ty)) when M.mem x acc_replace_table ->
+                      let x', sort = M.find x acc_replace_table in
+                      let acc_subst' = M.add x (Formula.Var (sort, x')) acc_subst in
+                      (env_add_schema acc (x',(arg1, arg2, substitute_F acc_subst ty))),
+                      M.remove x replace_table,
+                      acc_subst'
+                      
+                    |B (x, (arg1, arg2, ty)) when M.mem x acc_subst -> (* これ以降のxには何もしない *)
+                      let acc_subst' = M.remove x acc_subst in
+                      (env_add_schema acc (x,(arg1, arg2, substitute_F acc_subst ty))),
+                      acc_replace_table,
+                      acc_subst'
+                    |B (x, (arg1, arg2, ty)) ->
+                      (env_add_schema acc (x,(arg1, arg2, substitute_F acc_subst ty))),
+                      acc_replace_table,
+                      acc_subst
+                  )
+                  env
+                  (env_empty, replace_table, M.empty)
+  in
+  env'
+        
+
   
 (* 述語変数の置換 [y/x]t x -> yに変換*)
 let rec replace_F x y t =
