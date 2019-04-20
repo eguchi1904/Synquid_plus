@@ -128,8 +128,8 @@ let is_satisifiable_simple_cons_all = function
 let assert_p_well_formedness = function
   |SSub _ -> true
   |SWF (env, (senv,phi)) ->
-    List.for_all (function |Formula.Unknown (senv2, _, _, _) ->
-                             if senv <> senv2 then
+    List.for_all (function |Formula.Unknown (senv2, sort_sita, _, _) ->
+                             if (senv <> senv2) then
                                let () = Printf.printf "senv vs senv2differ:\n%s \nvs\n %s"
                                                       (Formula.Senv.of_string senv)
                                                       (Formula.Senv.of_string senv2) in
@@ -350,7 +350,7 @@ let rec split_cons' top_env (c:cons) =
      |Some b_sort ->
        let senv =(Liq.mk_sort_env env) in
        (match base_ty with
-        |Liq.TData (data, tys, pas) ->
+        |Liq.TData (_, tys, pas) ->
           let tys_simple_cons = 
             List.concat (List.map (fun ty -> split_cons' top_env (WF (env, ty))) tys)
           in

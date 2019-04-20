@@ -281,7 +281,8 @@ and cons_gen_e dinfos env e =
        let ty_x' = Liq.instantiate_implicit x_liq_sch tys_tmp unknown_pa_list in
        (* ty_x'のwell formedness: ここで、新しく生成したunknown_paなどのwellformednessが保証される *)
        (* しかしty_xの他のrefinement部分に重複した奴がきてしまう。 *)
-       let wellformedness_ty_x' = WF (env, ty_x') in       
+       let wellformedness_of_params' =
+         WF (env, Liq.TScalar (Liq.TData ("dummy", tys_tmp, unknown_pa_list), Formula.Bool true))  in       
        let  a_sort_sita_list = M.bindings a_sort_sita in
        let () = Printf.printf "a_list_sort:%s"
                               (String.concat ","
@@ -299,7 +300,7 @@ and cons_gen_e dinfos env e =
        (* logging *)
        let () = List.iter (log_pa_tmp ("instantiate:"^x)) unknown_pa_list in
        let () = List.iter (log_tmp ("instantiate:"^x)) tys_tmp in
-       let new_c =  [wellformedness_ty_x'] in
+       let new_c =  [wellformedness_of_params'] in
        let () = log_cons "" new_c in
        let schs_tmp = List.map Liq.mk_mono_schmea tys_tmp in
        (TaSyn.PSymbol (x, schs_tmp), (* Formula.tのinstantiateの情報が入っていない *)

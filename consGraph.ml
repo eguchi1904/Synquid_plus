@@ -349,8 +349,9 @@ end = struct
 
            
     let rec scan_wf_cs p_hash p_env_array p_senv_array = function
-      |Constraint.SWF (env, (senv, Formula.Unknown (_,_,_,p)))::other ->
+      |Constraint.SWF (env, (_, Formula.Unknown (senv,_,_,p)))::other ->
         let p_lav = Hashtbl.find p_hash p in
+        (assert (p_env_array.(p_lav) = Liq.env_empty));
         (p_env_array.(p_lav) <- env);
         (p_senv_array.(p_lav) <- senv);
         scan_wf_cs p_hash p_env_array p_senv_array other
