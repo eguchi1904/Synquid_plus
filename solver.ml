@@ -180,7 +180,7 @@ end =  struct
     match PriorityQueue.pop t.queue with
     |None -> None
     |Some (p, pol, priority) ->
-      
+
       let sol = FixabilityManager.fix t.fixabilityManager
                                       graph assign p priority
                                       ~may_change:(t.cFixState,
@@ -193,6 +193,10 @@ end =  struct
                              ~may_change:t.queue
       in
       let () = CFixState.prop_p_fix t.cFixState graph p
+      in
+      let () =
+        log graph ("pop:"^(G.id_of_pLavel graph p)
+                   ^"priority:"^(Priority.to_string graph priority)) t
       in
       Some (p, pol, sol)
 
@@ -330,7 +334,6 @@ let log_poped graph assign fixed_cs (p, pol, sol) =
 let rec iter_fix graph state (qualify:QualifierAssign.t) assign = (* stateは外に置きたいほんとは *)
   match DyState.next state graph assign with
   |Some (p, pol, sol) ->
-    let () = DyState.log graph ("pop:"^(G.id_of_pLavel graph p)) state in
     let fixed_cs = List.map fst sol
                  |> List.map (G.cons_of_cLavel graph)
     in

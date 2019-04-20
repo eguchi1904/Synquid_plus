@@ -429,8 +429,11 @@ let rec separate_unknown_simple_cons = function
                         )
     in
     let unknown_p_sub_cons_list = List.map (fun p -> SSub (env, phi1, p)) unknown_p_list in
-    let ohthers_p_sub_cons = SSub (env, phi1, (Formula.and_list others)) in
-    ohthers_p_sub_cons :: unknown_p_sub_cons_list
+    if others = [] then
+      unknown_p_sub_cons_list
+    else
+      let ohthers_p_sub_cons = SSub (env, phi1, (Formula.and_list others)) in
+      ohthers_p_sub_cons :: unknown_p_sub_cons_list
                         
 let split_cons c =
   match c with
