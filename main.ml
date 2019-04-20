@@ -64,7 +64,8 @@ let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t *
 
 let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t * ((Id.t * Type.schema) list))
   =
-  let init_env = (Type.env_add_schema_list Type.env_empty (cons_env@fundecs)) in
+  let fundecs' = until_assoc f_name fundecs in (* 自分は覗く *)
+  let init_env = (Type.env_add_schema_list Type.env_empty (cons_env@fundecs')) in
   let (ts,ps,f_ty) as f_sch = List.assoc f_name fundecs in
   let z3_env = UseZ3.mk_z3_env () in  
   match TypeInfer.f_check z3_env data_infos qualifiers init_env tmp f_sch with

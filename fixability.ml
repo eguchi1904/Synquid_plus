@@ -173,7 +173,14 @@ let mk_bound assign senv env pending_sita = function
             ;frontEnv = cons_front_env
             ;posFormula = e1} ->
     (match Liq.env_suffix cons_back_env env with
-     |None -> invalid_arg "Solver.mk_bound: cons_env and env mismatch"
+     |None ->                   (* error *)
+       let () = print_string
+                  ("cons_back_env:\n"
+                ^(Liq.env2string cons_back_env)
+                ^"env:^\n"
+                ^(Liq.env2string env))
+       in
+       invalid_arg "Solver.mk_bound: cons_env and env mismatch"
      |Some local_env ->
        let flatten_sita, eq_phi = mk_flatten_subst senv pending_sita in
        let flatten_replace = mk_replace_table flatten_sita in       
@@ -380,7 +387,8 @@ let is_fixable = function
 
 module Constructor = struct
 
-  let mk_negative_unbound ~back_env ~front_env ~pos_formula ~unknown_set (senv, sort_sita, sita, p) = 
+  let mk_negative_unbound ~back_env ~front_env ~pos_formula ~unknown_set (senv, sort_sita, sita, p) =
+    (assert (Liq.env_empty <> back_env));
     let position = Negative {backEnv = back_env
                             ;frontEnv = front_env
                             ;posFormula = pos_formula}
@@ -413,7 +421,7 @@ module Constructor = struct
             let front_env = Liq.env_rev rev_front_env in            
             let unbound =
               mk_negative_unbound
-              back_env front_env pos_formula unknown_set (senv, sort_sita, sita, p)
+                back_env front_env pos_formula unknown_set (senv, sort_sita, sita, p)
             in          
             let env  = G.pLavel_of_id graph p |> G.get_p_env graph in
             let bound, wait_pc = upgrade_unbound M.empty env unbound in

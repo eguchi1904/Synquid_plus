@@ -350,8 +350,8 @@ and cons_gen_b dinfos env b req_ty =
            (M.singleton Id.valueVar_id (Formula.Bool false))
            phi
        in       
-       let env_true = Liq.env_add_F (Liq.env_append c_env1 env) phi_true in
-       let env_false = Liq.env_add_F (Liq.env_append c_env1 env) phi_false in
+       let env_true = Liq.env_add_F (Liq.env_append env c_env1 ) phi_true in
+       let env_false = Liq.env_add_F (Liq.env_append env c_env1) phi_false in
        (* logging *)
        let () = log_place "if true" t2 in 
        let (t2', c2) = cons_gen dinfos env_true t2 req_ty in
@@ -399,9 +399,10 @@ and cons_gen_case dinfos env req_ty e_tmp  {TaSyn.constructor= con;
                     (Formula.substitution
                        (M.singleton Id.valueVar_id z_var) phi')
     in
-    let env' = Liq.env_add_F
-                 (Liq.env_append arg_env
-                                 (Liq.env_append c_env1 env))
+    let env' =
+      Liq.env_add_F
+                 (Liq.env_append env
+                                 (Liq.env_append c_env1 arg_env))
                  (Formula.substitution
                     (M.singleton Id.valueVar_id z_var) phi)
     in
@@ -472,6 +473,7 @@ let cons_gen_infer dinfos env t  =
   let new_c =  (WF (env, tmp)) in
   let () = log_tmp "toplevel" tmp in
   let () = log_cons "" [new_c] in
+
   let (t', cs) = cons_gen dinfos env t tmp in
   let cs = new_c::cs in
   (t', tmp, cs)

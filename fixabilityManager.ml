@@ -17,20 +17,41 @@ module CFixState = ConstraintFixState
 exception Cons_pred_mismatch of string
                               
 type t = {table: ((G.pLavel * G.cLavel), Fixability.t Stack.t) Hashtbl.t
-         ;affect: ((G.pLavel * G.cLavel), G.pLavel list) Hashtbl.t }
+         ;affect: ((G.pLavel * G.cLavel), PSet.t ) Hashtbl.t }
 
 let of_string graph t =
-  Hashtbl.fold
-    (fun (p,c) stack acc_str ->
-      try
-        let fixability = Stack.top stack  in
-        let str = Printf.sprintf "\n(%s, c:%d) -> %s" (G.id_of_pLavel graph p) (G.int_of_cLavel c) (Fixability.of_string fixability) in
-        (acc_str^str)
-      with
-        _ -> acc_str
-    )
-  t.table
-  ""
+  let table_str =
+    Hashtbl.fold
+      (fun (p,c) stack acc_str ->
+        try
+          let fixability = Stack.top stack  in
+          let str = Printf.sprintf "\n(%s, c:%d) -> %s" (G.id_of_pLavel graph p) (G.int_of_cLavel c) (Fixability.of_string fixability) in
+          (acc_str^str)
+        with
+          _ -> acc_str
+      )
+      t.table
+      ""
+  in
+  let affect_str =
+    Hashtbl.fold
+      (fun (p,c) q_set acc_str ->
+        let q_list_str =
+          PSet.elements q_set |>
+            List.map (G.id_of_pLavel graph) 
+          |> String.concat ","
+        in
+        let str = Printf.sprintf "\n(%s, c:%d) -> [%s]" (G.id_of_pLavel graph p) (G.int_of_cLavel c) q_list_str
+        in
+        acc_str^ str)
+      t.affect
+      ""
+  in
+  "*table\n"
+  ^table_str
+  ^"\n*affect\n"
+  ^affect_str
+    
       
 
 let is_fixable t p c =
@@ -70,13 +91,13 @@ let count_other_unknown_in_unfix_cs t graph assign cfix_state pol p =
   
 let add_affect affect p c q =
   match Hashtbl.find_opt affect (p,c) with
-  |Some l -> Hashtbl.replace affect (p,c) (q::l)
-  |None -> Hashtbl.add affect (p,c) [q]
+  |Some pset -> Hashtbl.replace affect (p,c) (PSet.add q pset)
+  |None -> Hashtbl.add affect (p,c) (PSet.singleton q)
 
 let update_affect t p c wait_ps = (* p,cを解くためには、wait_psが必要等情報をadd *)
   PSet.iter
     (fun q -> add_affect t.affect q c p)
-    wait_ps
+    (PSet.remove p wait_ps)
   
   
 let decr_wait_num t assign graph cfix_state q c 
@@ -102,11 +123,11 @@ let decr_wait_num t assign graph cfix_state q c
 
 let tell_constraint_predicate_is_fixed t graph assign cfix_state p c
                                        ~may_change:(pfixable_counter, pfix_state, queue) =
-  List.iter
+  PSet.iter
     (fun q -> decr_wait_num t assign graph cfix_state q c 
                             ~may_change:(pfixable_counter, pfix_state, queue)
     )
-    (List.filter (PFixState.isnt_fixed pfix_state) (Hashtbl.find t.affect (p,c)) )
+    (PSet.filter (PFixState.isnt_fixed pfix_state) (Hashtbl.find t.affect (p,c)) )
 
 
   
@@ -253,7 +274,7 @@ module Constructor = struct
       (fun p ->
         List.iter
           (fun c ->
-            Hashtbl.add affect (p,c) [])
+            Hashtbl.add affect (p,c) PSet.empty)
           ((G.pos_cs graph p)@(G.neg_cs graph p))
       )
     graph

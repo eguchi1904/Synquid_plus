@@ -289,8 +289,8 @@ let rec env_mem (env:env) v =
   |_::othere -> env_mem othere v
   |[] -> false
 
-let env_append (env1:env) (env2:env):env =
-  env1@env2
+let env_append (dst_env:env) (env2:env):env =
+  env2@dst_env
 
 let env_fold f_b f_p env seed =
   List.fold_left
@@ -318,9 +318,13 @@ let env_fold_trace f_b f_p env seed =
 
 let env_rev  = List.rev
 
-(* env1のがでかい *)
+(* env1のがでかい,envはデータ構造としては反転しているので *)
 let env_suffix (env1:env) (env2:env) =
-  List.suffix env1 env2
+  let env1_rev = List.rev env1 in
+  let env2_rev = List.rev env2 in  
+  match List.suffix env1_rev env2_rev with
+  |Some suffix_env_rev -> Some (List.rev suffix_env_rev)
+  |None -> None
 
   
 let env_bindings (env:env) =
