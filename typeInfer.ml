@@ -38,6 +38,9 @@ let liqInfer z3_env dinfos qualifiers env ta_t =
   let st_infer = Sys.time () in
   (print_string (TaSyn.syn2string Ml.string_of_sch ta_t));
   let ta_t', tmp, cs = ConsGen.cons_gen_infer dinfos env ta_t in
+  let () = Format.printf "\ntasyn:\n%s\n\n"
+                         (TaSyntax.syn2string Liq.schema2string_sort ta_t')
+  in  
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs) in
@@ -55,6 +58,9 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   let st_infer = Sys.time () in
   (print_string (TaSyn.syn2string Ml.string_of_sch ta_t));
   let (ta_t', cs) = cons_gen dinfos env ta_t req_ty in
+  let () = Printf.printf "\ntasyn:\n%s\n\n"
+                         (TaSyntax.syn2string Liq.schema2string_sort ta_t')
+  in
   let auxi_ty_map, up_ps = extract_up ta_t' in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)

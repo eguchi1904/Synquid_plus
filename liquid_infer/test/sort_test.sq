@@ -152,15 +152,16 @@ partition :: p: a -> xs: RList a <{True}> -> {Pair (RList {a | _v <= p} <{True}>
 
 
 qsort = \l.
-  let append = \l1. \l2.
-     match l1 with
-      Nil -> l2
-      Cons y ys -> Cons y (append ys l2)
-   in
    match l with
     Nil -> Nil
-    Cons x xs -> match partition x xs with
-                  Pair l1 l2 -> append (qsort l1) (Cons x (qsort l2))
+    Cons x xs ->
+      let append = \l1. \l2.
+        match l1 with
+         Nil -> l2
+         Cons y ys -> Cons y (append ys l2)
+       in
+         match partition x xs with
+            Pair l1 l2 -> append (qsort l1) (Cons x (qsort l2))
 
 
 

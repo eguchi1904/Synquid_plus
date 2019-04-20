@@ -58,8 +58,8 @@ and extract_unknown_p_base = function
         S.empty
         ts
     in
-    let ps_set =
-      List.fold_left
+    let ps_set = 
+     List.fold_left
         (fun acc (_, body) -> S.union (Formula.extract_unknown_p body) acc)
         S.empty
         ps
@@ -164,7 +164,7 @@ and b2string_sort = function
   |TBool ->"Bool"|TInt -> "Int"
   |TData (i,ts,ps) ->
     let ts_string = List.map t2string_sort ts in
-    let ps_string_list = List.map Formula.pa2string ps in
+    let ps_string_list = List.map Formula.pa2string_detail ps in
     Printf.sprintf "%s %s <%s> "
                    i
                    (String.concat " " ts_string)
@@ -225,6 +225,15 @@ let rec schema2string ((ts,ps,t):schema) =
                                        (schema2string (ts,left,t))
   |[] -> t2string t
 
+
+let rec schema2string_sort ((ts,ps,t):schema) =
+  match ps with
+  |(r,shape) :: left -> Printf.sprintf "<%s::%s>.%s"
+                                       r
+                                       (Formula.pashape2string shape)
+                                       (schema2string (ts,left,t))
+  |[] -> t2string_sort t
+       
 type subst = t M.t   (* 型変数の代入 *)
 
 
@@ -577,7 +586,7 @@ let instantiate_implicit ((ts,ps,t):schema) ts' ps' =
                         sita)
                     M.empty
                     ts
-                    ts'
+                    ts'         (* instans先 *)
   in
 
   (substitute_pa sita_pa

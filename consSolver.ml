@@ -193,7 +193,9 @@ let rec init_p_assignment const_var_sita (qualifiers: Qualifier.t list) (cs:simp
   let p_assign = List.fold_left
                    (fun acc c ->
                      match c with
-                     |SWF (_, (senv, Formula.Unknown (_, sort_sita, sita, k))) ->
+                     |SWF (_, (_, Formula.Unknown (senv, sort_sita, sita, k)))
+                      ->
+
                        let p_list = List.concat
                                       (List.map
                                          (gen_p_candidate const_var_sita senv k)
@@ -297,7 +299,9 @@ let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *
   |SWF (env, (senv, Formula.Unknown (_, sort_sita_i, sita_i, i))) ->
     let qs = M.find i pcandi in
     let qs' = List.filter
-                (fun q -> let q' = (Formula.sort_subst2formula sort_sita_i (Formula.substitution sita_i q)) in
+                (fun q -> let q' =
+                            q |> Formula.sort_subst2formula sort_sita_i |>  Formula.substitution sita_i
+                          in
                           Constraint.is_valid_simple_cons  (SWF (env,(senv, q'))))
                 qs
     in

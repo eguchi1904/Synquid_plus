@@ -154,7 +154,7 @@ type pa_shape = (sort list) * sort
 
 let rec p2string = function
   |Bool b -> if b = true then "True" else "False"
-  | Int i -> string_of_int i
+  |Int i -> string_of_int i
   |Set (_,ts) ->let ts_string = String.concat ", " (List.map p2string ts) in
                 Printf.sprintf "[%s]" ts_string
   |Var (_,id) ->Printf.sprintf "%s " id
@@ -166,11 +166,11 @@ let rec p2string = function
     in
     let senv_str = List.map fst (Senv.reveal senv) |> String.concat "," in
     if sita_list = [] then
-      (* Printf.sprintf "senv:[%s].P[%s]" senv_str id *)
-      Printf.sprintf "P[%s]" id
+      Printf.sprintf "senv:[%s].P[%s]" senv_str id
+      (* Printf.sprintf "P[%s]" id *)
     else
-      Printf.sprintf "sita:[%s].P[%s]" (String.concat ";" sita_str_list) id
-      (* Printf.sprintf "senv:[%s].sita:[%s].P[%s]" senv_str (String.concat ";" sita_str_list) id               *)
+      (* Printf.sprintf "sita:[%s].P[%s]" (String.concat ";" sita_str_list) id *)
+      Printf.sprintf "senv:[%s].sita:[%s].P[%s]" senv_str (String.concat ";" sita_str_list) id
   |Cons (_,id,ts)|UF (_,id,ts) ->
     let ts_string = String.concat " " (List.map p2string ts) in
     Printf.sprintf "(%s %s)" id ts_string
@@ -240,10 +240,15 @@ let rec p2string_with_sort = function
                           (fun (s, p) -> Printf.sprintf "%s->%s" s (p2string_with_sort p))
                           sita_list
     in
-    if sita_list = [] then
+    let sort_sita_str =
+      M.bindings sort_sita
+      |> List.map (fun (s, p) -> Printf.sprintf "%s -> %s" s (sort2string p))
+      |> String.concat ";" 
+    in
+    if sita_list = [] && sort_sita = M.empty then
       Printf.sprintf "P[%s]" id
     else
-      Printf.sprintf "[%s].P[%s]" (String.concat ";" sita_str_list) id
+      Printf.sprintf "[%s][%s].P[%s]" sort_sita_str (String.concat ";" sita_str_list) id
   |Cons (s,id,ts)|UF (s,id,ts) ->
     let ts_string = String.concat " " (List.map p2string_with_sort ts) in
     Printf.sprintf "((%s %s):%s)" id ts_string (sort2string s)
@@ -581,10 +586,10 @@ let rec sort_subst_to_shape sita ((args, s):pa_shape) :pa_shape=
 let rec sort_subst2formula (sita:sort_subst) = function
   |Bool b -> Bool b
   |Int i -> Int i
-  |Unknown (senv, sort_sita, formula_sita, i) ->
+  |Unknown (senv, sort_sita, formula_sita, i) -> (* formula_sitaの中には代入するべきか *)
     let sort_sita' = compose_sort_subst sita sort_sita in
-    let formula_sita' = M.map (sort_subst2formula sita) formula_sita in
-    Unknown (senv, sort_sita', formula_sita', i)
+    (* let formula_sita' = M.map (sort_subst2formula sita) formula_sita in *)
+    Unknown (senv, sort_sita', formula_sita, i)
   |Set (s, ts) ->
     let ts' = List.map (sort_subst2formula sita) ts in
     Set (sort_subst sita s, ts')
@@ -911,5 +916,5 @@ let pa2string_detail ((arg,p):pa) =
                                    sprintf "%s:%s" id (sort2string sort))
                               arg)
   in
-  sprintf "%s. %s" arg_str (p2string p)
+  sprintf "%s. %s" arg_str (p2string_with_sort p)
        

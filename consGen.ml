@@ -24,7 +24,7 @@ let log_pa_tmp mes ((args, p):Formula.pa) =
   
   
 let log_cons mes cs =
-  Printf.fprintf cons_och "\n\n%s\n" (cons_list_to_string_human cs)
+  Printf.fprintf cons_och "\n\n%s\n" (cons_list_to_string cs)
 
 let log_place mes t =
   Printf.fprintf cons_och "\n\n\n\n%s\n|||||||||||||||||||||||||||||||||||||\n%s\n|||||||||||||||||||||||||||||||||||||\n"
@@ -97,7 +97,8 @@ let mk_tmp dinfos env t =
   let tmp = fresh senv dinfos (Ml.ta_infer (Ml.shape_env env) t) in
   tmp
 
-            
+(* 生成するunknown predicateは、少なくとも一つクリーンな（pendign substなどがない）
+well formued constratint を持つ *)
 let rec cons_gen dinfos env t req_ty =
   match t with
   |TaSyn.PLet ((x, (alist, ty)), t1, t2) when S.mem x (TaSyn.fv t1)-> (* recursive def *)
@@ -244,7 +245,7 @@ and cons_gen_e dinfos env e =
            [])
         |None ->  raise (ConsGenErr "dont know what sort is this"))
        
-     |(alist, plist, ty_x) ->
+     |(alist, plist, ty_x) ->   (* これ、ty_x参照してないがなんで良いの *)
        let () = Printf.printf "\n env_sch\n%s::%s. %s" x (String.concat "," alist) (Liq.schema2string x_liq_sch) in
        let a_sort_sita =
          List.fold_left2
@@ -279,6 +280,7 @@ and cons_gen_e dinfos env e =
        let tys_tmp = List.map (fresh (Liq.mk_sort_env env) dinfos) tys in
        let ty_x' = Liq.instantiate_implicit x_liq_sch tys_tmp unknown_pa_list in
        (* ty_x'のwell formedness: ここで、新しく生成したunknown_paなどのwellformednessが保証される *)
+       (* しかしty_xの他のrefinement部分に重複した奴がきてしまう。 *)
        let wellformedness_ty_x' = WF (env, ty_x') in       
        let  a_sort_sita_list = M.bindings a_sort_sita in
        let () = Printf.printf "a_list_sort:%s"

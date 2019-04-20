@@ -100,11 +100,11 @@ sortTest =
   match l with
    Nil -> (Cons x Nil)
    Cons y ys -> if geq x  y then
-                 Cons x l
+                 Cons x (Cons y ys) -- ここで Cons x l とするとsortedと片付けられない、非自明ポイントがある
 	       else
 	         Cons y (insert x ys)
  in
- let  sort = \l.
+ let sort = \l.
   match l with
    Nil -> Nil
    Cons y ys -> insert y (sort ys)

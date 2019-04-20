@@ -19,10 +19,10 @@ type pure_simple_cons = |PSWF of ((Id.t * Formula.sort) list * Formula.t)
 
 
 let cons2string = function
-  |WF (env, ty) -> Printf.sprintf "WF\n %s\n%s\n" (Liq.env2string env) (Liq.t2string ty)
+  |WF (env, ty) -> Printf.sprintf "WF\n %s\n%s\n" (Liq.env2string env) (Liq.t2string_sort ty)
   |Sub (env, ty1, ty2) ->
     Printf.sprintf "Sub\n %s\n%s <: %s\n"
-                   (Liq.env2string env) (Liq.t2string ty1)  (Liq.t2string ty2)
+                   (Liq.env2string env) (Liq.t2string_sort ty1)  (Liq.t2string_sort ty2)
 
 let cons2string_human = function
   |WF (env, ty) ->
@@ -96,7 +96,7 @@ let is_valid_simple_cons = function
   |SWF (_, (senv, e)) ->
        let x_sort_list = Formula.fv_sort_include_v e in
    (* omit checking if e has a boolean sort *)
-       List.for_all (fun x_sort -> Formula.Senv.mem2 x_sort senv) x_sort_list
+       List.for_all (fun (x,sort) -> Formula.Senv.mem2 (x,sort) senv) x_sort_list
 
 
 (* use Liq.env2formula_all  *)

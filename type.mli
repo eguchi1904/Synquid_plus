@@ -38,6 +38,7 @@ val sort2type_base : Formula.sort -> basetype
 val mk_mono_schmea : t -> schema
 val schema2ty: schema -> t
 val schema2string : schema -> string
+val schema2string_sort : schema -> string  
 
            
 (* -------------------------------------------------- *)
