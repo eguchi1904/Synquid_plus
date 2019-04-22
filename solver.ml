@@ -140,6 +140,7 @@ end =  struct
   let of_string graph t =
     let fix_manager_str = FixabilityManager.of_string graph t.fixabilityManager in
     let pfixable_counter_str = PFixableConstraintCounter.of_string graph t.pFixableCounter in
+    let pfix_state_str = PFixState.to_string graph t.pFixState in
     let queue_str = PriorityQueue.to_string graph t.queue in
     "\nFixabiliy Manager\n"
     ^"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
@@ -147,6 +148,9 @@ end =  struct
     ^"\n predicate fixable counter"
     ^"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
     ^ pfixable_counter_str
+    ^"\n predicate fix state"
+    ^"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+    ^ pfix_state_str    
     ^"\n queue\n"
     ^"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
     ^ queue_str
@@ -180,7 +184,13 @@ end =  struct
     match PriorityQueue.pop t.queue with
     |None -> None
     |Some (p, pol, priority) ->
-
+      let () =
+        log graph ("pop:"^(G.id_of_pLavel graph p)
+                   ^"priority:"^(Priority.to_string graph priority)) t
+      in
+      let () = PFixState.fix t.pFixState p
+                             ~may_change:t.queue
+      in      
       let sol = FixabilityManager.fix t.fixabilityManager
                                       graph assign p priority
                                       ~may_change:(t.cFixState,
@@ -188,15 +198,7 @@ end =  struct
                                                    t.pFixState,
                                                    t.queue)
       in
-      (* Fixabilityに夜、fixstateの変化を反映した後に、fixをする *)
-      let () = PFixState.fix t.pFixState p
-                             ~may_change:t.queue
-      in
       let () = CFixState.prop_p_fix t.cFixState graph p
-      in
-      let () =
-        log graph ("pop:"^(G.id_of_pLavel graph p)
-                   ^"priority:"^(Priority.to_string graph priority)) t
       in
       Some (p, pol, sol)
 
@@ -223,6 +225,8 @@ type validityLevel =
   
 let check_validity graph assign state p c_lavel   =
   let cfix_state = state.DyState.cFixState in
+  if CFixState.is_fixed cfix_state c_lavel then ()
+  else
   if CFixState.is_zero_unknown cfix_state c_lavel then
     begin
       let is_valid = G.cons_of_cLavel graph c_lavel

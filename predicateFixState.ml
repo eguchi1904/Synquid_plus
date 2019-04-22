@@ -17,6 +17,13 @@ type state = |Fixed of state  (* pre state *)
              |PartialFixable 
              |ZeroFixable
 
+let state_to_string = function
+  |Fixed _ -> "Fixed"
+  |AllFixable rc ->
+    Printf.sprintf "AllFixable:fixableNum = %d; othere count = %d" !(rc.fixableNum) !(rc.otherPCount)
+  |PartialFixable -> "PartialFixable"
+  |ZeroFixable -> "ZeroFixable"
+
 let calc_priority state pol p =
   match state with
   |Fixed _ -> invalid_arg "calc_priority: already fixed"
@@ -50,7 +57,27 @@ type t = {posTable: state array
          ;posAffect: int PMap.t array
          ;negAffect: int PMap.t array
 
-         }           
+         }
+
+
+let table_to_string graph table =
+  let _, str = Array.fold_left
+                 (fun (i,acc_str) state ->
+                   let str = (G.id_of_int graph i)^ " -> " ^ (state_to_string state) in
+                   (i+1, acc_str ^ "\n" ^ str))
+                 (0, "")
+                 table
+  in
+  str
+  
+
+let to_string graph t =
+  "pos table\n"
+  ^(table_to_string graph t.posTable)
+  ^"\nneg table\n"
+  ^(table_to_string graph t.negTable)
+      
+      
 
 (* これはposTableのみを見ているが、fixedすると、postableもnegtableも Fixedになるので OK*)
 let is_fixed t p =
@@ -62,14 +89,17 @@ let isnt_fixed t p = not (is_fixed t p)
 
 
                    
-(* この時点で、pをfixしたことによる、fixableLevelの変化は反映されていないといけない *)
+(* この時点で、pをfixしたことによる、fixableLevelの変化は反映されていないといけない -> 本当？*)
 (* fixしたことによる,allfixableの街を変化させる *)
+(* ここで、unfixのやつにしか伝播させないという工夫が必要だな、 *)
 let fix {posTable = pos_table
         ;negTable =  neg_table
         ;posAffect =  pos_affect
         ;negAffect =  neg_affect } p
         ~may_change:queue =
   let p = G.int_of_pLavel p in
+  pos_table.(p) <- Fixed pos_table.(p);
+  neg_table.(p) <- Fixed neg_table.(p);  
   let () = (PMap.iter
               (fun q i ->
                 let q_state = pos_table.(G.int_of_pLavel q) in
@@ -94,8 +124,8 @@ let fix {posTable = pos_table
                 |_ -> ())
               neg_affect.(p) )      
   in
-  pos_table.(p) <- Fixed pos_table.(p);
-  neg_table.(p) <- Fixed neg_table.(p) 
+  ()
+
 
 (* この時点で、pをunfixしたことによる、fixableLevelの変化は反映されていないといけない *)
 let unfix {posTable = pos_table

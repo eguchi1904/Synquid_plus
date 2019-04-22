@@ -477,13 +477,14 @@ module Constructor = struct
   let gen_fixability_map graph c =
     match c with
     |Constraint.SSub (env, e1, (Formula.Unknown(senv, sort_sita, sita, p) as e2)) ->
-      let unknown_set = S.singleton p in
+
       let env_e1 = Liq.env_add_F env e1 in      
       let neg_map = gen_fixability_map_neg graph env_e1
                                ~pos_formula:e2
-                               ~unknown_set:unknown_set
+                               ~unknown_set: (S.singleton p)
       in
       (* make positive fixability *)
+      let unknown_set = Formula.extract_unknown_p e1 in      
       let position = Positive {env = env; negFormula = e1 } in
       let unbound = UnBound {waitNum = ref (S.cardinal unknown_set)
                             ;senv = senv
