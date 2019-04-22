@@ -212,14 +212,15 @@ let fix t graph assign p priority
     let new_fixed_cs = List.map fst solution_asc in
     let remain_unfix_cs = List.fold_left
                             (fun acc c ->
-                              if CFixState.isnt_fixed cfix_state c then
+                              if CFixState.isnt_fixed cfix_state c
+                                 && not (List.mem c acc) then
                                 c::acc
                               else
                                 acc)
                             unfixed_neg_cs
                             unfixed_pos_cs
     in
-    (* ここ、 *)
+    (* remain_unfix_csは、unique listになっているべき *)
     let () = propagate_c_fixed_info
                t graph assign cfix_state p new_fixed_cs
                ~may_change:(pfixable_counter, pfix_state, queue)
@@ -237,14 +238,15 @@ let fix t graph assign p priority
     let new_fixed_cs = List.map fst solution_asc in
     let remain_unfix_cs = List.fold_left
                             (fun acc c ->
-                              if CFixState.isnt_fixed cfix_state c then
+                              if CFixState.isnt_fixed cfix_state c
+                              && not (List.mem c acc) then
                                 c::acc
                               else
                                 acc)
                             unfixed_pos_cs
                             unfixed_neg_cs
     in
-    
+    (* remain_unfix_csは、unique listになっているべき *)    
     let () = propagate_c_fixed_info
                t graph assign cfix_state p new_fixed_cs
                ~may_change:(pfixable_counter, pfix_state, queue)
