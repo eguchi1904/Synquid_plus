@@ -20,6 +20,18 @@ let is_fixed t c = t.isFix.(G.int_of_cLavel c)
 
 let isnt_fixed t c = not (is_fixed t c)
 
+let unfix_cs_around_p t graph p =
+  let unfix_pos_cs = (G.pos_cs graph p)
+                     |> List.filter (isnt_fixed t)
+  in
+  let unfix_neg_cs = (G.neg_cs graph p)
+                     |> List.filter (isnt_fixed t)
+                     |> List.filter (fun c -> not (List.mem c unfix_pos_cs))
+  in
+  unfix_pos_cs@unfix_neg_cs
+  
+  
+  
 
 (* ここを拡張する必要があるわけだ *)
 let fix t c = 

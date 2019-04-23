@@ -145,10 +145,10 @@ let tell_predicate_constraint_is_fixed t graph assign cfix_state c q pol
                                                ~may_change:(pfix_state, queue)
 
 
-(* この時点でcfix_stateは最新のものになっている必要がある *)
-let tell_related_predicate_constraint_is_fixed t graph assign cfix_state p c 
+(* この時点でcfix_state, pfix_stateは最新のものになっている必要がある *)
+let tell_related_predicate_constraint_is_fixed t graph assign cfix_state c 
                                                ~may_change:(pfixable_counter, pfix_state, queue) =
-  let isnt_fix q = (PFixState.isnt_fixed pfix_state q && q <> p) in
+  let isnt_fix = (PFixState.isnt_fixed pfix_state) in
   let unfixed_pos_p = (List.filter isnt_fix (G.pos_ps graph c)) in    
   let () =
     List.iter
@@ -183,26 +183,26 @@ let gather_solution_from_cs t assign p cs ~change:cfix_state =
     []
     cs
 
-let propagate_c_fixed_info t graph assign cfix_state p new_fixed_cs
+let propagate_c_fixed_info t graph assign cfix_state new_fixed_cs
                            ~may_change:(pfixable_counter, pfix_state, queue) = 
   List.iter     
     (tell_related_predicate_constraint_is_fixed
-       t graph assign cfix_state p 
+       t graph assign cfix_state 
        ~may_change:(pfixable_counter, pfix_state, queue))
     new_fixed_cs
 
-let propagate_p_fixed_info t graph assign cfix_state p remain_unfix_cs
-                           ~may_change:(pfixable_counter, pfix_state, queue) = 
+let propagate_p_fixed_info t graph assign cfix_state p 
+                           ~may_change:(pfixable_counter, pfix_state, queue) =
+  let remain_unfix_cs = CFixState.unfix_cs_around_p cfix_state graph p in
   List.iter
     (tell_constraint_predicate_is_fixed
        t graph assign cfix_state p
        ~may_change:(pfixable_counter, pfix_state, queue))
     remain_unfix_cs
 
-  
-(*  pがfixしたことをcsに電波, csはunfix *)
-let fix t graph assign p priority
-        ~may_change:(cfix_state, pfixable_counter, pfix_state, queue) =
+
+let pull_solution t graph assign p priority
+                  ~may_change:cfix_state = 
   let unfixed_pos_cs = List.filter (CFixState.isnt_fixed cfix_state) (G.pos_cs graph p) in
   let unfixed_neg_cs =  List.filter (CFixState.isnt_fixed cfix_state) (G.neg_cs graph p) in
   if priority.Priority.pol = Polarity.pos then
@@ -210,53 +210,13 @@ let fix t graph assign p priority
                                                ~change:cfix_state
     in
     let new_fixed_cs = List.map fst solution_asc in
-    let remain_unfix_cs = List.fold_left
-                            (fun acc c ->
-                              if CFixState.isnt_fixed cfix_state c
-                                 && not (List.mem c acc) then
-                                c::acc
-                              else
-                                acc)
-                            unfixed_neg_cs
-                            unfixed_pos_cs
-    in
-    (* remain_unfix_csは、unique listになっているべき *)
-    let () = propagate_c_fixed_info
-               t graph assign cfix_state p new_fixed_cs
-               ~may_change:(pfixable_counter, pfix_state, queue)
-           
-    in
-    let () = propagate_p_fixed_info
-               t graph assign cfix_state p remain_unfix_cs
-               ~may_change:(pfixable_counter, pfix_state, queue) 
-    in
-    solution_asc
+    solution_asc, new_fixed_cs
   else
     let solution_asc = gather_solution_from_cs t assign p unfixed_neg_cs
                                                ~change:cfix_state
     in
     let new_fixed_cs = List.map fst solution_asc in
-    let remain_unfix_cs = List.fold_left
-                            (fun acc c ->
-                              if CFixState.isnt_fixed cfix_state c
-                              && not (List.mem c acc) then
-                                c::acc
-                              else
-                                acc)
-                            unfixed_pos_cs
-                            unfixed_neg_cs
-    in
-    (* remain_unfix_csは、unique listになっているべき *)    
-    let () = propagate_c_fixed_info
-               t graph assign cfix_state p new_fixed_cs
-               ~may_change:(pfixable_counter, pfix_state, queue)
-    in
-    let () = propagate_p_fixed_info
-               t graph assign cfix_state p remain_unfix_cs
-               ~may_change:(pfixable_counter, pfix_state, queue)           
-    in
-    solution_asc        
-    
+    solution_asc, new_fixed_cs
     
     
     

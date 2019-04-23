@@ -250,7 +250,6 @@ end = struct
     t.pTable.(p).isUpp
 
 
-
   module Constructor = struct
     let plav_count = ref 0
 
@@ -480,6 +479,14 @@ module PSet = struct
     
 end
 
+module CSet = struct
+  include ( Set.Make
+              (struct
+                type t = G.cLavel
+                let compare = compare
+              end))
+end
+            
 module CMap = 
   Map.Make
     (struct
