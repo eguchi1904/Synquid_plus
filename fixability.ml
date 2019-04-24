@@ -334,8 +334,16 @@ let upgrade_unbound assign p_env = function
                        
 let try_to_fix assign = function
   |Fixable rc ->
-    (* ここで、sort_sitaを逆に適用する必要があるかも *)
-    Some (qformula_of_bound rc.senv assign rc.bound)
+    let qformula = qformula_of_bound rc.senv assign rc.bound in
+    (* ここで、sort_sitaを逆に適用する必要がある*)    
+    let qformula =
+      M.fold
+        (fun a sort acc->
+          Formula.sort_swap2qformula sort (AnyS a) acc)
+        rc.pendingSortSubst
+      qformula
+    in          
+      Some qformula
   |_ ->
     None
 

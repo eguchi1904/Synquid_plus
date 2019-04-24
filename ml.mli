@@ -52,11 +52,8 @@ val subst_tasyn: t subst -> schema TaSyntax.t -> schema TaSyntax.t
 val subst_compose: t subst -> t subst -> t subst
   
 
-
-
-  
-val infer: schema env -> Syntax.t -> (schema TaSyntax.t * t)
-val check: schema env -> Syntax.t -> t -> schema TaSyntax.t 
+val infer: schema env -> (t option) TaSyntax.t -> (schema TaSyntax.t * t)
+val check: schema env -> (t option) TaSyntax.t -> t -> schema TaSyntax.t 
 
 val ta_infer: schema env -> schema TaSyntax.t -> t
 val ta_infer_e: schema env -> schema TaSyntax.e -> t

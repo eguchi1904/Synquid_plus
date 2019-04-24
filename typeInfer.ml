@@ -92,12 +92,14 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
 
 
 let f  z3_env dinfos qualifiers env t =
+  let t = TaSyn.add_empty_annotation t in
   (* let inlined_t = Syntax.inline_rec_fun M.empty t in *)
   let (ta_t, ml_ty) = Ml.infer (Ml.shape_env env) t in
   liqInfer z3_env dinfos qualifiers env ta_t
   
 
 let f_check z3_env dinfos qualifiers env t (_,_,req_ty)=
+  let t = TaSyn.add_empty_annotation t in  
   (* let inlined_t = Syntax.inline_rec_fun M.empty t in *)
   (* let t = Syntax.alpha M.empty t in *)
   let ta_t = Ml.check (Ml.shape_env env) t (Ml.shape req_ty) in
@@ -129,7 +131,8 @@ let liqInferEterm z3_env dinfos qualifiers env ta_e =
 
   
 let fEterm  z3_env dinfos qualifiers env e =
-  match Ml.infer (Ml.shape_env env) (Syntax.PE e) with
+  let e = TaSyn.add_empty_annotation_e e in
+  match Ml.infer (Ml.shape_env env) (TaSyntax.PE e) with
   |(TaSyn.PE ta_e), ml_ty ->
     liqInferEterm z3_env dinfos qualifiers env ta_e
   | _ -> assert false

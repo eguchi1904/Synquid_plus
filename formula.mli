@@ -108,6 +108,9 @@ val sort_subst : sort M.t -> sort -> sort
 val compose_sort_subst : sort M.t -> sort M.t -> sort M.t
 val sort_subst_to_shape : sort M.t -> pa_shape -> pa_shape
 val sort_subst2formula : sort_subst -> t -> t
+val sort_swap: sort -> sort -> sort -> sort 
+val sort_swap2formula : sort -> sort -> t -> t
+val sort_swap2qformula : sort -> sort -> qformula -> qformula
 val sort_anyids : sort -> S.t
 val any2unknownsort : sort -> sort
 val any2unknownsort_pa : sort list * sort -> sort list * sort

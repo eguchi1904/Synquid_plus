@@ -571,6 +571,8 @@ let rec sort_subst sita = function
   |DataS (i, sortlist) ->DataS(i, List.map (sort_subst sita) sortlist )
   |SetS s -> SetS (sort_subst sita s)
   | s -> s
+                                
+    
 
 let compose_sort_subst (sita1:sort M.t) (sita2:sort M.t) = (* sita t = sita1(sita2 t) *)
   let sita2' = M.mapi
@@ -588,8 +590,8 @@ let rec sort_subst2formula (sita:sort_subst) = function
   |Int i -> Int i
   |Unknown (senv, sort_sita, formula_sita, i) -> (* formula_sitaの中には代入するべきか *)
     let sort_sita' = compose_sort_subst sita sort_sita in
-    (* let formula_sita' = M.map (sort_subst2formula sita) formula_sita in *)
-    Unknown (senv, sort_sita', formula_sita, i)
+    let formula_sita' = M.map (sort_subst2formula sita) formula_sita in
+    Unknown (senv, sort_sita', formula_sita', i)
   |Set (s, ts) ->
     let ts' = List.map (sort_subst2formula sita) ts in
     Set (sort_subst sita s, ts')
@@ -645,8 +647,92 @@ let rec sort_subst2formula (sita:sort_subst) = function
                               (sort_subst2formula sita t2))
   |Neg t1 -> Neg (sort_subst2formula sita t1)
   |Not t1 -> Not (sort_subst2formula sita t1)
-           
 
+let rec sort_swap target replace sort =
+  if sort = target then
+    replace
+  else
+    match sort with
+    |DataS (i, sort_list) -> DataS (i, List.map (sort_swap target replace) sort_list)
+    |SetS s -> SetS (sort_swap target replace s)
+    |AnyS _| UnknownS _| BoolS| IntS -> sort
+
+                                      
+let rec sort_swap2formula sort1 sort2 = function
+  |Bool b -> Bool b
+  |Int i -> Int i
+  |Unknown (senv, sort_sita, formula_sita, i) -> (* formula_sitaの中には代入するべきか *)
+    invalid_arg "sort_swap2formula: not impl"
+  |Set (s, ts) ->
+    let ts' = List.map (sort_swap2formula sort1 sort2 ) ts in
+    Set (sort_swap sort1 sort2 s, ts')
+  |Var (s,i) ->Var (sort_swap sort1 sort2 s, i)
+  |Cons (s, i, ts) ->
+    let ts' = List.map (sort_swap2formula sort1 sort2 ) ts in
+    Cons (sort_swap sort1 sort2 s, i, ts')
+  |UF (s, i, ts) ->
+    let ts' = List.map (sort_swap2formula sort1 sort2) ts in
+    UF (sort_swap sort1 sort2 s, i, ts')
+                  
+  (* 残りはただの再起 *)
+  |All (is, t') ->All (is, (sort_swap2formula sort1 sort2 t'))
+  |Exist (is, t') ->Exist (is, (sort_swap2formula sort1 sort2 t'))
+  |If (t1, t2, t3) ->If ((sort_swap2formula sort1 sort2 t1),
+                         (sort_swap2formula sort1 sort2 t2),
+                         (sort_swap2formula sort1 sort2 t3))
+  |Times (t1, t2) -> Times ((sort_swap2formula sort1 sort2 t1),
+                            (sort_swap2formula sort1 sort2 t2))
+  |Plus (t1, t2) -> Plus ((sort_swap2formula sort1 sort2 t1),
+                          (sort_swap2formula sort1 sort2 t2))
+  |Minus (t1, t2) -> Minus ((sort_swap2formula sort1 sort2 t1),
+                            (sort_swap2formula sort1 sort2 t2))
+  |Eq (t1, t2) -> Eq ((sort_swap2formula sort1 sort2 t1),
+                      (sort_swap2formula sort1 sort2 t2))
+  |Neq (t1, t2) -> Neq ((sort_swap2formula sort1 sort2 t1),
+                        (sort_swap2formula sort1 sort2 t2))
+  |Lt (t1, t2) -> Lt ((sort_swap2formula sort1 sort2 t1),
+                      (sort_swap2formula sort1 sort2 t2))
+  |Le (t1, t2) -> Le ((sort_swap2formula sort1 sort2 t1),
+                      (sort_swap2formula sort1 sort2 t2))
+  |Gt (t1, t2) -> Gt ((sort_swap2formula sort1 sort2 t1),
+                      (sort_swap2formula sort1 sort2 t2))
+  |Ge (t1, t2) -> Ge ((sort_swap2formula sort1 sort2 t1),
+                      (sort_swap2formula sort1 sort2 t2))
+  |And (t1, t2) -> And ((sort_swap2formula sort1 sort2 t1),
+                        (sort_swap2formula sort1 sort2 t2))
+  |Or (t1, t2) -> Or ((sort_swap2formula sort1 sort2 t1),
+                      (sort_swap2formula sort1 sort2 t2))
+  |Implies (t1, t2) -> Implies ((sort_swap2formula sort1 sort2 t1),
+                                (sort_swap2formula sort1 sort2 t2))
+  |Iff (t1, t2) -> Iff ((sort_swap2formula sort1 sort2 t1),
+                        (sort_swap2formula sort1 sort2 t2))
+  |Union (t1, t2) -> Union ((sort_swap2formula sort1 sort2 t1),
+                            (sort_swap2formula sort1 sort2 t2))
+  |Intersect (t1, t2) -> Intersect ((sort_swap2formula sort1 sort2 t1),
+                                    (sort_swap2formula sort1 sort2 t2))
+  |Diff (t1, t2) -> Diff ((sort_swap2formula sort1 sort2 t1),
+                          (sort_swap2formula sort1 sort2 t2))
+  |Member (t1, t2) -> Member ((sort_swap2formula sort1 sort2 t1),
+                              (sort_swap2formula sort1 sort2 t2))
+  |Subset (t1, t2) -> Subset ((sort_swap2formula sort1 sort2 t1),
+                              (sort_swap2formula sort1 sort2 t2))
+  |Neg t1 -> Neg (sort_swap2formula sort1 sort2 t1)
+  |Not t1 -> Not (sort_swap2formula sort1 sort2 t1)
+
+
+let sort_swap2qformula sort1 sort2 = function
+  |QAll (args, pre_list, p) ->
+    let args' = List.map (fun (x,sort) -> (x, sort_swap sort1 sort2 sort)) args in
+    let pre_list' = List.map (sort_swap2formula sort1 sort2) pre_list in
+    let p' =  sort_swap2formula sort1 sort2 p in
+    QAll (args', pre_list', p')
+  |QExist (args, p_list) ->
+    let args' = List.map (fun (x,sort) -> (x, sort_swap sort1 sort2 sort)) args in
+    let p_list' = List.map (sort_swap2formula sort1 sort2) p_list in
+    QExist (args', p_list')
+    
+    
+      
 let rec sort_anyids = function
   |AnyS i  -> S.singleton i
   |DataS (i, sortlist) ->

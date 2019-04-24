@@ -63,9 +63,9 @@ let rec replace_UF (target:t) (replace:t) (t:t) = (* t1 = UF (i,[arg]) -> t2 *)
 let print_qformula bv pre_list  p =
   let bv_str = String.concat "," (S.elements bv) in
   (Printf.printf "\n\nbv=[%s]\n------------------------------\n" bv_str);
-  (List.iter (fun formula -> Printf.printf "%s\n" (p2string formula)) pre_list);
+  (List.iter (fun formula -> Printf.printf "%s\n" (p2string_with_sort formula)) pre_list);
   (print_string "------------------------------\n");
-  (Printf.printf "%s\n\n" (p2string p))
+  (Printf.printf "%s\n\n" (p2string_with_sort p))
   
 let rec pop_var_eq bv = function
   |Eq (Var(s,i), e) :: p_list when S.mem i bv ->
@@ -82,7 +82,7 @@ let rec var_eq_propagate bv pre_list p =
   (print_qformula bv pre_list p);
   match pop_var_eq bv pre_list with
   |Some ((i,e), pre_list') ->
-    (Printf.printf "\npop:(%s,%s)\n" i (p2string e));
+    (Printf.printf "\npop:(%s,%s)\n" i (p2string_with_sort e));
     let pre_list'' = List.map (substitution (M.singleton i e)) pre_list' in
     let p' = substitution (M.singleton i e) p in
     var_eq_propagate bv pre_list'' p'
@@ -113,12 +113,11 @@ let rec var_UF_propagate bv pre_list p = (* uninterpreted function *)
   (print_qformula bv pre_list p);  
   match pop_UF_eq bv pre_list with
   |Some ((uf_app,e), pre_list') ->
-    (Printf.printf "\npop: %s, %s\n" (p2string uf_app) (p2string e));
+    (Printf.printf "\npop: %s, %s\n" (p2string_with_sort uf_app) (p2string_with_sort e));
     let pre_list'' = List.map (replace_UF uf_app e) pre_list' in
     let p' = replace_UF uf_app e p in
     var_UF_propagate bv pre_list'' p'
   |None -> pre_list,p
-
 
 let rec pop_UFUF_eq bv = function (* uninterpreted function *)
   |Eq ((UF(s,i,es) as uf), e) :: p_list when S.subset (fv uf) bv ->
@@ -136,7 +135,7 @@ let rec var_UFUF_propagate bv pre_list p = (* uninterpreted function *)
   (print_qformula bv pre_list p);  
   match pop_UFUF_eq bv pre_list with
   |Some ((uf_app,e), pre_list') ->
-    (Printf.printf "\npop: %s, %s\n" (p2string uf_app) (p2string e));
+    (Printf.printf "\npop: %s, %s\n" (p2string_with_sort uf_app) (p2string_with_sort e));
     let pre_list'' = List.map (replace_UF uf_app e) pre_list' in
     let p' = replace_UF uf_app e p in
     var_UFUF_propagate bv pre_list'' p'

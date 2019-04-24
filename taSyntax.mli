@@ -26,6 +26,9 @@ val remove_annotations: 'a t -> Syntax.t
 val remove_annotations_e: 'a e -> Syntax.e
 val remove_annotations_b: 'a b -> Syntax.b
 val remove_annotations_f: 'a f -> Syntax.f
+
+val add_empty_annotation: Syntax.t -> 'a option t
+val add_empty_annotation_e: Syntax.e -> 'a option e
              
 val substitute:   Id.t -> 'a e -> 'a t -> 'a t
 val substitute_f: Id.t -> 'a e -> 'a f -> 'a f

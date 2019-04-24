@@ -52,6 +52,54 @@ and remove_annotations_f = function
 
   |PFix ((f_name, _, _), body) ->
     Syntax.PFix (f_name, remove_annotations_f body)
+
+let rec add_empty_annotation = function
+  |Syntax.PLet (x, t1, t2) ->
+    PLet ((x, None),
+          add_empty_annotation t1,
+          add_empty_annotation t2)
+  |Syntax.PE e -> PE (add_empty_annotation_e e)
+  |Syntax.PI b -> PI (add_empty_annotation_b b)
+  |Syntax.PF f -> PF (add_empty_annotation_f f)
+  |Syntax.PHole -> PHole
+
+and add_empty_annotation_e = function
+  |Syntax.PSymbol i -> PSymbol (i, [])
+  |Syntax.PInnerFun f -> PInnerFun (add_empty_annotation_f f)
+  |Syntax.PAppFo (e1, e2) ->
+    PAppFo (add_empty_annotation_e e1,
+            add_empty_annotation_e e2)
+  |Syntax.PAppHo (e1, f2) ->
+    PAppHo (add_empty_annotation_e e1,
+            add_empty_annotation_f f2)
+  |Syntax.PAuxi i -> PAuxi (i, None)
+
+and add_empty_annotation_b = function
+  |Syntax.PIf (e, t1, t2) ->
+    PIf (add_empty_annotation_e e,
+         add_empty_annotation t1,
+         add_empty_annotation t2)
+  |Syntax.PMatch (e, cases) ->
+    PMatch (add_empty_annotation_e e,
+            List.map add_empty_annotation_case cases)
+
+and add_empty_annotation_case Syntax.{constructor = cons;
+                                      argNames = xs;
+                                      body = t} =
+  let xs' = List.map (fun x -> (x, None)) xs in
+  let t' = add_empty_annotation t in
+  {constructor = cons;
+   argNames = xs';
+   body = t'
+  }
+
+and add_empty_annotation_f = function
+  |Syntax.PFun (x, t) ->
+    PFun ((x,None),
+          add_empty_annotation t)
+  |Syntax.PFix _ -> assert false
+    
+    
                      
                  
          
