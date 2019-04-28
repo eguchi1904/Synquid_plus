@@ -3,7 +3,7 @@ and basetype =
     TBool
   | TInt
   | TData of Id.t * t list * Formula.pa list
-  | TVar of Formula.subst * Id.t
+  | TVar of Formula.subst * Id.t (* will disapear? *)
   | TAny of Id.t
           
 type schema = Id.t list * (Id.t * Formula.pa_shape) list * t

@@ -40,6 +40,57 @@ and shape_base b = match b with
   |Type.TVar (_,x) -> MLVar x
   |Type.TAny x -> MLVar x
 
+let rec mk_refine_top dinfos t =
+  match t with
+  |MLFun (t1, t2) ->
+    let t= Id.genid "t" in
+    let t1' = mk_refine_bot dinfos t1 in
+    let t2' = mk_refine_top dinfos t2 in
+    Type.TFun ((t, t1'), t2')
+  |MLVar _ |MLBool |MLInt |MLData _ ->
+    Type.TScalar ((mk_refine_base_top dinfos t), Formula.Bool true )
+   
+and mk_refine_base_top dinfos t =
+  match t with
+  |MLBool -> Type.TBool
+  |MLInt ->  Type.TInt
+  |MLData (data, ts) ->
+    let ts' = List.map (mk_refine_top dinfos) ts in
+    let data_info = M.find data dinfos in
+    let pa_shape_list = Data_info.instantiate_pred_param_shape data_info ts' in
+    let pas = List.map (fun (_,shape) -> Formula.genTopPa_shape shape) pa_shape_list in
+    Type.TData (data, ts', pas) 
+  |MLVar a ->
+    Type.TAny a
+  |MLFun _ -> invalid_arg "function  type in base"
+
+and  mk_refine_bot dinfos t =
+  match t with
+  |MLFun (t1, t2) ->
+    let t= Id.genid "t" in
+    let t1' = mk_refine_top dinfos t1 in
+    let t2' = mk_refine_bot dinfos t2 in
+    Type.TFun ((t, t1'), t2')
+  |MLVar _ |MLBool |MLInt |MLData _ ->
+    Type.TScalar ((mk_refine_base_bot dinfos t), Formula.Bool false )
+   
+and mk_refine_base_bot dinfos t =
+  match t with
+  |MLBool -> Type.TBool
+  |MLInt ->  Type.TInt
+  |MLData (data, ts) ->
+    let ts' = List.map (mk_refine_bot dinfos) ts in
+    let data_info = M.find data dinfos in
+    let pa_shape_list = Data_info.instantiate_pred_param_shape data_info ts' in
+    let pas = List.map (fun (_,shape) -> Formula.genBotPa_shape shape) pa_shape_list in
+    Type.TData (data, ts', pas) 
+  |MLVar a ->
+    Type.TAny a
+  |MLFun _ -> invalid_arg "function type in base"
+
+
+           
+
 let rec string_of_t t :string= let open Printf in
   match t with
   |MLBool -> "bool"|MLInt -> "int"
@@ -177,6 +228,58 @@ let subst_compose (sita1: t subst) (sita2: t subst) = (* \forall t. composed_sit
           sita1
           (M.mapi (fun i t2 -> subst_ty sita1 t2) sita2)
 
+(* is_pos: 代入さきがpostive positonか *)
+let rec subst_refine_ty' dinfos sita sort_sita is_pos = function
+  |Type.TScalar (b, phi) ->
+    let b' = subst_refine_base' dinfos sita sort_sita is_pos b in
+    let phi' = Formula.sort_subst2formula sort_sita phi in
+    Type.TScalar (b', phi')
+  |Type.TFun ((x, ty1), ty2) ->
+    Type.TFun ((x, subst_refine_ty' dinfos sita sort_sita (not is_pos) ty1),
+               subst_refine_ty' dinfos sita sort_sita is_pos ty2)
+  |Type.TBot -> Type.TBot
+
+and subst_refine_base' dinfos sita sort_sita is_pos = function
+  |Type.TBool -> Type.TBool
+  |Type.TInt -> Type.TInt
+  |Type.TData (data, tys, pas) ->
+    let tys' = List.map (subst_refine_ty' dinfos sita sort_sita is_pos) tys in
+    let pas' =
+      List.map
+        (fun (args, phi) ->
+          let args' = List.map (fun (x,sort) -> (x, Formula.sort_subst sort_sita sort)) args in
+          let phi' = Formula.sort_subst2formula sort_sita phi in
+          (args', phi'))
+        pas
+    in
+    Type.TData (data, tys', pas')
+  |Type.TAny a when M.mem a sita ->
+    let a_ml = M.find a sita in
+    (try
+       if is_pos then
+         mk_refine_base_top dinfos a_ml
+       else
+         mk_refine_base_bot dinfos a_ml
+     with
+       Invalid_argument mes -> invalid_arg mes)
+  |Type.TAny a -> Type.TAny a
+  |Type.TVar _ -> assert false
+
+let subst_refine_ty dinfos sita refine_ty =
+  let sort_sita =
+    M.map
+      (fun ml_ty -> try t2sort ml_ty
+                    with T2SORT ->
+                      invalid_arg "annotaion's variable instatntiate to function type")
+      sita
+  in
+  subst_refine_ty' dinfos sita sort_sita true refine_ty
+    
+    
+    
+     
+          
+    
   
 let instantiate_explicit tys ((bvs, ty):schema) = 
   if (List.length tys) <> (List.length bvs) then
