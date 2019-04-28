@@ -105,12 +105,6 @@ and positive_negative_unknown_p_base = function
       (pos_ps, neg_ps, other_ps)
   |TInt|TBool -> (S.empty, S.empty, S.empty)
           
-    
-
-      
-
-          
-
 
 let rec t2string = function
   |TScalar (b,p) ->
@@ -606,68 +600,11 @@ let instantiate env ((ts,ps,t):schema) =
   let ps' = List.map (fun (i, shape) -> Formula.genUnknownPa_shape senv shape i) ps in
   instantiate_implicit (ts,ps,t) ts' ps'
  
-(* fに関係するenvの条件を抜き出す。 *)
-(* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
-(*   match tenv with *)
-(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (\* schemaは無視して良いの? *\) *)
-(*     if S.mem x vset then *)
-(*       (Formula.And ((Formula.replace (Id.valueVar_id) x p), (\* [x/_v]p *\) *)
-(*                     (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p) )) *)
-(*       )) *)
-(*     else *)
-(*       env2formula' tenv' vset *)
-
-(*   |_ :: tenv' -> env2formula' tenv' vset *)
-
-(*   |[] -> Formula.Bool true *)
 let mk_valid x b =
   match b2sort b with
   |Some s ->  Formula.Eq (Formula.Var (s, x), Formula.Var (s, x))
   |None -> raise (Invalid_argument "mk_valid")
-(* _v = vを追加するver *)
-(* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
-(*   match tenv with *)
-(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (\* schemaは無視して良いの? *\) *)
-(*     (Formula.And ((mk_valid x b),  *)
-(*      (env2formula' tenv' vset))) *)
-   
-(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (\* schemaは無視して良いの? *\) *)
-(*     if S.mem x vset then *)
-(*       (if S.mem Id.valueVar_id (Formula.fv p) *)
-(*         then *)
-(*           (Formula.And ((Formula.replace (Id.valueVar_id) x p), (\* [x/_v]p *\) *)
-(*                         (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p)  )) *)
-(*           )) *)
-(*        else *)
-(*          Formula.And ((mk_valid x b), (Formula.And (p, (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p)))))) *)
-(*       ) *)
-(*     else *)
-(*       env2formula' tenv' vset *)
-
-(*   |_ :: tenv' -> env2formula' tenv' vset *)
-
-(*   |[] -> Formula.Bool true *)
-
-       
-(* let rec env2formula' (tenv:((Id.t*schema) list)) vset = *)
-(*   match tenv with *)
-(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (\* schemaは無視して良いの? *\) *)
-(*     env2formula' tenv' vset *)
-(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (\* schemaは無視して良いの? *\) *)
-(*     if S.mem x vset then *)
-(*       match b2sort b with *)
-(*       |Some x_sort -> *)
-(*         let x_var = Formula.Var (x_sort, x) in *)
-(*         (Formula.And ((Formula.substitution (M.singleton Id.valueVar_id x_var) p), (\* [x/_v]p *\) *)
-(*                         (env2formula' tenv' (S.union (S.remove x vset) (Formula.fv p)  )) *)
-(*         )) *)
-(*       |None ->assert false (\* env2formula' tenv' vset *\) *)
-(*     else *)
-(*       env2formula' tenv' vset *)
-
-(*   |_ :: tenv' -> env2formula' tenv' vset *)
-
-(*   |[] -> Formula.Bool true    *)       
+      
 
 let rec env2formula' (env:env) free_v acc :Formula.t=
   match env with
@@ -719,36 +656,6 @@ let rec env2formula_all' (env:env) acc :Formula.t=
       
          
 let env2formula_all env  = env2formula_all' env (Formula.Bool true)
-                                                        
-                            
-(* let rec env2formula_all' (tenv:((Id.t*schema) list))  = *)
-(*   match tenv with *)
-(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' when p = Formula.Bool true-> (\* schemaは無視して良いの? *\) *)
-(*     env2formula_all' tenv'  *)
-   
-(*   |(x, ([],[],(TScalar (b,p) ))) :: tenv' -> (\* schemaは無視して良いの? *\) *)
-(*     (match b2sort b with *)
-(*      |Some x_sort -> *)
-(*        let x_var = Formula.Var (x_sort, x) in     *)
-(*        (Formula.And ((Formula.substitution (M.singleton Id.valueVar_id x_var) p), (\* [x/_v]p *\) *)
-(*                      (env2formula_all' tenv'   ) *)
-(*     )) *)
-(*      |None -> assert false *)
-(*     ) *)
-
-(*   |_ :: tenv' -> env2formula_all' tenv'  *)
-
-(*   |[] -> Formula.Bool true *)
-       
-  
-
-(* let env2formula_all  ((tenv,ps):env) = *)
-(*   let p = List.fold_right (fun p acc -> Formula.And (p,acc)) *)
-(*                           ps *)
-(*                           (Formula.Bool true) *)
-(*   in *)
-(*   let tenv_p = env2formula_all' tenv  in *)
-(*   Formula.And (tenv_p, p) *)
 
   
 
@@ -803,4 +710,6 @@ let rec refresh_refinment t =
   |TFun ((x,t1),t2) -> TFun ((x, refresh_refinment t1), refresh_refinment t2)
   |TBot -> TBot
   
-        
+
+
+

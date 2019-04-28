@@ -15,17 +15,19 @@ val fresh: Formula.Senv.t -> Data_info.t M.t -> Ml.t -> Liq.t
   "cons_gen data_info env t ty" generate constraint to satisfy
   env |- t :: ty
  *)
-val cons_gen: Data_info.t M.t -> Liq.env -> Ml.schema TaSyn.t -> Liq.t ->
-              (Liq.schema TaSyn.t * Constraint.cons list)
+val cons_gen: Data_info.t M.t -> Liq.env -> Liq.schema TaSyn.t -> Liq.t ->
+              (Liq.schema TaSyn.t * Constraint.cons list * Constraint.cons list)
 
-val cons_gen_infer: Data_info.t M.t -> Liq.env -> Ml.schema TaSyn.t  ->
-                    (Liq.schema TaSyn.t * Liq.t * Constraint.cons list)
+
+val cons_gen_infer: Data_info.t M.t -> Liq.env -> Liq.schema TaSyn.t  ->
+                    (Liq.schema TaSyn.t * Liq.t * Constraint.cons list * Constraint.cons list)
   
 
 val cons_gen_e :
   Data_info.t M.t ->
   Liq.env ->
-  Ml.schema TaSyn.e -> Liq.schema TaSyn.e * Constraint.Liq.contextual * Constraint.cons list
+  Liq.schema TaSyn.e ->
+  Liq.schema TaSyn.e * Constraint.Liq.contextual * Constraint.cons list * Constraint.cons list
 (* val cons_gen_b : *)
 (*   Data_info.t M.t -> *)
 (*   Liq.env -> *)

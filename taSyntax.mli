@@ -34,10 +34,10 @@ val substitute:   Id.t -> 'a e -> 'a t -> 'a t
 val substitute_f: Id.t -> 'a e -> 'a f -> 'a f
 val syn2string: ('a -> string) -> 'a t -> string
              
-val access_annotation_t: ('a -> 'a) ->('a t) -> ('a t)
-val access_annotation_e: ('a -> 'a) ->('a e) -> ('a e)
-val access_annotation_b: ('a -> 'a) ->('a b) -> ('a b)
-val access_annotation_f: ('a -> 'a) ->('a f) -> ('a f)
+val access_annotation_t: ('a -> 'b) ->('a t) -> ('b t)
+val access_annotation_e: ('a -> 'b) ->('a e) -> ('b e)
+val access_annotation_b: ('a -> 'b) ->('a b) -> ('b b)
+val access_annotation_f: ('a -> 'b) ->('a f) -> ('b f)
 
 val replace:  Id.t M.t ->('a t) -> ('a t)
 val replace_e: Id.t M.t ->('a e) -> ('a e)

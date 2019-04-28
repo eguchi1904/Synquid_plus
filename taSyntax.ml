@@ -103,7 +103,7 @@ and add_empty_annotation_f = function
                      
                  
          
-let rec access_annotation_t (f:'a -> 'a) (t:'a t) = match t with
+let rec access_annotation_t (f:'a -> 'b) (t:'a t) = match t with
   |PLet ((x, sch), t1, t2) -> PLet ((x, (f sch)),
                                     (access_annotation_t f t1),
                                     (access_annotation_t f t2))
