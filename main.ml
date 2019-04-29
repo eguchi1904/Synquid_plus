@@ -62,13 +62,13 @@ let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t *
                   (Type.schema2string t));
   f_name, tmp, (g  data_infos qualifiers env tmp t)
 
-let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t * ((Id.t * Type.schema) list))
+let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * (Type.t option TaSyntax.t) * ((Id.t * Type.schema) list))
   =
   let fundecs' = until_assoc f_name fundecs in (* 自分は覗く *)
   let init_env = (Type.env_add_schema_list Type.env_empty (cons_env@fundecs')) in
   let (ts,ps,f_ty) as f_sch = List.assoc f_name fundecs in
   let z3_env = UseZ3.mk_z3_env () in  
-  match TypeInfer.f_check z3_env data_infos qualifiers init_env (TaSyntax.add_empty_annotation tmp) f_sch with
+  match TypeInfer.f_check z3_env data_infos qualifiers init_env tmp f_sch with
   |Ok auxi_ty_list ->
     let auxi_sch_list:(Id.t * Type.schema) list =
       List.map (fun (g,ty) -> (g, (ts,ps,ty))) auxi_ty_list in
@@ -232,15 +232,15 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
 
   
   (* synthesith *)
-  let mk_tmp = gen_mk_tmp data_info_map minfos in
-  let syn_goals = Mk_tmp.f mk_tmp fundecs syn_goals in (* 各ゴールにtemplateを設定 *)
-  let f_tmp_g_list:(Id.t * Syntax.t * ((Id.t * Type.schema) list)) list
+  (* let mk_tmp = gen_mk_tmp data_info_map minfos in *)
+  (* let syn_goals = Mk_tmp.f mk_tmp fundecs syn_goals in  ひとまずtemplateの自動生成は休憩*) 
+  let f_tmp_g_list:(Id.t * 'a TaSyntax.t * ((Id.t * Type.schema) list)) list
     = List.map (g' data_info_map qualifiers cons_env fundecs) syn_goals
   in
   let new_fundecs, new_syn_goals =
     List.fold_left
       (fun (acc_fundecs, acc_syn_goals) (id, t, auxi_defs) ->
-        let auxi_goals = List.map (fun (auxi_i, _) -> (auxi_i, Syntax.PHole)) auxi_defs in
+        let auxi_goals = List.map (fun (auxi_i, _) -> (auxi_i, TaSyntax.PHole)) auxi_defs in
         (auxi_defs@acc_fundecs,  auxi_goals@acc_syn_goals))
       (fundecs, syn_goals)
       f_tmp_g_list
@@ -267,7 +267,8 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   in
   let id_sch_list = List.map (fun (id, ty) -> (id, (([],[],ty):Type.schema))) id_type_list in
   let new_fundecs = ope_defs@new_fundecs@id_sch_list in
-  let new_defs = (List.map (fun (x,tasyn) -> (x, TaSyntax.remove_annotations tasyn)) infer_goals)@new_syn_goals in
+  let new_syn_goals' = List.map (fun (x,syn) -> (x, TaSyntax.remove_annotations syn)) new_syn_goals in
+  let new_defs = (List.map (fun (x,tasyn) -> (x, TaSyntax.remove_annotations tasyn)) infer_goals)@new_syn_goals' in
   (data_info_map, minfos, new_fundecs, new_defs)
 
 

@@ -69,6 +69,9 @@ and adjust_annotation_e dinfos e_ml e_usr =
   |PAuxi (g, ml_sch), PAuxi (g', None) when g = g' ->
     PAuxi (g, Ml.mk_refine_top_sch dinfos ml_sch)
 
+  |PAuxi (g, ml_sch), PAuxi (g', Some liq_anno) when g = g' ->
+    PAuxi (g, adjust_refine dinfos ml_sch liq_anno)
+
   |PInnerFun f_ml, PInnerFun f_usr ->
     PInnerFun (adjust_annotation_f dinfos f_ml f_usr)
 
