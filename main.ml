@@ -68,7 +68,7 @@ let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t *
   let init_env = (Type.env_add_schema_list Type.env_empty (cons_env@fundecs')) in
   let (ts,ps,f_ty) as f_sch = List.assoc f_name fundecs in
   let z3_env = UseZ3.mk_z3_env () in  
-  match TypeInfer.f_check z3_env data_infos qualifiers init_env tmp f_sch with
+  match TypeInfer.f_check z3_env data_infos qualifiers init_env (TaSyntax.add_empty_annotation tmp) f_sch with
   |Ok auxi_ty_list ->
     let auxi_sch_list:(Id.t * Type.schema) list =
       List.map (fun (g,ty) -> (g, (ts,ps,ty))) auxi_ty_list in
@@ -249,6 +249,7 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   let id_check_result_list =
     List.map
       (fun (x, t) ->
+        let t = TaSyntax.add_empty_annotation t in (* パーサーが対応するまで *)
         let z3_env =  UseZ3.mk_z3_env () in
         let x_ty = Type.env_find init_env x in
         (x, TypeInfer.f_check z3_env data_info_map qualifiers init_env t  x_ty ))
@@ -259,6 +260,7 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   let id_type_list =
     List.map
       (fun (x, t) ->
+        let t = TaSyntax.add_empty_annotation t in
         let z3_env =  UseZ3.mk_z3_env () in
         (x, TypeInfer.f z3_env data_info_map qualifiers init_env  t  ))
       infer_goals

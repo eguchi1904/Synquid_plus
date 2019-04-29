@@ -469,14 +469,17 @@ and infer_b env b = match b with
      |[] -> raise (ML_Inf_Err "empty cases")
      |top_case::left_cases ->
        let (ta_top_case, ty_top_case, c_top_case) = infer_case env ty1 top_case in
-       let (ta_cases, ty_cases, c_cases) =
-         List.fold_left
-           (fun (ta_case_list, ty_preb, c_acc) case ->
+       let (ta_left_cases, ty_left_cases, c_left_cases) =
+         List.fold_right
+           (fun case (ta_case_list, ty_preb, c_acc) ->
              let (ta_case, ty_case, c_case) = infer_case env ty1 case in
              (ta_case::ta_case_list, ty_case, (ty_case, ty_preb)::c_case@c_acc))
-           ([ta_top_case], ty_top_case , c_top_case)
            left_cases
+           ([], ty_top_case , [])
        in
+       let ta_cases = ta_top_case::ta_left_cases in
+       let ty_cases = ty_left_cases in
+       let c_cases = c_top_case@c_left_cases in
        (TaSyn.PMatch (ta_e1, ta_cases), ty_cases, c1@c_cases)
     )
 
@@ -550,7 +553,10 @@ let infer env (t:(t option) TaSyntax.t) =
 let check env t req_ty =
   let (ta_t, ty) = infer env t in
   let sita = unify [(ty, req_ty)] subst_empty in
-  subst_tasyn sita ta_t
+  if req_ty == subst_ty sita req_ty then
+    subst_tasyn sita ta_t
+  else
+    raise (ML_Inf_Err "required type is too generic")
 
 
 (*******************************************)

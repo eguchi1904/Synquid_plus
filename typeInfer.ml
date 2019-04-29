@@ -213,20 +213,19 @@ let f  z3_env dinfos qualifiers env (t: Liq.t option TaSyn.t) =
       (function Some ty -> Some (Ml.shape ty) |None -> None)
     t
   in
-  
-  (* let inlined_t = Syntax.inline_rec_fun M.empty t in *)
-  let (ta_t, ml_ty) = Ml.infer (Ml.shape_env env) ml_option_t in
-  
+  let (ta_ml, ml_ty) = Ml.infer (Ml.shape_env env) ml_option_t in
+  let ta_t = adjust_annotation dinfos ta_ml t in
   liqInfer z3_env dinfos qualifiers env ta_t
   
 
-let f_check z3_env dinfos qualifiers env t (_,_,req_ty)=
-  let t = TaSyn.add_empty_annotation t in  
-  (* let inlined_t = Syntax.inline_rec_fun M.empty t in *)
-  (* let t = Syntax.alpha M.empty t in *)
-  let ta_t = Ml.check (Ml.shape_env env) t (Ml.shape req_ty) in
-  (* req_ty を、ml_tyに合わせる必要があるな *)
-  (* それか要求を通せる何か、これは辛いな。 *)
+let f_check z3_env dinfos qualifiers env (t: Liq.t option TaSyn.t) (_,_,req_ty)=
+  let ml_option_t =
+    TaSyn.access_annotation_t
+      (function Some ty -> Some (Ml.shape ty) |None -> None)
+      t
+  in
+  let ta_ml = Ml.check (Ml.shape_env env) ml_option_t (Ml.shape req_ty) in
+  let ta_t = adjust_annotation dinfos ta_ml t in
   liqCheck z3_env dinfos qualifiers env ta_t req_ty
 (* -------------------------------------------------- *)
 (* inference of E-term *)
@@ -234,7 +233,7 @@ let f_check z3_env dinfos qualifiers env t (_,_,req_ty)=
   
 let liqInferEterm z3_env dinfos qualifiers env ta_e =
   (* (print_string (TaSyn.syn2string Ml.string_of_sch ta_t)); *)
-  let (ta_e', Liq.TLet(cenv, tmp), cs) = cons_gen_e dinfos env ta_e in
+  let (ta_e', Liq.TLet(cenv, tmp), cs, cs_ann) = cons_gen_e dinfos env ta_e in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs) in
@@ -255,7 +254,8 @@ let liqInferEterm z3_env dinfos qualifiers env ta_e =
 let fEterm  z3_env dinfos qualifiers env e =
   let e = TaSyn.add_empty_annotation_e e in
   match Ml.infer (Ml.shape_env env) (TaSyntax.PE e) with
-  |(TaSyn.PE ta_e), ml_ty ->
+  |(TaSyn.PE ta_ml_e), ml_ty ->
+    let ta_e = adjust_annotation_e dinfos ta_ml_e e in
     liqInferEterm z3_env dinfos qualifiers env ta_e
   | _ -> assert false
 

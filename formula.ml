@@ -542,12 +542,12 @@ let genUnknownPa senv ((args,_):pa) s :pa =
   
 let genUnknownPa_shape senv ((arg_sort,rets):pa_shape) s :pa =
   (Id.init_pa_arg_counter ());
-  let args = List.fold_right
-               (fun  sort args ->
-                 let () = assert false in           (* あとで気づくよう *)
-                 args@[((Id.gen_pa_arg ()), sort)]) (* なぜ逆順？ *)
-               arg_sort
+  let args = List.fold_left
+               (fun  args sort  ->
+                 args@[((Id.gen_pa_arg ()), sort)]) (* 逆順だったので書き換え *)
                []
+               arg_sort
+
   in
   (args, genUnkownP (Senv.append (Senv.cover args) senv) s)
 

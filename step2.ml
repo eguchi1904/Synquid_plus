@@ -30,18 +30,22 @@ let rec extractConst z3_env data_infos qualifiers env e required_ty c =
     let required_ty_e1 = TFun ((y, ty2), required_ty) in 
     extractConst  z3_env data_infos qualifiers env e1 required_ty_e1 (env_append c_env1 c)
   |PAppHo (e1, f) ->
-    let ty2 = TypeInfer.f  z3_env data_infos qualifiers env (PF f) in
+    
+    let ty2 =TaSyntax.add_empty_annotation (PF f)
+             |> TypeInfer.f  z3_env data_infos qualifiers env
+    in
     let y = Id.genid "y" in
     let required_ty_e1 = TFun ((y, ty2), required_ty) in
     extractConst  z3_env data_infos qualifiers env e1 required_ty_e1 c
   |PSymbol _ -> assert false
+              
     
   
   
 let rec f' z3_env data_infos qualifiers (env:Type.env) (prg:Syntax.t) (t:Type.t) =
   match prg  with
   |PLet (x, t1, t2) ->
-    let ty1 = TypeInfer.f  z3_env data_infos qualifiers env t1 in
+    let ty1 = TypeInfer.f  z3_env data_infos qualifiers env (TaSyntax.add_empty_annotation t1) in
     let env' = env_add env (x, ty1) in
     f'  z3_env data_infos qualifiers env' t2 t
   |PE e when auxi_exist e ->
