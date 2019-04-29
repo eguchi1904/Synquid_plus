@@ -12,7 +12,123 @@ module Cons = Constraint
 exception LiqErr of string
 (* log file *)
 
+(* -------------------------------------------------- *)
+(* annotation *)
+(* -------------------------------------------------- *)
 
+let adjust_refine dinfos ((alist,ty_ml):Ml.schema) ty_refine :Liq.schema=
+  let sita = Ml.unify2 (Ml.shape ty_refine) ty_ml in
+  let ty_refine' = Ml.subst_refine_ty dinfos sita ty_refine in
+  let () = assert ((Ml.subst_ty sita ty_ml) = ty_ml) in
+  (alist, [], ty_refine')
+  
+
+let rec adjust_annotation dinfos (t_ml:Ml.schema TaSyn.t) (t_user_anno:Liq.t option TaSyn.t) =
+  let open TaSyn in
+  match t_ml, t_user_anno with
+  |PLet ((x, ml_sch), t1_ml, t2_ml),
+   PLet ((y, None), t1_usr, t2_usr) when (x = y) ->
+    let t1' = adjust_annotation dinfos t1_ml t1_usr in
+    let t2' = adjust_annotation dinfos t2_ml t2_usr in
+    PLet ((x, Ml.mk_refine_top_sch dinfos ml_sch), t1', t2')
+
+  |PLet ((x, ml_sch), t1_ml, t2_ml),
+   PLet ((y, Some liq_ann), t1_usr, t2_usr) when (x = y) ->
+    let t1' = adjust_annotation dinfos t1_ml t1_usr in
+    let t2' = adjust_annotation dinfos t2_ml t2_usr in
+    PLet ((x, adjust_refine dinfos ml_sch liq_ann), t1', t2')
+
+  |PE e_ml, PE e_usr -> PE (adjust_annotation_e dinfos e_ml e_usr)
+
+  |PI b_ml, PI b_usr -> PI (adjust_annotation_b dinfos b_ml b_usr)
+
+  |PF f_ml, PF f_usr -> PF (adjust_annotation_f dinfos f_ml f_usr)
+
+  |PHole, PHole -> PHole
+
+  |_ -> invalid_arg "adjust_annotation: syntax mismatch"
+
+and adjust_annotation_e dinfos e_ml e_usr =
+  match e_ml, e_usr with
+  |PSymbol (x, ml_schs), PSymbol (y, usr_ann_opts) when x = y ->
+    let _, schs = List.fold_right
+                   (fun ml_sch (acc_usr_ann_opts, acc) ->
+                     match acc_usr_ann_opts with
+                     |None :: usr_ann_opts' ->
+                       (usr_ann_opts',
+                        (Ml.mk_refine_top_sch dinfos ml_sch)::acc)
+                     |Some usr_ann :: usr_ann_opts' ->
+                       (usr_ann_opts',
+                        (adjust_refine dinfos ml_sch usr_ann)::acc)
+                     |[] -> ([], Ml.mk_refine_top_sch dinfos ml_sch::acc))
+                   ml_schs
+                   (usr_ann_opts, [])
+    in
+    PSymbol (x, schs)
+
+  |PAuxi (g, ml_sch), PAuxi (g', None) when g = g' ->
+    PAuxi (g, Ml.mk_refine_top_sch dinfos ml_sch)
+
+  |PInnerFun f_ml, PInnerFun f_usr ->
+    PInnerFun (adjust_annotation_f dinfos f_ml f_usr)
+
+  |PAppFo (e1_ml, e2_ml), PAppFo (e1_usr, e2_usr) ->
+    let e1' = adjust_annotation_e dinfos e1_ml e1_usr in
+    let e2' = adjust_annotation_e dinfos e2_ml e2_usr in
+    PAppFo (e1', e2')
+
+  |PAppHo  (e1_ml, f2_ml), PAppHo (e1_usr, f2_usr) ->
+    let e1' = adjust_annotation_e dinfos e1_ml e1_usr in
+    let f2' = adjust_annotation_f dinfos f2_ml f2_usr in
+    PAppHo (e1', f2')
+
+  |_ -> invalid_arg "adjust_annotation_e: syntax mismatch"
+
+and adjust_annotation_b dinfos b_ml b_usr =
+  match b_ml, b_usr with
+  |PIf (e1_ml, t2_ml, t3_ml), PIf (e1_usr, t2_usr, t3_usr) ->
+    let e1' = adjust_annotation_e dinfos e1_ml e1_usr in
+    let t2' = adjust_annotation dinfos t2_ml t2_usr in
+    let t3' = adjust_annotation dinfos t3_ml t3_usr in
+    PIf (e1', t2', t3')
+
+  |PMatch (e1_ml, cases_ml), PMatch (e1_usr, cases_usr) ->
+    let e1' = adjust_annotation_e dinfos e1_ml e1_usr in
+    let cases' = List.map2 (adjust_annotation_case dinfos) cases_ml cases_usr in
+    PMatch (e1', cases')
+
+  |_ -> invalid_arg "adjust_annotation_b: sytax mismatch"
+
+and adjust_annotation_case dinfos case_ml case_usr =
+  let args =                    
+    List.map
+      (fun (x, ml_sch) -> (x, Ml.mk_refine_top_sch dinfos ml_sch))
+      case_ml.argNames
+  in
+  let t' = adjust_annotation dinfos case_ml.body case_usr.body in
+  {constructor = case_ml.constructor
+  ;argNames = args
+  ;body = t'
+  }
+
+and adjust_annotation_f dinfos f_ml f_usr =
+  match f_ml, f_usr with
+  |PFun ((x, ml_sch), t_ml),
+   PFun ((y, None), t_usr) when x = y ->
+    let t' = adjust_annotation dinfos t_ml t_usr in
+    PFun ((x, Ml.mk_refine_top_sch dinfos ml_sch), t')
+  |PFun ((x, ml_sch), t_ml),
+   PFun ((y, Some usr_ty), t_usr) when x = y ->
+    let t' = adjust_annotation dinfos t_ml t_usr in
+    PFun ((x, adjust_refine dinfos ml_sch usr_ty), t')
+
+  |PFix _, PFix _ -> assert false
+
+  |_ -> invalid_arg "adjust_annotation_f: syntax mismatch"
+   
+    
+
+                  
 (* -------------------------------------------------- *)
 (* main *)
 (* -------------------------------------------------- *)  

@@ -89,7 +89,7 @@ and mk_refine_base_bot dinfos t =
   |MLFun _ -> invalid_arg "function type in base"
 
 
-           
+
 
 let rec string_of_t t :string= let open Printf in
   match t with
@@ -150,6 +150,13 @@ let instantiate ((bvs, ty):schema) =
 let fv_schema ((bvs, ty):schema) = List.diff (fv ty) bvs
 
 let access_type_in_schema (f:t-> t) ((bvs, ty):schema) = (bvs, (f ty))
+
+let mk_refine_top_sch dinfos ((alist, t):schema) =
+  ((alist,[],mk_refine_top dinfos t))
+
+let mk_refine_bot_sch dinfos ((alist, t):schema) =
+  ((alist,[],mk_refine_bot dinfos t))  
+                                                
 
 (*--------------------------------------------------*)
 (* environment *)
@@ -265,6 +272,7 @@ and subst_refine_base' dinfos sita sort_sita is_pos = function
   |Type.TAny a -> Type.TAny a
   |Type.TVar _ -> assert false
 
+                
 let subst_refine_ty dinfos sita refine_ty =
   let sort_sita =
     M.map
@@ -277,8 +285,6 @@ let subst_refine_ty dinfos sita refine_ty =
     
     
     
-     
-          
     
   
 let instantiate_explicit tys ((bvs, ty):schema) = 
