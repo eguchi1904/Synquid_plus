@@ -182,9 +182,10 @@ let merge:  Data_info.t M.t ->  PreSyntax.measureInfo list ->
 元々、ユーザで提供されてる場合はそのままにする*)
 let f (mk_tmp: Id.t -> Type.schema ->  Syntax.t )
       (fundecs:(Id.t * Type.schema) list)
-      (goals:(Id.t * Syntax.t) list) =
+      (goals:((Id.t * Type.t option TaSyntax.t) list)) =
   List.map
     (fun (f_name, tmp) ->
+      let tmp = TaSyntax.remove_annotations tmp in
       match tmp with
       |PHole ->
         let t = List.assoc f_name fundecs in

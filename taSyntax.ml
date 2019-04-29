@@ -23,6 +23,15 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
 
  and 'a case = {constructor : Id.t ; argNames : (Id.t * 'a) list ; body : 'a t}
 
+let mk_case cons args body =
+  let args = List.map (fun x -> (x, None)) args in
+  {constructor = cons
+  ;argNames = args
+  ;body = body
+  }
+
+  
+
 let rec remove_annotations = function
   |PLet ((x, _), t1, t2) -> Syntax.PLet (x, remove_annotations t1, remove_annotations t2)
   |PE e -> Syntax.PE (remove_annotations_e e)
@@ -97,7 +106,8 @@ and add_empty_annotation_f = function
   |Syntax.PFun (x, t) ->
     PFun ((x,None),
           add_empty_annotation t)
-  |Syntax.PFix _ -> assert false
+  |Syntax.PFix (name, f)->
+    PFix ((name, None, []), add_empty_annotation_f f)
     
     
                      
@@ -273,6 +283,33 @@ and fv_case  {constructor = cons; argNames = xs; body = t} =
   S.diff (fv t) (S.of_list (List.map fst xs))
 
 
+let rec auxi_exist (e:'a e) =
+  match e with
+  |PSymbol _ -> false
+  |PAuxi _ -> true
+  |PInnerFun f -> auxi_exist_f f
+  |PAppFo (e1, e2) ->(auxi_exist e1)||(auxi_exist e2)
+  |PAppHo (e1, f2) ->(auxi_exist e1)||(auxi_exist_f f2)
+
+and auxi_exist_f (f:'a f) = match f with
+  |PFun (x, t) -> (auxi_exist_t t)
+  |PFix (x, f) -> (auxi_exist_f f)
+
+and auxi_exist_t (t:'a t) = match t with
+  |PLet (_, t1, t2) -> (auxi_exist_t t1)||(auxi_exist_t t2)
+  |PE e -> (auxi_exist e)
+  |PI b -> (auxi_exist_b b)
+  |PF f -> (auxi_exist_f f)
+  |PHole -> false
+
+and auxi_exist_b (b:'a b) = match b with
+  |PIf (e1, t1, t2) -> (auxi_exist e1)||(auxi_exist_t t1)||(auxi_exist_t t2)
+  |PMatch (e, case_list) -> (auxi_exist e)||(List.exists auxi_exist_case case_list)
+
+and auxi_exist_case case = auxi_exist_t case.body
+
+
+               
 
 let rec replace env = function
   |PLet ((y,sch), t1, t2) ->

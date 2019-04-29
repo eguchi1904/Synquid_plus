@@ -181,7 +181,9 @@ let ope_defs =
   ]
 
 let ope_defs=[]
-  
+
+
+(* ad-hocの塊 *)
 let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
                Id.t -> Type.schema -> Syntax.t ) = 
   let lexbuf = if file = "" then  Lexing.from_channel stdin
@@ -223,7 +225,7 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
                                  defs
   in
   let syn_goals, check_goal = List.partition
-                                (fun (id, prg) -> (Syntax.auxi_exist_t prg) || prg = Syntax.PHole)
+                                (fun (id, prg) -> (TaSyntax.auxi_exist_t prg) || prg = TaSyntax.PHole)
                                 syn_check_goals
   in
 
@@ -249,7 +251,6 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   let id_check_result_list =
     List.map
       (fun (x, t) ->
-        let t = TaSyntax.add_empty_annotation t in (* パーサーが対応するまで *)
         let z3_env =  UseZ3.mk_z3_env () in
         let x_ty = Type.env_find init_env x in
         (x, TypeInfer.f_check z3_env data_info_map qualifiers init_env t  x_ty ))
@@ -260,14 +261,13 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   let id_type_list =
     List.map
       (fun (x, t) ->
-        let t = TaSyntax.add_empty_annotation t in
         let z3_env =  UseZ3.mk_z3_env () in
         (x, TypeInfer.f z3_env data_info_map qualifiers init_env  t  ))
       infer_goals
   in
   let id_sch_list = List.map (fun (id, ty) -> (id, (([],[],ty):Type.schema))) id_type_list in
   let new_fundecs = ope_defs@new_fundecs@id_sch_list in
-  let new_defs = infer_goals@new_syn_goals in
+  let new_defs = (List.map (fun (x,tasyn) -> (x, TaSyntax.remove_annotations tasyn)) infer_goals)@new_syn_goals in
   (data_info_map, minfos, new_fundecs, new_defs)
 
 

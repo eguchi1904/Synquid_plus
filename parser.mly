@@ -2,7 +2,7 @@
 
 open Type
 open Formula
-open Syntax
+open TaSyntax
 open PreSyntax
 
 
@@ -77,7 +77,7 @@ let rec pop_lst = function
 %left MINUS PLUS IN
 %left AST
 
-%type < PreSyntax.id_schemas * PreSyntax.measureInfo list * PreSyntax.id_schemas * ((Id.t * Syntax.t) list) * (Formula.t list) > toplevel
+%type < PreSyntax.id_schemas * PreSyntax.measureInfo list * PreSyntax.id_schemas * ((Id.t * Type.t option TaSyntax.t) list) * (Formula.t list) > toplevel
 %type <PreSyntax.id_schemas> m1 /*m1によってコンストラクタの型の環境を作成*/
 %type <Id.t list> t_paras
 %type <(Id.t * Formula.pa_shape) list> p_paras
@@ -193,8 +193,8 @@ cargs:
 m3:/* query */
 | ID nl EQUAL nl prg nl
 {
- if S.mem $1 (Syntax.fv $5) then (* recursive def *)
-     ($1, PLet ($1, $5, (PE (PSymbol $1))) )
+ if S.mem $1 (TaSyntax.fv $5) then (* recursive def *)
+     ($1, PLet (($1, None), $5, (PE (PSymbol 	($1,[])))) )
  else
      ($1, $5)
 }
@@ -208,7 +208,8 @@ prg:
 | prg_e { PE $1 }
 | prg_b { PI $1 }
 | prg_f { PF $1 }
-| LET nl ID nl EQUAL nl prg nl IN nl prg { PLet ($3, $7, $11) }
+| LET nl ID nl EQUAL nl prg nl IN nl prg { PLet (($3, None), $7, $11) }
+| LET nl ID COLON texp nl EQUAL nl prg nl IN nl prg  {  PLet (($3, Some $5 ), $9, $13) }
 | QUESTION { PHole }
 
 prg_e:
@@ -220,9 +221,18 @@ prg_e:
   
 prg_eatom:
 | LPAREN prg_e RPAREN { $2 }
-| ID { PSymbol $1 }
-| CAPID { PSymbol $1 }
-| AUXI { PAuxi $1 }
+| ID { PSymbol ($1, []) }
+| ID LSQBRAC texp_commas RSQBRAC {PSymbol ($1, $3)} /* explicit instantiation */
+| CAPID { PSymbol ($1, []) }
+| CAPID LSQBRAC texp_commas RSQBRAC {PSymbol ($1, $3)} /* explicit instantiation */
+| AUXI { PAuxi ($1, None) }
+| AUXI COLON texp { PAuxi ($1, Some $3) }
+
+texp_commas:
+| { [] }
+| texp  { [Some $1] }
+| texp COMMA texp_commas { (Some $1) :: $3 }
+
 
 prg_b:
 | LPAREN prg_b RPAREN { $2 }
@@ -234,11 +244,12 @@ prg_cases:
 | prg_case { [$1] }
 
 prg_case:
-| CAPID cargs ALLOW nl prg nl { Syntax.mk_case $1 $2 $5 }
+| CAPID cargs ALLOW nl prg nl { TaSyntax.mk_case $1 $2 $5 }
 
 prg_f:
-|  LPAREN prg_f RPAREN { $2 }
-| BACKSLASH ID DOT nl  prg { PFun ($2, $5) }
+| LPAREN prg_f RPAREN { $2 }
+| BACKSLASH ID DOT nl prg { PFun (($2, None), $5) }
+| BACKSLASH ID COLON texp DOT nl prg { PFun (($2, Some $4), $7) }
 
 
 

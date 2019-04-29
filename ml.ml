@@ -553,9 +553,13 @@ let infer env (t:(t option) TaSyntax.t) =
 let check env t req_ty =
   let (ta_t, ty) = infer env t in
   let sita = unify [(ty, req_ty)] subst_empty in
-  if req_ty == subst_ty sita req_ty then
+  if req_ty = subst_ty sita req_ty then
     subst_tasyn sita ta_t
   else
+    let () = Printf.printf "%s vs %s\n"
+                           (string_of_t req_ty)
+                           (string_of_t (subst_ty sita req_ty))
+    in
     raise (ML_Inf_Err "required type is too generic")
 
 

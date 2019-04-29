@@ -22,6 +22,9 @@ type 'a t = PLet of (Id.t * 'a)  * 'a t * 'a t
 
  and 'a case = {constructor : Id.t ; argNames : (Id.t * 'a) list ; body : 'a t}
 
+
+val mk_case: Id.t -> Id.t list -> 'a option t -> 'a option case (* for parser *)
+
 val remove_annotations: 'a t -> Syntax.t
 val remove_annotations_e: 'a e -> Syntax.e
 val remove_annotations_b: 'a b -> Syntax.b
@@ -47,5 +50,7 @@ val replace_f: Id.t M.t  ->('a f) -> ('a f)
   
                
 val fv: 'a t -> S.t
+
+val auxi_exist_t: 'a t -> bool
 
 val get_auxi_anno: 'a t -> 'a M.t

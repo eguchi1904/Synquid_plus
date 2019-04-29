@@ -245,7 +245,7 @@ and cons_gen_e dinfos env e =
     )
    
   |TaSyn.PSymbol (x, schs) ->     (* x[t1,t2,...tn] explicite instantiation *)
-
+    
     let tys = List.map Liq.schema2ty schs
     in
     let x_liq_sch =
@@ -294,10 +294,12 @@ and cons_gen_e dinfos env e =
        (* typeのinstantiate *)
        let tys_tmp, tys_wf_cs, tys_ann_cs =
          List.map (fresh_from_annotation dinfos env) tys
-         |> List.fold_left
-              (fun (acc_tmp, acc_tmp_cs, acc_ann_cs) (tmp, tmp_cs, ann_cs)->
-                (tmp::acc_tmp), (tmp_cs@acc_tmp_cs), (ann_cs@acc_ann_cs))
-              ([],[],[])
+         |> (fun l -> List.fold_right (* fold-leftにすると,tys_tmpの順番が反転してしまう *)
+                        (fun (tmp, tmp_cs, ann_cs)  (acc_tmp, acc_tmp_cs, acc_ann_cs) ->
+                          (tmp::acc_tmp), (tmp_cs@acc_tmp_cs), (ann_cs@acc_ann_cs))
+                    l
+                    ([],[],[])
+            )
        in
        let ty_x' = Liq.instantiate_implicit x_liq_sch tys_tmp unknown_pa_list in
        (* ty_x'のwell formedness: ここで、新しく生成したunknown_paなどのwellformednessが保証される *)

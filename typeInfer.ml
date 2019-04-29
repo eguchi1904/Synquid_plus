@@ -225,8 +225,17 @@ let f_check z3_env dinfos qualifiers env (t: Liq.t option TaSyn.t) (_,_,req_ty)=
       t
   in
   let ta_ml = Ml.check (Ml.shape_env env) ml_option_t (Ml.shape req_ty) in
+  let () = print_string ("**after ml_inference**\n\n"
+                         ^(TaSyn.syn2string Ml.string_of_sch ta_ml)
+                         ^"\n\n")
+  in
   let ta_t = adjust_annotation dinfos ta_ml t in
+  let () = print_string ("**after adjust annotation**\n\n"
+                         ^(TaSyn.syn2string Liq.schema2string ta_t)
+                         ^"\n\n")
+  in  
   liqCheck z3_env dinfos qualifiers env ta_t req_ty
+  
 (* -------------------------------------------------- *)
 (* inference of E-term *)
 (* -------------------------------------------------- *)
