@@ -352,7 +352,7 @@ and cons_gen_e dinfos env e =
      
   |TaSyn.PAuxi (g, sch) ->
     let ty = Liq.schema2ty sch in
-    let g_tmp, g_tmp_cs, g_ann_cs = fresh_from_annotation dinfos env ty in
+    let g_tmp, g_tmp_cs, g_ann_cs = fresh_from_annotation dinfos Liq.env_empty ty in
     let () = log_tmp "auxi" g_tmp in
     let () = log_cons "" g_tmp_cs in
     let g_sch = Liq.mk_mono_schmea g_tmp in

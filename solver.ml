@@ -255,7 +255,7 @@ let get_qfree_sol graph assign p_lav sol pol =
     let qe_sol = get_qfree_sol graph assign p sol pol (* List.map Qe.f (List.map snd sol) *)
                  (* |> Formula.and_list *)
     in
-    let p_assign = Formula.And (qualify_phi, qe_sol) in
+    let p_assign =Formula.and_list [qualify_phi; qe_sol] in
     M.add (G.id_of_pLavel graph p) p_assign assign
 
 
