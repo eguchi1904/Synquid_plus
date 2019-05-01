@@ -239,7 +239,22 @@ let get_qfree_sol graph assign p_lav sol pol =
         []
         sol
     in
-    Formula.or_list qfree_list
+    let c_list = List.map fst sol
+                 |> List.map (G.cons_of_cLavel graph)
+    in
+    let qfree_list =
+      List.filter
+        (fun phi ->
+          let assign' = M.add p phi assign in
+          List.for_all
+            (fun c ->
+              Constraint.subst_simple_cons assign' c
+              |> Constraint.replace_unknown_p_to_top
+              |> Constraint.is_valid_simple_cons)
+            c_list)
+      qfree_list
+    in
+    Formula.and_list qfree_list
     
     
   let mk_new_assign graph assign qualify p pol sol =

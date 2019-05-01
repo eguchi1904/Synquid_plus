@@ -83,11 +83,14 @@ let extract_necessary_predicate senv unknown env =
     env
     (unknown, S.empty)
 
+
 let rec iter_extract_necessary_predicate senv unknown env =
   let unknown', necess_p = extract_necessary_predicate senv unknown env in
-  if unknown' = unknown then
+  let () = assert ((S.cardinal unknown) <= (S.cardinal unknown')) in
+  if S.equal unknown' unknown then
     necess_p
   else
+    let () = assert ((S.cardinal unknown) < (S.cardinal unknown')) in
     iter_extract_necessary_predicate senv unknown' env
   
   
@@ -151,6 +154,13 @@ let extract_argument_vars senv env =
   |> List.filter (fun (x,_) -> not (Liq.env_mem env x))
   |> List.map fst
   |> S.of_list
+  
+(* let extract_argument_vars senv env = *)
+(*   let () =  Format.eprintf "go to extartct@" in *)
+(*   let ret = extract_argument_vars senv env  in *)
+(*   let () = assert false in *)
+(*   ret *)
+  
 
 (* envはpが定義されたところでの環境 *)
 let mk_bound assign senv env pending_sita = function
