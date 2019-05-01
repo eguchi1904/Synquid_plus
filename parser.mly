@@ -209,7 +209,7 @@ prg:
 | prg_b { PI $1 }
 | prg_f { PF $1 }
 | LET nl ID nl EQUAL nl prg nl IN nl prg { PLet (($3, None), $7, $11) }
-| LET nl ID COLON texp nl EQUAL nl prg nl IN nl prg  {  PLet (($3, Some $5 ), $9, $13) }
+| LET nl ID COLON COLON nl texp_annotation nl EQUAL nl prg nl IN nl prg  {  PLet (($3, Some $7 ), $11, $15) }
 | QUESTION { PHole }
 
 prg_e:
@@ -222,16 +222,21 @@ prg_e:
 prg_eatom:
 | LPAREN prg_e RPAREN { $2 }
 | ID { PSymbol ($1, []) }
-| ID LSQBRAC texp_commas RSQBRAC {PSymbol ($1, $3)} /* explicit instantiation */
+| ID LSQBRAC texp_commas_annotation RSQBRAC {PSymbol ($1, $3)} /* explicit instantiation */
 | CAPID { PSymbol ($1, []) }
-| CAPID LSQBRAC texp_commas RSQBRAC {PSymbol ($1, $3)} /* explicit instantiation */
+| CAPID LSQBRAC texp_commas_annotation RSQBRAC {PSymbol ($1, $3)} /* explicit instantiation */
 | AUXI { PAuxi ($1, None) }
-| AUXI COLON texp { PAuxi ($1, Some $3) }
+| AUXI COLON COLON texp_annotation { PAuxi ($1, Some $4) }
 
 texp_commas:
 | { [] }
 | texp  { [Some $1] }
 | texp COMMA texp_commas { (Some $1) :: $3 }
+
+texp_commas_annotation:
+| { [] }
+| texp_annotation  { [Some $1] }
+| texp_annotation COMMA texp_commas_annotation { (Some $1) :: $3 }
 
 
 prg_b:
@@ -293,7 +298,6 @@ tatom:
  { TScalar ($2, $4) }
 | basetype { TScalar ($1, Bool true) }  /*refinmentが略記されたもの*/
 
-
 basetype:
 | INTSYMBOL {TInt}
 | BOOLSYMBOL {TBool}
@@ -303,6 +307,32 @@ basetype:
 tatoms:
 | tatom tatoms  { $1 :: $2 }
 |  { [] }
+
+/* type expression written in annoation
+ defalut refinement is ignore varialbe "_"
+*/
+texp_annotation:
+|ID COLON tatom_annotation nl ALLOW nl texp_annotation {TFun (($1,$3), $7) } /* x:t1 -> t2 */
+|tatom_annotation {$1}
+
+tatom_annotation:
+| LPAREN texp_annotation RPAREN { $2 }
+| LCURBRAC basetype_annotation PIPE fexp RCURBRAC /*{b | p}の形*/
+ { TScalar ($2, $4) }
+| basetype_annotation { TScalar ($1, Formula.Var (Formula.BoolS, Id.ignore_id)) }  /*refinmentが略記されたもの*/
+
+basetype_annotation:
+| INTSYMBOL {TInt}
+| BOOLSYMBOL {TBool}
+| CAPID tatoms_annotation pas { TData($1, $2, $3) }
+| ID { TAny $1 }
+
+tatoms_annotation:
+| tatom_annotation tatoms_annotation  { $1 :: $2 }
+| { [] }
+
+
+
 
 /*predicate abstraction */
 pas:

@@ -399,7 +399,8 @@ let fillsort2pa senv senv_param senv_var (pa:pa) =
     id2pa_shape r r_shape
     
   |(args,e) ->
-    let e' = fillsort senv senv_param (args@senv_var) e in
+    let senv_var' = (Id.ignore_id, Formula.BoolS) :: (args@senv_var) in
+    let e' = fillsort senv senv_param senv_var' e in
     (args, e')
 
 
@@ -410,7 +411,7 @@ let fillsort2pa senv senv_param senv_var (pa:pa) =
 let rec fillsort2type  senv senv_param senv_var =function
   |TScalar (b,p) ->
     let vs = base2pashape b in
-    let senv_var' = (Id.valueVar_id, vs) :: senv_var in
+    let senv_var' = (Id.ignore_id, Formula.BoolS) :: (Id.valueVar_id, vs) :: senv_var in
     let p'= fillsort senv senv_param senv_var' p in
     let b' = fillsort2basetype senv senv_param senv_var b in
     TScalar (b', p')
