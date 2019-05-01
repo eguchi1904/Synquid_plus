@@ -326,6 +326,11 @@ let get_qfree_sol graph assign p_lav sol pol =
                                 graph assign p priority
                                 ~may_change:t.cFixState
       in
+      let fixed_cs_log =  List.map fst sol
+                      |> List.map (G.cons_of_cLavel graph)
+      in      
+      (* logging: navely add from iter_fix *)
+      let () = log_poped graph assign fixed_cs_log (p, pol, sol) in      
       let assign' = mk_new_assign graph assign t.qualifierAssign p pol sol in
       let additional_fix_cs = check_validity_around_p graph assign' p
                                                       ~may_change:t.cFixState
@@ -345,11 +350,7 @@ let get_qfree_sol graph assign p_lav sol pol =
                              t.pFixState,
                              t.queue)
       in
-      let fixed_cs =  List.map fst sol
-                      |> List.map (G.cons_of_cLavel graph)
-      in      
-      (* logging: navely add from iter_fix *)
-      let () = log_poped graph assign' fixed_cs (p, pol, sol) in
+
       let () = log_assign "" assign' in
       Some assign'
       

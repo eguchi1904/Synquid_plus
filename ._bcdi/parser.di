@@ -1,1 +1,1 @@
-parser.cmi : syntax.cmo preSyntax.cmo id.cmo formula.cmi
+parser.cmi : type.cmi taSyntax.cmi preSyntax.cmo id.cmi formula.cmi

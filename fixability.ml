@@ -62,7 +62,7 @@ let extract_necessary_predicate senv unknown env =
         match sch with
         |([], [], Liq.TScalar (_, phi)) ->
           let phi_fv = (Formula.fv phi) in (* = fv ([_v->x].phi) / {x}  *)
-          let new_unknown' = S.filter (fun x -> Formula.Senv.mem x senv) phi_fv  in
+          let new_unknown' = S.filter (fun x -> not (Formula.Senv.mem x senv)) phi_fv  in
           let acc_unknown' = S.union new_unknown' acc_unknown in
           let acc_p' = S.union acc_p (Formula.extract_unknown_p phi) in
           (acc_unknown', acc_p')
@@ -75,7 +75,7 @@ let extract_necessary_predicate senv unknown env =
       if S.is_empty (S.inter  phi_fv acc_unknown) then
         (acc_unknown, acc_p)
       else
-        let new_unknown' = S.filter (fun x -> Formula.Senv.mem x senv) phi_fv  in
+        let new_unknown' = S.filter (fun x -> not (Formula.Senv.mem x senv)) phi_fv  in
         let acc_unknown' = S.union new_unknown' acc_unknown in
         let acc_p' = S.union acc_p (Formula.extract_unknown_p phi) in
         (acc_unknown', acc_p')
@@ -145,7 +145,12 @@ let mk_flatten_subst senv sita =
   in
   Formula.subst_compose delta freshing_sita
   , eq_phi
-  
+
+let extract_argument_vars senv env =
+  Formula.Senv.reveal senv
+  |> List.filter (fun (x,_) -> not (Liq.env_mem env x))
+  |> List.map fst
+  |> S.of_list
 
 (* envはpが定義されたところでの環境 *)
 let mk_bound assign senv env pending_sita = function
@@ -162,8 +167,16 @@ let mk_bound assign senv env pending_sita = function
                  |>Formula.substitution flatten_sita
        in
        let require = Formula.And (e1', eq_phi) in
-       let vars = S.filter (fun x -> not (Formula.Senv.mem x senv))
-                           (Formula.fv require)
+       let unknown_vars = S.filter (fun x -> not (Formula.Senv.mem x senv))
+
+                                   (Formula.fv require)
+       in
+       (* let env' = Liq.env_replace flatten_replace env in *)
+       let vars = if S.is_empty unknown_vars then unknown_vars
+                  else
+                    S.union
+                      unknown_vars
+                      (extract_argument_vars senv env) (* 引数変数を関係しているものとして加える *)
        in
        LowBound {localEnv = local_env'
                 ;vars = vars
@@ -200,9 +213,16 @@ let mk_bound assign senv env pending_sita = function
                         |> Formula.fv_include_v
                         |>S.union (Formula.fv_include_v e1')
        in
-       let vars = S.filter (fun x -> not (Formula.Senv.mem x senv))
+       let unknown_vars = S.filter (fun x -> not (Formula.Senv.mem x senv))
                            require_fv
        in
+       (* let env' = Liq.env_replace flatten_replace env in *)
+       let vars = if S.is_empty unknown_vars then unknown_vars
+                  else
+                    S.union
+                      unknown_vars
+                      (extract_argument_vars senv env) (* 引数変数を関係しているものとして加える *)
+       in       
        UpBound {localEnv = local_env'
                ;vars = vars
                ;require = require})

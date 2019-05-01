@@ -24,10 +24,6 @@ measure elems :: List a -> Set a where
  Nil -> []
  Cons x xs -> [x] + elems xs
 
-  
-
-
-
 bin2list :: t:BST a -> {List a | elems _v == keys t && len _v == size t}
 
 bin2list = ??
