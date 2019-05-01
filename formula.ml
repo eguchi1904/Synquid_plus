@@ -97,11 +97,11 @@ type t =
   (* set literal [1, 2, 3] *)
   |Set of sort * (t list) 
   (* input variable *)        
-  |Var of sort * Id.t   
+  |Var of sort * Id.t
   (* unknown predicate *)
-  (* これは相互再帰だからだめだ *)
   |Unknown of Senv.t * sort_subst * subst * Id.t
-  |Cons of sort * Id.t * (t list) (* datatype constructor *)
+  (* datatype constructor *)
+  |Cons of sort * Id.t * (t list) 
   |UF of sort * Id.t * (t list)   (* uninterpreted function *)
   |All of (Id.t * sort) list * t  (* 使わない *)
   |Exist of (Id.t * sort) list * t (* 使わない *)

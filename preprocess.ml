@@ -439,6 +439,16 @@ let rec fillsort2schema  senv ((ts,ps,t):schema) :schema=
 let rec fillsort2env senv (env:(Id.t * schema) list) =
   List.map (fun (x,schm) ->(x, fillsort2schema senv schm) ) env
 
+let fillsort2defs senv defs =
+  List.map (fun (x, ta_syn) ->
+      (x,
+       TaSyntax.access_annotation_t
+         (function |None -> None
+                   |Some ty -> Some (fillsort2type senv [] [] ty))
+         ta_syn))
+  defs
+  
+
 
 
 let rec fill_pa_args ((arg_sort,rets):(Formula.pa_shape)) senv_param (pa:pa) =
@@ -481,6 +491,16 @@ let rec fill_pa_args2schema data_pas ((ts,ps,t):schema) =
 let rec fill_pa_args2env data_pas (env:(Id.t * schema) list) =
   List.map (fun (x,schm) ->(x, fill_pa_args2schema data_pas schm)) env
 
+let fill_pa_arg2defs data_pas defs =
+  List.map (fun (x, ta_syn) ->
+      (x,
+       TaSyntax.access_annotation_t
+         (function |None -> None
+                   |Some ty -> Some (fill_pa_args2type data_pas [] ty))
+         ta_syn))
+           defs
+                                
+
 let rec which_data_cons = function
   |TScalar (TData(i, _,_), _) ->i
   |TFun ((x,t1), t2) -> which_data_cons t2
@@ -505,7 +525,7 @@ let rec mk_data_pas (env:(Id.t * schema) list) =
     
         
 (* この段階では、envにはコンストラクタのみ入っている。 *)
-let f env minfos fundecs =
+let f env minfos fundecs (defs:(Id.t * Type.t option TaSyntax.t) list) =
   let senv_cons = List.map (fun (cons,(_,_,c_t)) -> (cons, type2pashape c_t) ) env in
   (* let senv_mes = List.map (fun (mes, (shape,_)) -> (mes, shape)) minfos in *)
   let senv_mes = List.map
@@ -514,15 +534,17 @@ let f env minfos fundecs =
                in
   let senv = senv_cons@senv_mes in
   let env = minfos2env env minfos in (*  measrureの情報を追加 *)
-
+  (* fill pa args *)
   let data_pas = mk_data_pas env in
   let env' = fill_pa_args2env data_pas env in
   let fundecs' = fill_pa_args2env data_pas fundecs in
-  
+  let defs' = fill_pa_arg2defs data_pas defs in
+  (* fill sort *)
   let env' = fillsort2env senv env' in
   (Printf.printf "env\n%s\n\n" (Type.env2string (env_add_schema_list env_empty env' )));
   let fundecs' = fillsort2env senv fundecs' in
-  (env', fundecs')
+  let defs' = fillsort2defs senv defs' in
+  (env', fundecs', defs')
   
 (* qualifyer *)
   

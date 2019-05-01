@@ -445,7 +445,32 @@ let split_cons c =
   |Sub (env, ty1, ty2) ->
     split_cons' env c
     |> List.map separate_unknown_simple_cons 
-    |> List.concat   
+    |> List.concat
+
+(* -------------------------------------------------- *)
+(* ignore *)
+(* -------------------------------------------------- *)
+
+let rec replace_ignore sc  =
+  let ignore2top = M.singleton Id.ignore_id (Formula.Bool true) in
+  let ignore2bot =  M.singleton Id.ignore_id (Formula.Bool false) in
+  match sc with
+  |SWF (env, (senv, phi)) -> SWF (env, (senv, Formula.substitution ignore2top phi))
+  |SSub (env, phi1, phi2) ->
+    let phi2' = Formula.substitution ignore2top phi2 in
+    let phi1' = Formula.substitution ignore2bot phi1 in
+    let env' = Liq.env_substitute_F ignore2top env in
+    SSub (env', phi1', phi2')
+
+let rec remove_obviously_valid = function
+  |SSub (_, Formula.Bool false, _) ::left ->
+    remove_obviously_valid left
+  |SSub (_, _, Formula.Bool true ) ::left ->
+    remove_obviously_valid left
+  |c::cs -> c :: (remove_obviously_valid cs)
+  |[] -> []
+   
+    
 
 (* -------------------------------------------------- *)
 (* pp *)

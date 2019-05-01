@@ -162,7 +162,14 @@ let liqInfer z3_env dinfos qualifiers env ta_t =
   in  
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
-  let simple_cs = List.concat (List.map split_cons cs) in
+  let simple_cs = List.concat (List.map split_cons cs)
+                  |> Constraint.remove_obviously_valid
+  in
+  let simple_cs_ann = List.concat (List.map split_cons cs_ann)
+                      |> List.map Constraint.replace_ignore
+                      |> Constraint.remove_obviously_valid
+  in
+  let simple_cs = simple_cs_ann@simple_cs in
   let () = (Printf.printf "cs_length:%d \n" (List.length cs)) in
   let () =  (Printf.printf "simple_cs_length:%d \n" (List.length simple_cs)) in
   (* (print_string (scons_list_to_string simple_cs)); *)
@@ -183,7 +190,13 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   let auxi_ty_map, up_ps = extract_up ta_t' in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
-  let simple_cs = List.concat (List.map split_cons cs) in
+  let simple_cs = List.concat (List.map split_cons cs)
+                  |> Constraint.remove_obviously_valid
+  in
+  let simple_cs_ann = List.concat (List.map split_cons cs_ann)
+                      |> List.map Constraint.replace_ignore
+                      |> Constraint.remove_obviously_valid
+  in    
   let () = (Printf.printf "cs_length:%d \n" (List.length cs)) in
   let () =  (Printf.printf "simple_cs_length:%d \n" (List.length simple_cs)) in
   (* (print_string (scons_list_to_string simple_cs)); *)
@@ -193,7 +206,7 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   (* logging *)
     try
       (* let p_assign = ConsSolver.find_predicate z3_env qualifiers simple_cs env req_ty in *)
-      let p_assign = Solver.f up_ps qualifiers simple_cs in
+      let p_assign = Solver.f up_ps qualifiers (simple_cs_ann@simple_cs) in
       let auxi_ty_map = M.map (Liq.substitute_F p_assign) auxi_ty_map in
       
     (* logging *)

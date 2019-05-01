@@ -192,7 +192,7 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   in
   let  (cons_env, minfos, fundecs, defs, q_formulas)  = Parser.toplevel Lexer.main lexbuf in
   (* (List.iter print_string (List.map PreSyntax.minfo2string minfos)); *)
-  let cons_env,fundecs = Preprocess.f cons_env minfos fundecs in
+  let cons_env,fundecs, defs = Preprocess.f cons_env minfos fundecs defs in
   let data_info_map = Data_info.mk_data_info cons_env in
   let q_formulas = List.map (Preprocess.fillsort_to_formula (cons_env@fundecs) minfos) q_formulas in
   
@@ -205,7 +205,8 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   let () = Printf.printf "\nqualifier:\n%s\n\n"
                     (String.concat "\n" (List.map Qualifier.qualifier_to_string qualifiers))
   in
-  (* 応急手当て、predicateパラメタのsortの整合性合わせ*)
+  (* 応急手当て、predicateパラメタのsortの整合性合わせ 
+   *)
   let cons_env =
     List.map
       (fun (id, sch) ->
@@ -218,8 +219,18 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
         (id, Data_info.fix_sort_in_pred_param_schema data_info_map sch))
       fundecs
   in
-
-
+  let defs =
+    List.map
+      (fun (x, ta_syn) ->
+        let ta_syn' =
+          TaSyntax.access_annotation_t
+            (function |None -> None
+                      |Some ty -> Some (Data_info.fix_sort_in_pred_param data_info_map ty))
+          ta_syn
+        in
+        (x, ta_syn'))
+      defs
+  in
   let syn_check_goals, infer_goals = List.partition
                                  (fun (id, _) -> List.mem_assoc id fundecs)
                                  defs

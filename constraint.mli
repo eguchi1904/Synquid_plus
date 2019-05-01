@@ -32,6 +32,10 @@ val is_valid_simple_cons : simple_cons -> bool
 val is_valid_simple_cons_all : simple_cons -> bool
 (* using Liq.env2formula_all *)
 val is_satisifiable_simple_cons_all : simple_cons -> bool
+
+val replace_ignore : simple_cons -> simple_cons
+
+val remove_obviously_valid : simple_cons list -> simple_cons list
   
 (* unknown p に対するsubst *)
 val subst_simple_cons : Formula.subst -> simple_cons -> simple_cons

@@ -98,8 +98,8 @@ let rec formula2z3 (ctx:context) (smap:sort_map) (emap:id_expr_map) (fmap:id_fun
     (*   Not_found -> *)
     (*   let new_var = (Expr.mk_const_s ctx i z_sort) in *)
     (*   (Hashtbl.add emap i new_var); *)
-    (*   new_var, z_sort)     *)
-      
+  (*   new_var, z_sort)     *)
+
   |Formula.Cons (sort, i , args) ->
     let (z_args_e, z_args_s) = List.split (List.map (formula2z3 ctx smap emap fmap) args) in
     let z_sort = sort2z3 ctx smap sort in
