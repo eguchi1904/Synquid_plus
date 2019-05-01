@@ -456,7 +456,7 @@ let rec env_substitute_F (sita:Formula.subst) (env:env) :env=
       (fun env_elm acc ->
         match env_elm with
         |P p ->
-          env_add_F acc p
+          env_add_F acc (Formula.substitution sita p)
         |B (x, (arg1,arg2,ty)) ->
           env_add_schema acc (x,(arg1, arg2, substitute_F sita ty))
       )
