@@ -322,14 +322,14 @@ module Constructor = struct
       )
     graph    
         
-
-  let f up_p_set graph =
+  (* up_pset, down_p_setは、queueをcreateするために必要 *)
+  let f up_p_set down_p_set graph =
     let t = gen_t graph in
     let p_num = G.pNode_num graph in
     (* 以下を初期化 *)
     let fixable_count = PFixableConstraintCounter.Constructor.create p_num in
     let pfix_state = PFixState.Constructor.create p_num in
-    let queue = PriorityQueue.create up_p_set p_num in
+    let queue = PriorityQueue.create up_p_set down_p_set p_num in
     let () = pos_registor graph t ~change:(fixable_count, pfix_state, queue) in
     let () = neg_registor graph t ~change:(fixable_count, pfix_state, queue) in    
     (t, fixable_count, pfix_state, queue)

@@ -155,7 +155,7 @@ sig
 
   val log: G.t -> string -> t -> unit
 
-  val create: S.t -> G.t -> Formula.t M.t ->  t
+  val create: S.t -> S.t -> G.t -> Formula.t M.t ->  t
          (* val fix_constraint: t -> G.t -> G.pLavel -> G.cLavel -> unit *)
 
   val next: t -> G.t -> Formula.t M.t ->
@@ -199,10 +199,11 @@ end =  struct
       (of_string graph t)
   
   (* 初期状態を作成する *)
-  let create up_ps graph qualifier_assign =
+  let create up_ps down_ps graph qualifier_assign =
     let up_plav_set = PSet.of_id_Set graph up_ps in
+    let down_plav_set = PSet.of_id_Set graph down_ps in
     let fixability_manager, fixable_count, pfix_state, queue = 
-      FixabilityManager.Constructor.f up_plav_set graph
+      FixabilityManager.Constructor.f up_plav_set down_plav_set graph
     in
     let cfix_state = CFixState.create up_ps graph in
     {qualifierAssign = QualifierAssign.create graph qualifier_assign
@@ -400,7 +401,7 @@ let f up_ps neg_ps qualifyers cs =
   let graph = G.create up_ps neg_ps cs in
   let () = G.log graph in
   let qualify_assign = M.empty in (* とりあえず *)  
-  let state = DyState.create up_ps graph qualify_assign in
+  let state = DyState.create up_ps neg_ps graph qualify_assign in
   let assign = iter_fix graph state  M.empty in
   let sita_debug = M.bindings assign in
   assign

@@ -7,6 +7,7 @@ module Polarity = PredicatePriorityQueue.Polarity
 module PredicateFixableLevel = PredicatePriorityQueue.PredicateFixableLevel
 module PriorityQueue = PredicatePriorityQueue.PriorityQueue
 module Priority = PredicatePriorityQueue.Priority
+module PredicateInfo = PredicatePriorityQueue.PredicateInfo
 
                 
 
@@ -24,30 +25,34 @@ let state_to_string = function
   |PartialFixable -> "PartialFixable"
   |ZeroFixable -> "ZeroFixable"
 
-let calc_priority state pol p =
+
+                
+let calc_p_info p state pol =
   match state with
   |Fixed _ -> invalid_arg "calc_priority: already fixed"
   |AllFixable rc ->
-    Priority.{fixLevel = PredicateFixableLevel.all
-             ;otherPCount = !(rc.otherPCount)
-             ;fixableNum = !(rc.fixableNum)
-             ;pol = pol
+    PredicateInfo.{fixLevel = PredicateFixableLevel.all
+                  ;otherPCount =Some  !(rc.otherPCount)
+                  ;fixableNum = Some !(rc.fixableNum)
+                  ;pol = pol
              ;lavel = p
     }
   |PartialFixable ->
-    Priority.{fixLevel = PredicateFixableLevel.partial
-             ;otherPCount = 0
-             ;fixableNum = 0  (* dummy *)
+    PredicateInfo.{fixLevel = PredicateFixableLevel.partial
+             ;otherPCount = None
+             ;fixableNum = None
              ;pol = pol
              ;lavel = p
     }
   |ZeroFixable ->
-    Priority.{fixLevel = PredicateFixableLevel.zero
-             ;otherPCount = 0
-             ;fixableNum = 0  (* dummy *)
+    PredicateInfo.{fixLevel = PredicateFixableLevel.zero
+             ;otherPCount = None
+             ;fixableNum = None
              ;pol = pol
              ;lavel = p
     }      
+
+
 
    
    
@@ -87,9 +92,34 @@ let is_fixed t p =
 
 let isnt_fixed t p = not (is_fixed t p)
 
-
+(* ************************************************** *)
+(* queueにstateを反映させる関数群 *)
+(* ************************************************** *)
                    
-(* この時点で、pをfixしたことによる、fixableLevelの変化は反映されていないといけない -> 本当？*)
+let push2queue_pos q state ~change:queue =
+  let p_info = calc_p_info q state Polarity.pos in
+  let priority = PriorityQueue.calc_priority queue p_info in
+  PriorityQueue.push_pos queue q priority
+
+let push2queue_neg q state ~change:queue =
+  let p_info = calc_p_info q state Polarity.neg in
+  let priority = PriorityQueue.calc_priority queue p_info in
+  PriorityQueue.push_neg queue q priority  
+
+
+let update_queue_pos q state ~change:queue =
+  let p_info = calc_p_info q state Polarity.pos in
+  let priority = PriorityQueue.calc_priority queue p_info in
+  PriorityQueue.update_pos queue q priority
+
+let update_queue_neg q state ~change:queue =
+  let p_info = calc_p_info q state Polarity.neg in
+  let priority = PriorityQueue.calc_priority queue p_info in
+  PriorityQueue.update_neg queue q priority  
+
+
+  
+
 (* fixしたことによる,allfixableの街を変化させる *)
 (* ここで、unfixのやつにしか伝播させないという工夫が必要だな、 *)
 let fix {posTable = pos_table
@@ -107,8 +137,7 @@ let fix {posTable = pos_table
                 |Fixed _-> ()
                 |AllFixable rc ->
                   (rc.otherPCount := !(rc.otherPCount) - i);
-                  calc_priority q_state Polarity.pos q
-                  |> PriorityQueue.push_pos queue q 
+                  push2queue_pos q q_state  ~change:queue
                 |_ -> ())
               pos_affect.(p) )
   in
@@ -119,8 +148,7 @@ let fix {posTable = pos_table
                 |Fixed _ ->  ()
                 |AllFixable  rc ->
                   (rc.otherPCount := !(rc.otherPCount) - i);
-                  calc_priority q_state Polarity.neg q
-                  |> PriorityQueue.push_neg queue q                       
+                  push2queue_neg q q_state ~change:queue                  
                 |_ -> ())
               neg_affect.(p) )      
   in
@@ -141,8 +169,7 @@ let unfix {posTable = pos_table
                 |Fixed _-> ()
                 |AllFixable rc ->
                   (rc.otherPCount := !(rc.otherPCount) + i);
-                  calc_priority q_state Polarity.pos q
-                  |> PriorityQueue.push_pos queue q 
+                  push2queue_pos q q_state ~change:queue
                 |_ -> assert false)
               pos_affect.(p) )
   in
@@ -153,8 +180,7 @@ let unfix {posTable = pos_table
                 |Fixed _ ->  ()
                 |AllFixable rc ->
                   (rc.otherPCount := !(rc.otherPCount) + i);
-                  calc_priority q_state Polarity.neg q
-                  |> PriorityQueue.push_neg queue q                                             
+                  push2queue_neg q q_state ~change:queue                                    
                 |_ -> assert false)
               neg_affect.(p) )      
   in      
@@ -248,16 +274,15 @@ let neg_update2allfixable' t p fixable_num (othere_unknown_map: int PMap.t) =
 let pos_update2allfixable t p (othere_unknown_map: int PMap.t)
                           fixable_num ~change:queue =
   let updated_state = pos_update2allfixable' t p fixable_num othere_unknown_map in
-  let updated_priority = calc_priority updated_state Polarity.pos p in
-  PriorityQueue.update_pos queue p updated_priority
+  update_queue_pos p updated_state ~change:queue
+
   
   
 
 let neg_update2allfixable t p (othere_unknown_map: int PMap.t)
                           fixable_num ~change:queue =
   let updated_state = neg_update2allfixable' t p fixable_num othere_unknown_map in
-  let updated_priority = calc_priority updated_state Polarity.neg p in
-  PriorityQueue.update_neg queue p updated_priority
+  update_queue_neg p updated_state ~change:queue  
   
   
 (* backtraceでこうなることもあるね、
@@ -306,28 +331,13 @@ let neg_update' t p fixable_level =
 
 let pos_update t p fixable_level
                ~change:queue = 
-  let _ = (pos_update' t p fixable_level) in
-  let priority = Priority.{ fixLevel = fixable_level
-                           ;otherPCount = 0
-                           ;fixableNum = 0 (* dummy *)
-                           ;pol = Polarity.pos
-                           ;lavel = p
-                 }
-  in
-  PriorityQueue.update_pos queue p priority
+  let updated_state = (pos_update' t p fixable_level) in
+  update_queue_pos p updated_state ~change:queue
 
 let neg_update t p fixable_level
                ~change:queue = 
-  let _ = (neg_update' t p fixable_level) in
-  let priority = Priority.{ fixLevel = fixable_level
-                           ;otherPCount = 0
-                           ;fixableNum = 0 (* dummy *)
-                           ;pol = Polarity.neg
-                           ;lavel = p
-                 }
-  in
-  PriorityQueue.update_neg queue p priority
-
+  let updated_state = (neg_update' t p fixable_level) in
+  update_queue_neg p updated_state ~change:queue
 
   
 let pos_decr_othere_p_form_allfixable' t p (rm_map:int PMap.t) = 
@@ -365,15 +375,14 @@ let neg_decr_othere_p_form_allfixable' t p (rm_map:int PMap.t) =
 
     
 let pos_decr_othere_p_form_allfixable t p (rm_map:int PMap.t) ~change:queue =
-  let updated_sate = pos_decr_othere_p_form_allfixable' t p rm_map in
-  let updated_priority = calc_priority updated_sate Polarity.pos p in
-  PriorityQueue.update_pos queue p updated_priority
+  let updated_state = pos_decr_othere_p_form_allfixable' t p rm_map in
+  update_queue_pos p updated_state ~change:queue
+
 
   
 let neg_decr_othere_p_form_allfixable t p (rm_map:int PMap.t) ~change:queue =
-  let updated_sate = neg_decr_othere_p_form_allfixable' t p rm_map in
-  let updated_priority = calc_priority updated_sate Polarity.neg p in
-  PriorityQueue.update_neg queue p updated_priority        
+  let updated_state = neg_decr_othere_p_form_allfixable' t p rm_map in
+  update_queue_neg p updated_state ~change:queue  
   
   
 
@@ -390,15 +399,14 @@ module Constructor = struct
 
   let pos_registor t p fixable_level ~change:queue =
     let state = update_table t.posTable p fixable_level in (* fixable_level = allの時はinvalid *)
-    let priority = calc_priority state Polarity.pos p in
-    PriorityQueue.push_pos queue p priority
+    update_queue_pos p state ~change:queue
 
     
     
   let neg_registor t p fixable_level ~change:queue =
     let state = update_table t.negTable p fixable_level in (* fixable_level = allの時はinvalid *)
-    let priority = calc_priority state Polarity.neg p in
-    PriorityQueue.push_neg queue p priority
+    update_queue_neg p state ~change:queue    
+
 
   let pos_registor_allfixable t p (othere_unknown_map: int PMap.t) fixable_num
                               ~change:queue
@@ -410,8 +418,8 @@ module Constructor = struct
     in
     let () = t.posTable.(G.int_of_pLavel p) <- state in
     let () = update_affect t.posAffect p othere_unknown_map in
-    let priority = calc_priority state Polarity.pos p in
-    PriorityQueue.push_pos queue p priority    
+    update_queue_pos p state ~change:queue
+
 
 
     
@@ -425,8 +433,8 @@ module Constructor = struct
     in
     let () = t.negTable.(G.int_of_pLavel p) <- state in
     let () = update_affect t.negAffect p othere_unknown_map in
-    let priority = calc_priority state Polarity.neg p in
-    PriorityQueue.push_neg queue p priority        
+    update_queue_neg p state ~change:queue 
+
 
 
 
