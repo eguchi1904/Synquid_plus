@@ -213,7 +213,7 @@ end =  struct
     ;queue = queue
     }
 
-let get_qfree_sol graph assign p_lav sol pol =
+let get_qfree_sol graph assign p_lav sol pol fixability =
   let p = G.id_of_pLavel graph p_lav in
   if pol = Polarity.neg then
     (* qeせずとも成立しているものは除く *)
@@ -235,29 +235,41 @@ let get_qfree_sol graph assign p_lav sol pol =
   else
     let qfree_list =
       List.fold_left
-        (fun acc (c_lav, q_phi) -> (Qe.f q_phi)::acc)
+        (fun acc (c_lav, q_phi) ->
+          let qe_phi = (Qe.f q_phi)
+                       (* ひとまず、pass conditionのような、_vを含まないようなものを排除する *)
+                       |> Formula.list_and
+                       |> List.filter (fun phi ->
+                              S.mem Id.valueVar_id (Formula.fv_include_v phi))
+                       |> Formula.and_list
+          in
+            qe_phi::acc
+        )
         []
         sol
     in
-    let c_list = List.map fst sol
-                 |> List.map (G.cons_of_cLavel graph)
-    in
-    let qfree_list =
-      List.filter
-        (fun phi ->
-          let assign' = M.add p phi assign in
-          List.for_all
-            (fun c ->
-              Constraint.subst_simple_cons assign' c
-              |> Constraint.replace_unknown_p_to_top
-              |> Constraint.is_valid_simple_cons)
-            c_list)
-      qfree_list
-    in
-    Formula.and_list qfree_list
-    
-    
-  let mk_new_assign graph assign qualify p pol sol =
+    if qfree_list = [] then Formula.Bool false
+    else
+      let c_list = List.map fst sol
+                   |> List.map (G.cons_of_cLavel graph)
+      in
+      let qfree_list =
+        List.filter
+          (fun phi ->
+            let assign' = M.add p phi assign in
+            List.for_all
+              (fun c ->
+                Constraint.subst_simple_cons assign' c
+                |> Constraint.replace_unknown_p_to_top
+                |> Constraint.is_valid_simple_cons)
+              c_list)
+          qfree_list
+      in
+      Formula.and_list qfree_list
+      
+
+(* qeして、qualifyと適切に結合させて解をえる *)
+  let mk_new_assign graph assign qualify p pol fixability sol =
     let fixed_cs = List.map fst sol
                  |> List.map (G.cons_of_cLavel graph)
     in    
@@ -267,7 +279,7 @@ let get_qfree_sol graph assign p_lav sol pol =
       else
         QualifierAssign.get qualify graph assign p []
     in
-    let qe_sol = get_qfree_sol graph assign p sol pol (* List.map Qe.f (List.map snd sol) *)
+    let qe_sol = get_qfree_sol graph assign p sol pol fixability (* List.map Qe.f (List.map snd sol) *)
                  (* |> Formula.and_list *)
     in
     let p_assign =Formula.and_list [qualify_phi; qe_sol] in
@@ -335,7 +347,7 @@ let get_qfree_sol graph assign p_lav sol pol =
       let () = PFixState.fix t.pFixState p
                              ~may_change:t.queue
       in
-      let () = CFixState.prop_p_fix t.cFixState graph p (* なぜこれ分離されてるんだっけ *)    in
+      let () = CFixState.prop_p_fix t.cFixState graph p in
       let sol, fixed_cs = FixabilityManager.pull_solution
                                 t.fixabilityManager
                                 graph assign p priority
@@ -345,8 +357,10 @@ let get_qfree_sol graph assign p_lav sol pol =
                       |> List.map (G.cons_of_cLavel graph)
       in      
       (* logging: navely add from iter_fix *)
-      let () = log_poped graph assign fixed_cs_log (p, pol, sol) in      
-      let assign' = mk_new_assign graph assign t.qualifierAssign p pol sol in
+      let () = log_poped graph assign fixed_cs_log (p, pol, sol) in
+      let fixability = priority.fixLevel in
+      let assign' = mk_new_assign graph assign t.qualifierAssign
+                                  p pol fixability sol in
       let additional_fix_cs = check_validity_around_p graph assign' p
                                                       ~may_change:t.cFixState
       in

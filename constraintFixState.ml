@@ -33,7 +33,7 @@ let unfix_cs_around_p t graph p =
   
   
 
-(* ここを拡張する必要があるわけだ *)
+
 let fix t c = 
   (t.isFix.(G.int_of_cLavel c) <- true)
 
@@ -49,9 +49,9 @@ let is_only_upp_p t c =
   
 let prop_p_fix_to_c t graph p c =
   let c = G.int_of_cLavel c in  
-  if G.is_upp_p graph p then
+  if G.is_upp_p graph p then 
     begin
-      (t.unknown_p_count.(c) <- t.unknown_p_count.(c)  - 1);
+      (t.unknown_p_count.(c) <- t.unknown_p_count.(c) - 1);
           (t.unknown_up_p_count.(c) <- t.unknown_up_p_count.(c)  - 1);
         end
   else

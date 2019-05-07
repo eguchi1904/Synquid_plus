@@ -66,10 +66,10 @@ module Priority = struct
   (* priorityの値が小さい方が優先順位が低い
    言葉の意味が反転してしまっている*)
   let max = {fixLevel = PredicateFixableLevel.zero
-             ;otherPCount = max_int
-             ;fixableNum = max_int
-             ;pol = Polarity.pos
-             ;lavel = G.def_pLavel }
+            ;otherPCount = max_int
+            ;fixableNum = max_int
+            ;pol = Polarity.pos
+            ;lavel = G.def_pLavel }
           
   let compare = compare
 end

@@ -1,5 +1,22 @@
 module Liq = Type                     
-   
+
+module PreferedDirection:sig
+  
+  type t = private int
+  val any:t
+  val up: t
+  val down: t
+end = struct
+  type t = int
+
+  let any = 0
+
+  let up = 1
+         
+  let down = 2
+end
+
+           
 (* constraintとunknown predicate　からなるグラフ構造 *)
 module G:
 sig
@@ -17,17 +34,19 @@ sig
 
   type cNode = {lavel:int
                ;value:Constraint.simple_cons
-               ;pos:pLavel list 
+               ;pos:pLavel list
                ;neg:pLavel list}
 
+             
   type pNode = {lavel:int
                ;value:Id.t
-               ;isUpp: bool
-               ;env:Liq.env
-               ;senv:Formula.Senv.t
+               ;preferedDirection: PreferedDirection.t
+               ;env: Liq.env
+               ;senv:Formula.Senv.t               
                ;pos: cLavel list
                ;neg: cLavel list
                }
+
 
   type t = {cTable: cNode array; cNodeNum: int;
             pTable: pNode array; pNodeNum: int;
@@ -36,7 +55,7 @@ sig
 
   val log: t -> unit
 
-  val create: S.t -> Constraint.simple_cons list -> t
+  val create: S.t -> S.t ->  Constraint.simple_cons list -> t
 
   val iter_p: (pLavel -> unit) -> t -> unit
 
@@ -46,13 +65,13 @@ sig
          
   val pNode_num: t -> int
     
-  val cNode_num: t -> int    
+  val cNode_num: t -> int
     
   val pLavel_of_id: t -> Id.t -> pLavel
 
   val id_of_pLavel: t -> pLavel -> Id.t
 
-  val id_of_int: t -> int -> Id.t    
+  val id_of_int: t -> int -> Id.t
 
   val cons_of_cLavel: t -> cLavel -> Constraint.simple_cons
 
@@ -68,8 +87,10 @@ sig
 
   val is_upp_p: t -> pLavel -> bool
 
+  val is_down_p: t -> pLavel -> bool
+
     
-end = struct
+  end =  struct
          
   type cLavel = int
 
@@ -89,7 +110,7 @@ end = struct
 
   type pNode = {lavel:int
                ;value:Id.t
-               ;isUpp: bool               
+               ;preferedDirection: PreferedDirection.t
                ;env: Liq.env
                ;senv:Formula.Senv.t               
                ;pos: cLavel list
@@ -247,7 +268,10 @@ end = struct
     graph.pTable.(p).env
 
   let is_upp_p t p =
-    t.pTable.(p).isUpp
+    t.pTable.(p).preferedDirection = PreferedDirection.up
+
+  let is_down_p t p =
+    t.pTable.(p).preferedDirection = PreferedDirection.down    
 
 
   module Constructor = struct
@@ -386,20 +410,29 @@ end = struct
 
     let dummy_p_node = {lavel = -1
                          ;value = ""
-                         ;isUpp = false      
+                         ;preferedDirection = PreferedDirection.any
                          ;env = Liq.env_empty
                          ;senv = Formula.Senv.empty
                          ;pos = []
                          ;neg = []
-                         }
+                       }
+
+    let mk_prefered_dict p up_ps down_ps =
+      if S.mem p up_ps then
+        PreferedDirection.up
+      else if S.mem p down_ps then
+        PreferedDirection.down
+      else
+        PreferedDirection.any
+                     
                        
-    let mk_p_table up_ps p_count p_hash p_map p_env_array p_senv_array =
+    let mk_p_table up_ps down_ps p_count p_hash p_map p_env_array p_senv_array =
       let p_table = Array.make p_count dummy_p_node in
       let () = Hashtbl.iter
                  (fun p p_lav ->
                    p_table.(p_lav) <- {lavel = p_lav
                                       ;value = p
-                                      ;isUpp = S.mem p up_ps
+                                      ;preferedDirection = mk_prefered_dict p up_ps down_ps
                                       ;env = p_env_array.(p_lav)
                                       ;senv = p_senv_array.(p_lav)
                                       ;pos = p_map.pos.(p_lav)
@@ -412,11 +445,10 @@ end = struct
         
 
       
-      
-    let mk_graph up_ps p_hash c_array p_map c_map p_env_array p_senv_array =
+    let mk_graph up_ps donw_ps p_hash c_array p_map c_map p_env_array p_senv_array =
       let c_table = mk_c_table c_array c_map in
       let p_table =
-        mk_p_table up_ps (!plav_count) p_hash p_map p_env_array p_senv_array
+        mk_p_table up_ps donw_ps (!plav_count) p_hash p_map p_env_array p_senv_array
       in
       {cTable = c_table; cNodeNum = !clav_count
       ;pTable = p_table; pNodeNum = !plav_count
@@ -426,7 +458,7 @@ end = struct
       
       
                    
-    let f up_ps cs =
+    let f up_ps down_ps cs =
       let sub_cs, wf_cs = List.partition
                             (function
                              |Constraint.SSub _ -> true
@@ -445,7 +477,7 @@ end = struct
       let p_senv_array = Array.make p_count Formula.Senv.empty in
       (* initialize p_env_array p_senv_array *)
       let () = scan_wf_cs p_hash p_env_array p_senv_array wf_cs in
-      mk_graph up_ps p_hash c_array p_map c_map p_env_array p_senv_array
+      mk_graph up_ps down_ps p_hash c_array p_map c_map p_env_array p_senv_array
       
     end
 
