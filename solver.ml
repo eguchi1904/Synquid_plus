@@ -241,7 +241,9 @@ let get_qfree_sol graph assign p_lav sol pol fixability =
                        (* ひとまず、pass conditionのような、_vを含まないようなものを排除する *)
                        |> Formula.list_and
                        |> List.filter (fun phi ->
-                              S.mem Id.valueVar_id (Formula.fv_include_v phi))
+                              S.exists
+                                (fun x -> x = Id.valueVar_id ||(Id.is_pa_arg x))
+                                (Formula.fv_include_v phi))
                        |> Formula.and_list
           in
             qe_phi::acc
