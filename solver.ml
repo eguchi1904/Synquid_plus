@@ -396,8 +396,8 @@ let rec iter_fix graph state assign = (* stateは外に置きたいほんとは 
     
     
         
-let f up_ps qualifyers cs =
-  let graph = G.create up_ps cs in
+let f up_ps neg_ps qualifyers cs =
+  let graph = G.create up_ps neg_ps cs in
   let () = G.log graph in
   let qualify_assign = M.empty in (* とりあえず *)  
   let state = DyState.create up_ps graph qualify_assign in

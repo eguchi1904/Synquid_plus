@@ -135,20 +135,20 @@ and adjust_annotation_f dinfos f_ml f_usr =
 (* -------------------------------------------------- *)
 (* main *)
 (* -------------------------------------------------- *)  
-let extract_up ta_t =
+let extract_goal ta_t =
   let auxi_ty_map = TaSyn.get_auxi_anno ta_t
                   |> M.map Liq.schema2ty
                 in
-  let up_ps =
+  let up_ps, neg_ps =
     M.fold
-      (fun g ty acc ->
-        let pos_ps, _, _ = Liq.positive_negative_unknown_p ty
+      (fun g ty (acc_pos, acc_neg) ->
+        let pos_ps, neg_ps, _ = Liq.positive_negative_unknown_p ty
         in
-        S.union pos_ps acc)
+        (S.union pos_ps acc_pos), (S.union neg_ps acc_neg) )
       auxi_ty_map
-      S.empty
+      (S.empty, S.empty)
   in
-  (auxi_ty_map, up_ps)
+  (auxi_ty_map, up_ps, neg_ps)
   
   
   
@@ -187,7 +187,7 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   let () = Printf.printf "\ntasyn:\n%s\n\n"
                          (TaSyntax.syn2string Liq.schema2string_sort ta_t')
   in
-  let auxi_ty_map, up_ps = extract_up ta_t' in
+  let auxi_ty_map, up_ps, neg_ps = extract_goal ta_t' in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs)
@@ -206,7 +206,7 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   (* logging *)
     try
       (* let p_assign = ConsSolver.find_predicate z3_env qualifiers simple_cs env req_ty in *)
-      let p_assign = Solver.f up_ps qualifiers (simple_cs_ann@simple_cs) in
+      let p_assign = Solver.f up_ps neg_ps qualifiers (simple_cs_ann@simple_cs) in
       let auxi_ty_map = M.map (Liq.substitute_F p_assign) auxi_ty_map in
       
     (* logging *)
