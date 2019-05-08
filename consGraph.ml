@@ -1,4 +1,6 @@
-module Liq = Type                     
+open Extensions
+module Liq = Type
+           
 
 module PreferedDirection:sig
   
@@ -527,22 +529,73 @@ module CMap =
     end)
   
 
+module PNode:sig
+  type t = private G.pLavel
+  val of_pLavel : G.pLavel -> t
+    
+  val compare : t -> t -> int
+  val hash : t -> int
+  val equal : t -> t -> bool
+
+  val src :  G.t -> t -> t list
+  val dest : G.t -> t -> t list
+
+
+    
+end= struct
+  
+  type t = G.pLavel
+         
+  let of_pLavel t = t
+         
+  let compare = compare
+  let hash p = (G.int_of_pLavel p)
+  let equal = (=)
+
+            
+  let src graph p =
+    G.pos_cs graph p
+    |> List.map (G.neg_ps graph)
+    |> List.concat
+    |> List.uniq
+
+  let dest graph p =
+    G.neg_cs graph p
+    |> List.map (G.pos_ps graph)
+    |> List.concat
+    |> List.uniq    
+
+            
+end
+
+
+
 (* predicateだけからなるグラフ *)
 (* \Gamma|- pが、
    \Gamma; p; q -> ... 
    の時　p -neg-> q
-   
  *)
 module PG = struct
-  
-  type t = {posTable: (G.pLavel list) array
-           ;negTable: (G.pLavel list) array
-           }
+  module BaseG = Graph.Persistent.Digraph.ConcreteBidirectional(PNode)
 
-  let pos_ps t p = t.posTable.(G.int_of_pLavel p)
+  include BaseG
+        
+  let add_edge_v2vlist pg_graph v vlist = 
+    List.fold_left (fun acc_g v_dst -> BaseG.add_edge acc_g v v_dst) pg_graph vlist
+    
+  let add_edge_vlist2v pg_graph vlist v = 
+    List.fold_left (fun acc_g v_src -> BaseG.add_edge acc_g v_src v) pg_graph vlist    
 
-  let neg_ps t p = t.negTable.(G.int_of_pLavel p)                 
-  
+  let of_graph graph :t=
+    G.fold_p
+      (fun p acc ->
+        let pnode = PNode.of_pLavel p in
+        let acc' = add_edge_v2vlist acc pnode (PNode.dest graph pnode) in
+        let acc'' = add_edge_vlist2v acc' (PNode.src graph pnode) pnode in
+        acc'')
+      graph
+    BaseG.empty
+
 end
 
 
