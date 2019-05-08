@@ -387,7 +387,6 @@ let get_qfree_sol graph assign p_lav sol pol fixability =
       Some assign'
       
 end
-
     
   
 
@@ -399,11 +398,12 @@ let rec iter_fix graph state assign = (* stateは外に置きたいほんとは 
     
     
         
-let f up_ps neg_ps qualifyers cs =
-  let graph = G.create up_ps neg_ps cs in
+let f up_ps down_ps qualifyers cs =
+  let graph = G.create up_ps down_ps cs in
+  let up_ps, down_ps = ConsGraph.prop_direction ~may_change:graph up_ps down_ps in
   let () = G.log graph in
   let qualify_assign = M.empty in (* とりあえず *)  
-  let state = DyState.create up_ps neg_ps graph qualify_assign in
+  let state = DyState.create up_ps down_ps graph qualify_assign in
   let assign = iter_fix graph state  M.empty in
   let sita_debug = M.bindings assign in
   assign

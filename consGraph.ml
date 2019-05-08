@@ -91,6 +91,12 @@ sig
 
   val is_down_p: t -> pLavel -> bool
 
+  val update_direction2any: t -> pLavel -> unit    
+
+  val update_direction2up: t -> pLavel -> unit
+
+  val update_direction2down: t -> pLavel -> unit    
+
     
   end =  struct
          
@@ -123,8 +129,45 @@ sig
             pTable: pNode array; pNodeNum: int
             ;pIdHash: (Id.t, pLavel) Hashtbl.t
            }
+  let update_direction2any t p =
+    let p_node = t.pTable.(p) in
+    let p_node' = {lavel = p_node.lavel
+               ;value =  p_node.value
+               ;preferedDirection = PreferedDirection.any
+               ;env =  p_node.env
+               ;senv =  p_node.senv
+               ;pos =  p_node.pos
+               ;neg =  p_node.neg
+                  }
+    in
+    t.pTable.(p) <- p_node'
 
+  let update_direction2up t p =
+    let p_node = t.pTable.(p) in
+    let p_node' = {lavel = p_node.lavel
+               ;value =  p_node.value
+               ;preferedDirection = PreferedDirection.up
+               ;env =  p_node.env
+               ;senv =  p_node.senv
+               ;pos =  p_node.pos
+               ;neg =  p_node.neg
+                  }
+    in
+    t.pTable.(p) <- p_node'
 
+let update_direction2down t p =
+    let p_node = t.pTable.(p) in
+    let p_node' = {lavel = p_node.lavel
+               ;value =  p_node.value
+               ;preferedDirection = PreferedDirection.down
+               ;env =  p_node.env
+               ;senv =  p_node.senv
+               ;pos =  p_node.pos
+               ;neg =  p_node.neg
+                  }
+    in
+    t.pTable.(p) <- p_node'    
+    
   let iter_p f t =
     for p = 0 to t.pNodeNum - 1 do
       f p
@@ -510,7 +553,7 @@ module PSet = struct
         add (G.pLavel_of_id graph id) acc)
     id_set
     empty
-    
+
 end
 
 module CSet = struct
@@ -530,7 +573,7 @@ module CMap =
   
 
 module PNode:sig
-  type t = private G.pLavel
+  type t = G.pLavel
   val of_pLavel : G.pLavel -> t
     
   val compare : t -> t -> int
@@ -577,7 +620,7 @@ end
  *)
 module PG = struct
   module BaseG = Graph.Persistent.Digraph.ConcreteBidirectional(PNode)
-
+  module Components = Graph.Components.Make(BaseG)
   include BaseG
         
   let add_edge_v2vlist pg_graph v vlist = 
@@ -598,6 +641,76 @@ module PG = struct
 
 end
 
+let rec prop_up p pg_graph (tord: PNode.t -> int) escape_ps  acc_ps =
+  if PSet.mem p acc_ps || PSet.mem p escape_ps then
+    acc_ps
+  else
+    let acc_ps = PSet.add p acc_ps in
+    PG.fold_succ
+      (fun q acc->
+        if tord p = tord q then
+          acc
+        else
+          let () = assert (tord p > tord q) in
+          prop_up q pg_graph tord escape_ps acc 
+      )
+      pg_graph
+      p
+      acc_ps
+    
+    
+let rec prop_down p pg_graph (tord: PNode.t -> int) escape_ps acc_ps = 
+  if PSet.mem p acc_ps || PSet.mem p escape_ps then
+    acc_ps
+  else
+    let acc_ps = PSet.add p acc_ps in
+    PG.fold_pred
+      (fun q acc->
+        if tord p = tord q then
+          acc
+        else
+          let () = assert (tord p < tord q) in 
+          prop_down q pg_graph tord escape_ps acc)
+      pg_graph
+      p
+      acc_ps    
+    
+
+let extend_direction pg_graph (tord: PNode.t -> int) up_ps down_ps =
+  let up_ps' =
+    PSet.fold (fun p acc -> prop_up p pg_graph tord down_ps acc) up_ps PSet.empty
+  in
+  let down_ps' =
+    PSet.fold (fun p acc -> prop_down p pg_graph tord up_ps' acc) down_ps PSet.empty
+  in
+  up_ps', down_ps'
+
+
+let prop_direction ~may_change:graph up_ps down_ps =
+  let up_ps = PSet.of_id_Set graph up_ps in
+  let down_ps = PSet.of_id_Set graph down_ps in  
+  let pg_graph = PG.of_graph graph in
+  let _,tord = PG.Components.scc pg_graph in
+  let up_ps', down_ps'  = extend_direction pg_graph tord up_ps down_ps in
+  let () = assert (PSet.subset up_ps up_ps') in
+  let () = assert (PSet.subset down_ps down_ps') in  
+  let () = PSet.iter (G.update_direction2up graph) up_ps' in
+  let () = PSet.iter (G.update_direction2down graph) down_ps' in
+  let up_ps' = PSet.fold
+                 (fun p acc -> S.add (G.id_of_pLavel graph p) acc)
+                 up_ps'
+                 S.empty
+  in
+  let down_ps' = PSet.fold
+                 (fun p acc -> S.add (G.id_of_pLavel graph p) acc)
+                 down_ps'
+                 S.empty
+  in
+  up_ps', down_ps'
+  
+
+ 
+  
 
 
           
