@@ -21,7 +21,7 @@ deformation.ml  qe.mli qe.ml useZ3.mli useZ3.ml find_unknownP.ml \
 type.mli type.ml  preSyntax.ml data_info.mli data_info.ml  mk_tmp.ml parser.mly lexer.mll preprocess.mli preprocess.ml\
  ml.mli ml.ml qualifier.mli qualifier.ml constraint.mli constraint.ml\
 consGen.mli consGen.ml\
-consGraph.ml predicatePriorityQueue.ml predicateFixState.ml predicateFixableCounter.ml constraintFixState.ml fixability.ml fixabilityManager.ml solver.mli solver.ml consSolver.mli consSolver.ml  typeInfer.mli typeInfer.ml\
+consGraph.ml predicatePriorityQueue.ml predicateFixState.ml predicateFixableCounter.ml constraintFixState.ml fixability.ml fixabilityManager.ml predicateDependency.ml solver.mli solver.ml consSolver.mli consSolver.ml  typeInfer.mli typeInfer.ml\
 step2.ml step3.ml  main.ml
 
 RESULT = main
