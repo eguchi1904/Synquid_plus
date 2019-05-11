@@ -163,11 +163,9 @@ let liqInfer z3_env dinfos qualifiers env ta_t =
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs)
-                  |> Constraint.remove_obviously_valid
   in
   let simple_cs_ann = List.concat (List.map split_cons cs_ann)
-                      |> List.map Constraint.replace_ignore
-                      |> Constraint.remove_obviously_valid
+                      |> Constraint.remove_ignore                    
   in
   let simple_cs = simple_cs_ann@simple_cs in
   let () = (Printf.printf "cs_length:%d \n" (List.length cs)) in
@@ -191,11 +189,9 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs)
-                  |> Constraint.remove_obviously_valid
   in
   let simple_cs_ann = List.concat (List.map split_cons cs_ann)
-                      |> List.map Constraint.replace_ignore
-                      |> Constraint.remove_obviously_valid
+                      |> Constraint.remove_ignore
   in    
   let () = (Printf.printf "cs_length:%d \n" (List.length cs)) in
   let () =  (Printf.printf "simple_cs_length:%d \n" (List.length simple_cs)) in

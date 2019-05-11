@@ -461,6 +461,15 @@ let rec replace_ignore sc  =
     let phi1' = Formula.substitution ignore2bot phi1 in
     let env' = Liq.env_substitute_F ignore2top env in
     SSub (env', phi1', phi2')
+    
+let rec remove_ignore = function
+  |SSub (_, Formula.Var (_,ig), e2) ::left when ig = Id.ignore_id ->
+    remove_ignore left
+  |SSub (_, e1, Formula.Var (_,ig)) ::left when ig = Id.ignore_id ->
+    remove_ignore left   
+  | sc::left -> (replace_ignore sc)::(remove_ignore left)
+  |[] -> []
+
 
 let rec remove_obviously_valid = function
   |SSub (_, Formula.Bool false, _) ::left ->

@@ -34,7 +34,7 @@ val is_valid_simple_cons_all : simple_cons -> bool
 val is_satisifiable_simple_cons_all : simple_cons -> bool
 
 val replace_ignore : simple_cons -> simple_cons
-
+val remove_ignore : simple_cons list -> simple_cons list
 val remove_obviously_valid : simple_cons list -> simple_cons list
   
 (* unknown p に対するsubst *)
