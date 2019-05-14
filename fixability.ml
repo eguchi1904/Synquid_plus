@@ -507,9 +507,6 @@ module Constructor = struct
     in
     neg_map
           (* ここでaddするときには、accにもともとあるか確かめ、あれば先の方を優先するようにする *)
-            
-        
-        
 
     
   let gen_fixability_map graph c =

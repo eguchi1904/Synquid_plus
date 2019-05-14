@@ -14,7 +14,42 @@ type t =
           
 
 type schema =  (Id.t list) * ((Id.t * Formula.pa_shape) list) * t
+module Eq:sig
+  val f: t -> t -> bool
+  val f_sch: schema -> schema -> bool  
+    
+end= struct
+  let rec f t1 t2 =
+    match t1, t2 with
+    |TScalar (b1, p1), TScalar (b2, p2) ->
+      (f_base b1 b2)&&(Formula_eq.f p1 p2)
+    |TFun ((x,t1),t2), TFun ((x',t1'),t2')  ->
+      (x = x)
+      &&(f t1 t1')
+    &&(f t2 t2')
+    |TBot, TBot -> true
+    |_ -> false
+        
+  and f_base b1 b2 =
+    match b1, b2 with
+    |TBool, TBool |TInt, TInt -> true
+    |TData (n, t_list, pa_list), TData (n', t_list', pa_list') ->
+      (n = n')
+      &&(List.for_all2 (fun t t' -> f t t') t_list t_list')
+      &&(List.for_all2
+           (fun (arg,p) (arg',p') ->
+             arg = arg' && Formula_eq.f p p')
+           pa_list pa_list')
+    |TAny a1, TAny a2 -> a1 = a2   
+    |TVar _ , _|_, TVar _ -> assert false
+    |_ -> let () = assert (b1 <> b2) in
+          false
 
+  let f_sch ((arg1, pa_arg1, t1):schema) ((arg2, pa_arg2, t2):schema) =
+    (arg1 = arg2)
+    &&(pa_arg1 = pa_arg2)
+    &&(f t1 t2)
+end
 
 let rec free_tvar' = function
   |TScalar (b,_) -> free_tvar_base b
@@ -312,11 +347,25 @@ let env_fold_trace f_b f_p env seed =
 
 let env_rev  = List.rev
 
+let rec env_suffix_rev (env1:env) (env2:env) =
+  match env1, env2 with
+  |(P p1)::left1, (P p2)::left2
+       when Formula_eq.f p1 p2 ->
+    env_suffix_rev left1 left2
+  |(B (x1, sch1))::left1, (B (x2, sch2))::left2
+       when (x1 = x2)&&(Eq.f_sch sch1 sch2) ->
+    env_suffix_rev left1 left2
+  |elm1::_, elm2::_ -> None
+  |_, [] -> Some env1
+  |[], (_::_) -> None
+               
+   
+  
 (* env1のがでかい,envはデータ構造としては反転しているので *)
 let env_suffix (env1:env) (env2:env) =
   let env1_rev = List.rev env1 in
   let env2_rev = List.rev env2 in  
-  match List.suffix env1_rev env2_rev with
+  match env_suffix_rev env1_rev env2_rev with
   |Some suffix_env_rev -> Some (List.rev suffix_env_rev)
   |None -> None
 

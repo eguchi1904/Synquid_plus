@@ -463,10 +463,10 @@ let rec replace_ignore sc  =
     SSub (env', phi1', phi2')
     
 let rec remove_ignore = function
-  |SSub (_, Formula.Var (_,ig), e2) ::left when ig = Id.ignore_id ->
+  |SSub (_, e1, e2)::left when (S.mem Id.ignore_id (Formula.fv e1)
+                          ||S.mem Id.ignore_id (Formula.fv e2))
+   ->
     remove_ignore left
-  |SSub (_, e1, Formula.Var (_,ig)) ::left when ig = Id.ignore_id ->
-    remove_ignore left   
   | sc::left -> (replace_ignore sc)::(remove_ignore left)
   |[] -> []
 

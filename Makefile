@@ -18,7 +18,7 @@ PACKS = Z3 Ocamlgraph Core
 
 SOURCES = extensions.ml m.ml list_map.ml s.ml id.mli id.ml syntax.ml taSyntax.mli taSyntax.ml formula.mli formula.ml formula_eq.ml \
 deformation.ml  qe.mli qe.ml useZ3.mli useZ3.ml find_unknownP.ml \
-type.mli type.ml  preSyntax.ml data_info.mli data_info.ml  mk_tmp.ml parser.mly lexer.mll preprocess.mli preprocess.ml\
+type.mli type.ml preSyntax.ml data_info.mli data_info.ml  mk_tmp.ml parser.mly lexer.mll preprocess.mli preprocess.ml\
  ml.mli ml.ml qualifier.mli qualifier.ml constraint.mli constraint.ml\
 consGen.mli consGen.ml\
 consGraph.ml predicatePriorityQueue.ml predicateFixState.ml predicateFixableCounter.ml constraintFixState.ml fixability.ml fixabilityManager.ml predicateDependency.ml solver.mli solver.ml consSolver.mli consSolver.ml  typeInfer.mli typeInfer.ml\
