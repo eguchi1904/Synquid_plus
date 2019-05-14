@@ -62,13 +62,19 @@ module PG = struct
       
       
   let of_graph graph :t=
-    let p2pnode = (fun p ->  G.pLavel_of_id graph p |> PNode.of_pLavel) in    
+    let p2pnode = (fun p ->  G.pLavel_of_id graph p |> PNode.of_pLavel) in
+    let pg_graph = G.fold_p
+                     (fun p_lav (acc:t) ->
+                       BaseG.add_vertex acc p_lav)
+                     graph
+                 BaseG.empty
+    in
     G.fold_c
       (fun c_lav (acc:t) ->
         let c = G.cons_of_cLavel graph c_lav in
         add_dependecy_from_c p2pnode acc c)
       graph
-      BaseG.empty
+      pg_graph
             
 
 end
@@ -77,6 +83,7 @@ let rec prop_up p pg_graph (tord: PNode.t -> int) escape_ps  acc_ps =
   if PSet.mem p acc_ps || PSet.mem p escape_ps then
     acc_ps
   else
+    let () = assert (PG.mem_vertex pg_graph p) in (* pがここでない *)
     let acc_ps = PSet.add p acc_ps in
     PG.fold_succ
       (fun q acc->

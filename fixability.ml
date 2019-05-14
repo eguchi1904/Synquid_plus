@@ -119,7 +119,7 @@ let rec extract_subst senv acc_sita eq_list =
          
 let mk_fresing_subst senv sita =
   M.fold
-    (fun x e acc ->
+    (fun x _ acc ->
       let x_sort = try Formula.Senv.find x senv with _ -> assert false in
       let x' = Id.genid x in
       M.add x (Formula.Var (x_sort, x')) acc)
@@ -137,7 +137,10 @@ let mk_replace_table sita =
   
 let mk_flatten_subst senv sita =
   let freshing_sita = mk_fresing_subst senv sita in
-  let eq_list = M.bindings (Formula.subst_compose freshing_sita sita) in
+  let eq_list =
+    M.bindings sita
+    |> List.map (fun (x, e) -> (x, Formula.substitution freshing_sita e))
+  in
   let delta, eq_list' = extract_subst senv M.empty eq_list in
   let eq_phi = eq_list'
                |> List.map
@@ -485,7 +488,7 @@ module Constructor = struct
                let map = gen_fixability_neg_from_formula
                            graph back_env rev_front_env pos_formula unknown_set phi'
                in
-               let acc_map' = M.union (fun p m1 m2 -> Some m1) acc_map  map in
+               let acc_map' = M.union (fun p m1 m2 -> Some m1) acc_map map in
                let rev_front_env' = Liq.env_add_schema rev_front_env (x, sch) in
                let unknown_set' = S.union unknown_set (Formula.extract_unknown_p phi) in
                (acc_map', rev_front_env', unknown_set')
