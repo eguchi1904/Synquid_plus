@@ -165,6 +165,129 @@ let rec var_left_propagate bv pre_list p = (* uninterpreted function *)
 exception DONT_KNOW of string
 
 
+let rec bigger_term bigger_sita smaller_sita t = 
+  match t with
+  |Int i -> Int i 
+  |Bool b -> Bool b
+  |Var (s, x) when M.mem x bigger_sita ->  M.find x bigger_sita
+  |Var (s, x) -> Var (s, x)
+  |Cons _ | UF _ -> t
+  |Times (t1, t2) -> Times (t1, t2) (* とりあえずそのまま、符号に気をつける必要があるため *)
+  |Plus (t1, t2) ->
+    let t1' = bigger_term bigger_sita smaller_sita t1 in
+    let t2' = bigger_term bigger_sita smaller_sita t2 in
+    Plus (t1', t2')
+  |Minus (t1, t2) ->
+    let t1' = bigger_term bigger_sita smaller_sita t1 in
+    let t2' = smaller_term bigger_sita smaller_sita t2 in
+    Minus (t1', t2')
+  |Neg t1 ->
+    let t1' = smaller_term bigger_sita smaller_sita t1 in
+    Neg t1'
+  |_ -> invalid_arg "bigger_term: not integar like term"
+      
+and smaller_term bigger_sita smaller_sita t =
+  match t with
+  |Int i -> Int i 
+  |Bool b -> Bool b
+  |Var (s, x) when M.mem x smaller_sita ->  M.find x smaller_sita
+  |Var (s, x) -> Var (s, x)
+  |Cons _ | UF _ -> t
+  |Times (t1, t2) -> Times (t1, t2) (* とりあえずそのまま、符号に気をつける必要があるため *)
+  |Plus (t1, t2) ->
+    let t1' = smaller_term bigger_sita smaller_sita t1 in
+    let t2' = smaller_term bigger_sita smaller_sita t2 in
+    Plus (t1', t2')
+  |Minus (t1, t2) ->
+    let t1' = smaller_term bigger_sita smaller_sita t1 in
+    let t2' = bigger_term bigger_sita smaller_sita t2 in
+    Minus (t1', t2')
+  |Neg t1 ->
+    let t1' = bigger_term bigger_sita smaller_sita t1 in
+    Neg t1'
+  |_ -> invalid_arg "smaller_term: not integar like term"  
+  
+    
+let rec prop_inequlality_strong bigger_sita smaller_sita t =
+  let f_strong = prop_inequlality_strong bigger_sita smaller_sita in
+  let f_weak = prop_inequlality_weak bigger_sita smaller_sita in  
+  match t with
+  (* boolenan conj *)
+  |And (t1, t2) -> And (f_strong t1, f_strong t2)
+  |Or (t1, t2) -> Or (f_strong t1, f_strong t2)                 
+  |Implies (t1, t2) -> Implies (f_weak t1, f_strong t2)
+  |If (t1,t2,t3) -> If(t1, f_strong t2, f_strong t3) 
+  |Iff (t1,t2) -> Iff (t1, t2)
+  |Not t1 -> Not (f_weak t1)
+(* comparison *)
+  |Lt (t1,t2) ->
+    let t1' = bigger_term bigger_sita smaller_sita t1 in
+    let t2' = smaller_term bigger_sita smaller_sita t2 in
+    Lt (t1', t2')
+  |Le (t1,t2) ->
+    let t1' = bigger_term bigger_sita smaller_sita t1 in
+    let t2' = smaller_term bigger_sita smaller_sita t2 in
+    Le (t1', t2')
+  |Gt (t1,t2) ->
+    let t1' = smaller_term bigger_sita smaller_sita t1 in
+    let t2' = bigger_term bigger_sita smaller_sita t2 in
+    Gt (t1', t2')
+  |Ge (t1,t2) ->
+    let t1' = smaller_term bigger_sita smaller_sita t1 in
+    let t2' = bigger_term bigger_sita smaller_sita t2 in
+    Ge (t1', t2')
+  |Member _ | Subset _ | Eq _ | Bool _ -> t
+  |_ -> invalid_arg "prop_inequlality_strong: expect boolean formula"
+      
+and prop_inequlality_weak bigger_sita smaller_sita t =
+  let f_strong = prop_inequlality_strong bigger_sita smaller_sita in
+  let f_weak = prop_inequlality_weak bigger_sita smaller_sita in  
+  match t with
+  (* boolenan conj *)
+  |And (t1, t2) -> And (f_weak t1, f_weak t2)
+  |Or (t1, t2) -> Or (f_weak t1, f_weak t2)                 
+  |Implies (t1, t2) -> Implies (f_strong t1, f_weak t2)
+  |If (t1,t2,t3) -> If(t1, f_weak t2, f_weak t3) 
+  |Iff (t1,t2) -> Iff (t1, t2)
+  |Not t1 -> Not (f_weak t1)
+(* comparison *)
+  |Lt (t1,t2) ->
+    let t1' = smaller_term bigger_sita smaller_sita t1 in
+    let t2' = bigger_term bigger_sita smaller_sita t2 in
+    Lt (t1', t2')
+  |Le (t1,t2) ->
+    let t1' = smaller_term bigger_sita smaller_sita t1 in
+    let t2' = bigger_term bigger_sita smaller_sita t2 in
+    Le (t1', t2')
+  |Gt (t1,t2) ->
+    let t1' = bigger_term bigger_sita smaller_sita t1 in
+    let t2' = smaller_term bigger_sita smaller_sita t2 in
+    Gt (t1', t2')
+  |Ge (t1,t2) ->
+    let t1' = bigger_term bigger_sita smaller_sita t1 in
+    let t2' = smaller_term bigger_sita smaller_sita t2 in
+    Ge (t1', t2')
+  |Member _ | Subset _ | Eq _ | Bool _ -> t
+  |_ -> invalid_arg "prop_inequlality_strong: expect boolean formula"      
+    
+
+let rec extract_ineq_rec bv bigger_sita smaller_sita = function
+  |Lt (Var(s,i), e) :: p_list | Le (Var(s,i), e) :: p_list
+   |Gt (e, Var(s,i)) :: p_list | Ge (e, Var(s,i)) :: p_list
+       when (S.mem i bv)&&(S.for_all (fun x -> not (S.mem x bv)) (Formula.fv e)) ->
+    let bigger_sita' =  M.add i e bigger_sita in
+    extract_ineq_rec bv bigger_sita' smaller_sita p_list
+  |Gt (Var(s,i), e) :: p_list | Ge (Var(s,i), e) :: p_list
+   |Lt (e, Var(s,i)) :: p_list | Le (e, Var(s,i)) :: p_list
+       when (S.mem i bv)&&(S.for_all (fun x -> not (S.mem x bv)) (Formula.fv e)) ->
+    let smaller_sita' =  M.add i e smaller_sita in
+    extract_ineq_rec bv bigger_sita smaller_sita' p_list
+  |_ :: p_list -> extract_ineq_rec bv bigger_sita smaller_sita p_list
+  |[] -> bigger_sita, smaller_sita
+    
+let extract_ineq bv p_list = extract_ineq_rec bv M.empty M.empty p_list
+  
+  
 (*  var_eq_propagate ->
  var_UF_propagate ->
 var_UFUF_propagate
@@ -182,8 +305,14 @@ let f = function
     if S.is_empty (S.inter bv (fv p') ) then
       p'
     else
-      ((print_qformula bv pre_list' p');
-       raise (DONT_KNOW "qe"))
+      (* 不等式の伝播 *)
+      let bigger_sita, smaller_sita = extract_ineq bv pre_list' in
+      let p' = prop_inequlality_strong bigger_sita smaller_sita p' in
+      if S.is_empty (S.inter bv (fv p') ) then
+        p'
+      else
+        ((print_qformula bv pre_list' p');
+         raise (DONT_KNOW "qe"))
 
   |QExist (args, p_list) ->
     let bv = S.of_list (List.map fst args) in
