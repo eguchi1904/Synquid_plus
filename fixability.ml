@@ -42,6 +42,12 @@ type bound =
               ;require: (Liq.env * Formula.t) (* no unknown p in bound *)
               }
 
+let string_of_bound = function
+  |LowBound rc ->
+    "Low -> "^(Formula.p2string rc.require)
+  |UpBound rc ->
+    "Up <- "^(Formula.p2string (snd rc.require))
+   
 let unknown_in_localEnv assign = function
   |LowBound {localEnv = local_env} |UpBound {localEnv = local_env} ->
     S.filter
@@ -123,8 +129,9 @@ let mk_fresing_subst senv sita =
       let x_sort = try Formula.Senv.find x senv with _ -> assert false in
       let x' = Id.genid x in
       M.add x (Formula.Var (x_sort, x')) acc)
+    sita  
     M.empty
-    sita
+
   
 
 let mk_replace_table sita =
@@ -136,12 +143,15 @@ let mk_replace_table sita =
   
   
 let mk_flatten_subst senv sita =
+  let sita_debug = M.bindings sita in
   let freshing_sita = mk_fresing_subst senv sita in
+  let freshing_sita_debug = M.bindings freshing_sita in  
   let eq_list =
     M.bindings sita
     |> List.map (fun (x, e) -> (x, Formula.substitution freshing_sita e))
   in
   let delta, eq_list' = extract_subst senv M.empty eq_list in
+  let delta_debug = M.bindings delta in
   let eq_phi = eq_list'
                |> List.map
                     (fun (x,e) ->
@@ -209,6 +219,7 @@ let mk_bound assign senv env pending_sita = function
        invalid_arg "Solver.mk_bound: cons_env and env mismatch"
      |Some local_env ->
        let flatten_sita, eq_phi = mk_flatten_subst senv pending_sita in
+       let pending_sita_debug = M.bindings pending_sita in
        let flatten_replace = mk_replace_table flatten_sita in       
        let flatten_sita_debug = M.bindings flatten_sita in
        let local_env' = Liq.env_substitute_F assign local_env (* ここはやらなくても良い *)
@@ -235,7 +246,7 @@ let mk_bound assign senv env pending_sita = function
                     S.union
                       unknown_vars
                       (extract_argument_vars senv env) (* 引数変数を関係しているものとして加える *)
-       in       
+       in
        UpBound {localEnv = local_env'
                ;vars = vars
                ;require = require})
@@ -312,9 +323,15 @@ type t = |UnBound of {waitNum: int ref
 
 
 let of_string = function
-  |UnBound _ -> "UnBound"
-  |Bound _ -> "Bound"
-  |Fixable _ -> "Fixable"
+  |UnBound rc ->
+    let sita_str = List.map
+                     (fun (s, p) -> Printf.sprintf "%s->%s" s (Formula.p2string p))
+                     (M.bindings rc.pendingSubst)
+                   |> String.concat ";"
+    in
+    "UnBound[sita:"^sita_str^"]"
+  |Bound rc -> "Bound["^(string_of_bound rc.bound)
+  |Fixable rc -> "Fixable["^(string_of_bound rc.bound)
 
 
 let count_othere_p t graph assign =
