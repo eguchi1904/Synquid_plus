@@ -75,9 +75,37 @@ module PG = struct
         add_dependecy_from_c p2pnode acc c)
       graph
       pg_graph
-            
+
+  let to_string p2string pg_graph =
+    BaseG.fold_vertex
+      (fun p acc ->
+        let pred_list = BaseG.fold_pred
+                           (fun q acc ->
+                             (p2string q)::acc)
+                           pg_graph
+                           p
+                           []
+        in
+        let succ_list = BaseG.fold_succ
+                           (fun q acc ->
+                             (p2string q)::acc)
+                           pg_graph
+                           p
+                           []
+        in
+        let pred_str = String.concat "; " pred_list in
+        let succ_str = String.concat "; " succ_list in
+          (p2string p)^" ->["^succ_str^"]\n"
+          ^(p2string p)^" <-["^pred_str^"]\n"
+          ^acc
+      )
+      pg_graph
+    ""
+        
 
 end
+
+let log_och = open_out "predicateDependency.log"          
 
 let rec prop_up p pg_graph (tord: PNode.t -> int) escape_ps  acc_ps =
   if PSet.mem p acc_ps || PSet.mem p escape_ps then
@@ -126,14 +154,43 @@ let extend_direction pg_graph (tord: PNode.t -> int) up_ps down_ps =
   up_ps', down_ps
 
 
+let log graph up_ps down_ps pg_graph up_ps' down_ps' =
+  let up_ps_str = S.fold (fun p acc -> p^"; "^acc) up_ps "" in
+  let down_ps_str = S.fold (fun p acc -> p^"; "^acc) down_ps "" in
+  let up_ps_str' = S.fold (fun p acc -> p^"; "^acc) up_ps' "" in
+  let down_ps_str' = S.fold (fun p acc -> p^"; "^acc) down_ps' "" in
+  let p2string p = G.id_of_pLavel graph p in
+  let pg_graph_str = PG.to_string p2string pg_graph in
+  Printf.fprintf
+    log_och
+    ("init direction\n
+      up:[%s]\n
+      down:[%s]\n\n
+      extended direction\n
+      up:[%s]\n
+      down:[%s]\n\n
+      dependency graph\n
+      --------------------------------------------------\n
+      %s")
+    up_ps_str
+    down_ps_str
+    up_ps_str'
+    down_ps_str'
+    pg_graph_str
+
+       
+    
+       
+  
+  
 let prop_direction ~may_change:graph up_ps down_ps =
-  let up_ps = PSet.of_id_Set graph up_ps in
-  let down_ps = PSet.of_id_Set graph down_ps in  
+  let up_ps_lav = PSet.of_id_Set graph up_ps in
+  let down_ps_lav = PSet.of_id_Set graph down_ps in  
   let pg_graph = PG.of_graph graph in
   let _,tord = PG.Components.scc pg_graph in
-  let up_ps', down_ps'  = extend_direction pg_graph tord up_ps down_ps in
-  let () = assert (PSet.subset up_ps up_ps') in
-  let () = assert (PSet.equal down_ps down_ps') in  
+  let up_ps', down_ps'  = extend_direction pg_graph tord up_ps_lav down_ps_lav in
+  let () = assert (PSet.subset up_ps_lav up_ps') in
+  let () = assert (PSet.equal down_ps_lav down_ps') in  
   let () = PSet.iter (G.update_direction2up graph) up_ps' in
   (* let () = PSet.iter (G.update_direction2down graph) down_ps' in *)
   let up_ps' = PSet.fold
@@ -146,6 +203,7 @@ let prop_direction ~may_change:graph up_ps down_ps =
                  down_ps'
                  S.empty
   in
+  let () = log graph up_ps down_ps pg_graph up_ps' down_ps' in
   up_ps', down_ps'
   
 

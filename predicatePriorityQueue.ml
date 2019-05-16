@@ -24,33 +24,13 @@ end = struct
       assert false
 end
 
-    
-module PredicateFixableLevel:
-sig
-  type t = private int 
-  val all: t
-  val partial: t        (* partial is_hinted *)
-  val zero:  t           (* zero is_hinted *)
-  val to_string: t -> string
-end = struct
-  type t =  int
-  let all  = 0
-  let partial  = 1
-  let zero  = 2
-
-  let to_string t =
-    if t = all then "all"
-    else if t = partial then "partial"
-    else if t = zero then "zero"
-    else assert false
-end
-
 module PreferedPolarity:
 sig
   type t = private int
   val any:t                 
   val pos:t
   val neg:t
+  val is_prefered: t -> Polarity.t -> bool
 end = struct
   type t = int
 
@@ -58,10 +38,60 @@ end = struct
   let pos = 1
   let neg = 2
 
-end
-          
+  let is_prefered (t:t) (pol:Polarity.t) =
+    (t = any) ||(t = pos && pol = Polarity.pos)||(t = neg && pol = Polarity.neg)
+      
     
 
+end
+          
+
+    
+module PredicateFixableLevel:
+sig
+  type t = private int 
+  val all: t
+  val partial: t        (* partial is_hinted *)
+  val twist: t          (* prefered polarityと逆の制約でfixableなのがある状態 *)
+  val zero:  t           (* zero is_hinted *)
+  val add_twisted_info: t -> Polarity.t -> PreferedPolarity.t -> int option -> t
+  val to_string: t -> string
+end = struct
+  type t =  int
+  let all  = 0
+  let partial  = 1
+  let twist = 2
+  let zero  = 3
+
+  let add_twisted_info fix_level pol prefere_pol fixable_num_opt =
+    if PreferedPolarity.is_prefered prefere_pol pol then
+      fix_level                 (* no change *)
+    else if(fix_level = partial)||(fix_level = all && fixable_num_opt <> Some 0) then
+      twist
+    else
+      zero
+      
+      
+      
+  let to_string t =
+    if t = all then "all"
+    else if t = partial then "partial"
+    else if t = zero then "zero"
+    else if t = twist then "twist"
+    else assert false
+end
+    
+
+
+module PredicateInfo = struct
+  type t ={fixLevel: PredicateFixableLevel.t
+          ;otherPCount: int option
+          ;fixableNum: int option
+          ;pol: Polarity.t
+          ;lavel: G.pLavel }
+
+end            
+    
     
 module Priority = struct
   (* the most important factor is fixable level *)
@@ -91,6 +121,7 @@ module Priority = struct
             ;lavel = G.def_pLavel }
           
   let compare rc1 rc2 =
+    (*  *)
     if rc1.fixLevel <> rc2.fixLevel then
       compare rc1.fixLevel rc2.fixLevel
     else if rc1.preferedPol <> rc2.preferedPol then
@@ -105,17 +136,7 @@ module Priority = struct
       compare rc1.lavel rc2.lavel (* 反転 *)
     
 end
-
-(* priorityを計算するために必要な情報 *)
-module PredicateInfo = struct
-  type t ={fixLevel: PredicateFixableLevel.t
-          ;otherPCount: int option
-          ;fixableNum: int option
-          ;pol: Polarity.t
-          ;lavel: G.pLavel }
-
-end            
-                
+            
 module PriorityQueue:
 sig
 
@@ -227,6 +248,15 @@ end  = struct
   let calc_priority t p_info =
     let p = p_info.PredicateInfo.lavel in
     let prefer = t.preferedPol.(G.int_of_pLavel p) in
+    let pol = p_info.PredicateInfo.pol in
+    let init_fix_level = p_info.PredicateInfo.fixLevel in
+    (* ad-hoc *)
+    let fix_level = PredicateFixableLevel.add_twisted_info
+                      init_fix_level
+                      pol
+                      prefer
+                      p_info.PredicateInfo.fixableNum                  
+    in
     let pc_count =
       match p_info.PredicateInfo.otherPCount with
       |Some i-> i
@@ -238,7 +268,7 @@ end  = struct
       |None -> -1               (* dummy *)
     in    
     
-    Priority.{fixLevel = p_info.PredicateInfo.fixLevel
+    Priority.{fixLevel = fix_level
              ;preferedPol = prefer
              ;otherPCount = pc_count
              ;fixableNum =  fixable_num
@@ -264,51 +294,29 @@ end  = struct
                ;negTable = neg_table
                ;table = table
                ;internalQueue = internal_queue} p priority =
-    let prefer = prefered_pol.(G.int_of_pLavel p) in
-    if prefer = PreferedPolarity.neg then
-      ()
-    else if prefer = PreferedPolarity.pos then
-      begin
-        table.(G.int_of_pLavel p) <- priority;
-        InternalQueue.push internal_queue priority
-      end
+    pos_table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
+    let neg_priority = neg_table.(G.int_of_pLavel p) in
+    let min_priority = min priority neg_priority in
+    if min_priority < table.(G.int_of_pLavel p)  then
+      (table.(G.int_of_pLavel p) <- min_priority;
+       InternalQueue.push internal_queue min_priority)
     else
-      begin
-        pos_table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
-        let neg_priority = neg_table.(G.int_of_pLavel p) in
-        let min_priority = min priority neg_priority in
-        if min_priority < table.(G.int_of_pLavel p)  then
-          (table.(G.int_of_pLavel p) <- min_priority;
-           InternalQueue.push internal_queue min_priority)
-        else
-          ()
-      end
-
+      ()
+    
     
   let push_neg {preferedPol = prefered_pol
                ;posTable = pos_table
                ;negTable = neg_table
                ;table = table
                ;internalQueue = internal_queue} p priority =
-    let prefer = prefered_pol.(G.int_of_pLavel p) in
-    if prefer =  PreferedPolarity.pos then
-      ()
-    else if prefer = PreferedPolarity.neg then
-      begin
-        table.(G.int_of_pLavel p) <- priority;
-        InternalQueue.push internal_queue priority
-      end
+    neg_table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
+    let pos_priority = pos_table.(G.int_of_pLavel p) in
+    let min_priority = min priority  pos_priority in
+    if min_priority < pos_table.(G.int_of_pLavel p) then
+      (table.(G.int_of_pLavel p) <- min_priority;
+       InternalQueue.push internal_queue min_priority)
     else
-      begin
-        neg_table.(G.int_of_pLavel p) <- priority; (* table kept up to date *)
-        let pos_priority = pos_table.(G.int_of_pLavel p) in
-        let min_priority = min priority  pos_priority in
-        if min_priority < pos_table.(G.int_of_pLavel p) then
-          (table.(G.int_of_pLavel p) <- min_priority;
-           InternalQueue.push internal_queue min_priority)
-        else
-          ()
-      end
+      ()
        
 
   let update_pos = push_pos
