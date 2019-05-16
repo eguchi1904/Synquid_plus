@@ -175,6 +175,7 @@ end =  struct
     let fix_manager_str = FixabilityManager.of_string graph t.fixabilityManager in
     let pfixable_counter_str = PFixableConstraintCounter.of_string graph t.pFixableCounter in
     let pfix_state_str = PFixState.to_string graph t.pFixState in
+    let cfix_state_str = CFixState.to_string t.cFixState in
     let queue_str = PriorityQueue.to_string graph t.queue in
     "\nFixabiliy Manager\n"
     ^"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
@@ -184,7 +185,10 @@ end =  struct
     ^ pfixable_counter_str
     ^"\n predicate fix state"
     ^"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
-    ^ pfix_state_str    
+    ^ pfix_state_str
+    ^"\n constraint fix state"
+    ^"\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+    ^ cfix_state_str
     ^"\n queue\n"
     ^"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
     ^ queue_str

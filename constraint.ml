@@ -483,7 +483,33 @@ let rec remove_dummy_loop = function
     else
       c:: (remove_dummy_loop left)
   |c::cs -> c :: (remove_dummy_loop cs)
-  |[] -> []    
+  |[] -> []
+
+
+let rec add_dummy_start_point_constraint = function
+  |SSub (env, e1, Formula.Bool tr) ::left when tr = true ->
+    let st_point = Formula.list_and e1
+                   |> List.fold_left
+                        (fun acc phi ->
+                          match phi with
+                          |Formula.Unknown _ -> (SSub (env, phi, Formula.Bool true))::acc
+                          |_ -> acc)
+                        []
+    in
+    st_point @ (add_dummy_start_point_constraint left)
+  |SSub (env, e1, e2) :: left when (S.is_empty (Formula.extract_unknown_p e2)) ->
+    let st_point = Formula.list_and e1
+                   |> List.fold_left
+                        (fun acc phi ->
+                          match phi with
+                          |Formula.Unknown _ -> (SSub (env, phi, Formula.Bool true))::acc
+                          |_ -> acc)
+                        []
+    in
+    (SSub (env, e1, e2))::st_point@(add_dummy_start_point_constraint left)
+  |sc :: left -> sc :: (add_dummy_start_point_constraint left)
+  |[] -> []
+    
        
 let rec remove_obviously_valid = function
   |SSub (_, Formula.Bool false, _) ::left ->

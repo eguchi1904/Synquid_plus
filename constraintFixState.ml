@@ -16,6 +16,21 @@ type t = {isFix: bool array
          ;unknown_up_p_count: int array
          }
 
+let to_string t =
+  let _, str = Array.fold_left
+                 (fun (i,acc_str) fixed ->
+                   let str =
+                     Printf.sprintf
+                       "%d -> is_fixed:%b unknown_p:%d unknown_up_p:%d"
+                       i fixed t.unknown_p_count.(i) t.unknown_up_p_count.(i)
+                   in
+                   (i+1, acc_str ^ "\n" ^ str))
+                 (0, "")
+                 t.isFix
+  in
+  str
+  
+
 let is_fixed t c = t.isFix.(G.int_of_cLavel c)
 
 let isnt_fixed t c = not (is_fixed t c)
