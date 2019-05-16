@@ -105,7 +105,7 @@ val genUnknownPa_shape : Senv.t -> pa_shape -> Id.t -> pa
   
 val genTopPa_shape : pa_shape -> pa
 val genBotPa_shape : pa_shape -> pa    
-  
+val genIgnorePa_shape :pa_shape -> pa    
 val var_in_sort : sort -> S.t
 val sort_subst : sort M.t -> sort -> sort
 val compose_sort_subst : sort M.t -> sort M.t -> sort M.t

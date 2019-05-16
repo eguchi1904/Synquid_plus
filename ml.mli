@@ -69,6 +69,11 @@ val mk_refine_bot: Data_info.t M.t -> t -> Type.t
   
 val mk_refine_bot_sch: Data_info.t M.t -> schema -> Type.schema  
 
+
+val mk_refine_ignore: Data_info.t M.t -> t -> Type.t
+  
+val mk_refine_ignore_sch: Data_info.t M.t -> schema -> Type.schema  
+  
 (*--------------------------------------------------*)
 (* type inference *)
 (*--------------------------------------------------*)

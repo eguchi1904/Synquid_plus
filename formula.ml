@@ -570,7 +570,16 @@ let genBotPa_shape ((arg_sort,rets):pa_shape) :pa=
                arg_sort
   in
   (args, Bool false)  
-                 
+
+let genIgnorePa_shape ((arg_sort,rets):pa_shape) :pa=
+  (Id.init_pa_arg_counter ());
+  let args = List.fold_left
+               (fun args sort ->
+                 args@[(Id.gen_pa_arg ()), sort])
+               []
+               arg_sort
+  in
+  (args, Var (BoolS, Id.ignore_id))
 
 (* -------------------------------------------------- *)
 (* sort *)

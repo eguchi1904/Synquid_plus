@@ -90,7 +90,20 @@ module Priority = struct
             ;pol = Polarity.pos
             ;lavel = G.def_pLavel }
           
-  let compare = compare
+  let compare rc1 rc2 =
+    if rc1.fixLevel <> rc2.fixLevel then
+      compare rc1.fixLevel rc2.fixLevel
+    else if rc1.preferedPol <> rc2.preferedPol then
+      compare rc1.preferedPol rc2.preferedPol
+    else if rc1.otherPCount <> rc2.otherPCount then
+      compare rc1.otherPCount rc2.otherPCount
+    else if rc1.fixableNum <> rc2.fixableNum then
+      compare rc1.fixableNum rc2.fixableNum
+    else if rc1.pol <> rc2.pol then
+      compare rc1.pol rc2.pol
+    else
+      compare rc1.lavel rc2.lavel (* 反転 *)
+    
 end
 
 (* priorityを計算するために必要な情報 *)

@@ -470,7 +470,21 @@ let rec remove_ignore = function
   | sc::left -> (replace_ignore sc)::(remove_ignore left)
   |[] -> []
 
-
+let rec remove_dummy_loop = function
+  |(SSub (_, phi2, Formula.Unknown (_, _, sita2, p2)) as c):: left ->
+    let p2_exists =
+      (Formula.list_and phi2)
+      |> List.exists
+           (function |Formula.Unknown (_, _, sita1, p1) when sita1 = sita2 && p1 = p2 -> true
+                     |_ ->false)
+    in      
+    if p2_exists then
+      remove_dummy_loop left
+    else
+      c:: (remove_dummy_loop left)
+  |c::cs -> c :: (remove_dummy_loop cs)
+  |[] -> []    
+       
 let rec remove_obviously_valid = function
   |SSub (_, Formula.Bool false, _) ::left ->
     remove_obviously_valid left

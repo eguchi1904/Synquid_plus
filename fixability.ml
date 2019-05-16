@@ -106,7 +106,6 @@ let wait_predicates assign senv = function
     let local_env' = Liq.env_substitute_F assign local_env in
     iter_extract_necessary_predicate senv vars local_env'
 
-    
 
 let rec extract_subst senv acc_sita eq_list =
   let open Formula in

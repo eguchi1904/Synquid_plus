@@ -25,7 +25,12 @@ let of_string graph t =
       (fun (p,c) stack acc_str ->
         try
           let fixability = Stack.top stack  in
-          let str = Printf.sprintf "\n(%s, c:%d) -> %s" (G.id_of_pLavel graph p) (G.int_of_cLavel c) (Fixability.of_string fixability) in
+          let str = Printf.sprintf
+                      "\n(%s, c:%d) -> %s"
+                      (G.id_of_pLavel graph p)
+                      (G.int_of_cLavel c)
+                      (Fixability.of_string fixability)
+          in
           (acc_str^str)
         with
           _ -> acc_str

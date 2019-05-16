@@ -30,7 +30,7 @@ let rec adjust_annotation dinfos (t_ml:Ml.schema TaSyn.t) (t_user_anno:Liq.t opt
    PLet ((y, None), t1_usr, t2_usr) when (x = y) ->
     let t1' = adjust_annotation dinfos t1_ml t1_usr in
     let t2' = adjust_annotation dinfos t2_ml t2_usr in
-    PLet ((x, Ml.mk_refine_top_sch dinfos ml_sch), t1', t2')
+    PLet ((x, Ml.mk_refine_ignore_sch dinfos ml_sch), t1', t2')
 
   |PLet ((x, ml_sch), t1_ml, t2_ml),
    PLet ((y, Some liq_ann), t1_usr, t2_usr) when (x = y) ->
@@ -56,18 +56,18 @@ and adjust_annotation_e dinfos e_ml e_usr =
                      match acc_usr_ann_opts with
                      |None :: usr_ann_opts' ->
                        (usr_ann_opts',
-                        (Ml.mk_refine_top_sch dinfos ml_sch)::acc)
+                        (Ml.mk_refine_ignore_sch dinfos ml_sch)::acc)
                      |Some usr_ann :: usr_ann_opts' ->
                        (usr_ann_opts',
                         (adjust_refine dinfos ml_sch usr_ann)::acc)
-                     |[] -> ([], Ml.mk_refine_top_sch dinfos ml_sch::acc))
+                     |[] -> ([], Ml.mk_refine_ignore_sch dinfos ml_sch::acc))
                    ml_schs
                    (usr_ann_opts, [])
     in
     PSymbol (x, schs)
 
   |PAuxi (g, ml_sch), PAuxi (g', None) when g = g' ->
-    PAuxi (g, Ml.mk_refine_top_sch dinfos ml_sch)
+    PAuxi (g, Ml.mk_refine_ignore_sch dinfos ml_sch)
 
   |PAuxi (g, ml_sch), PAuxi (g', Some liq_anno) when g = g' ->
     PAuxi (g, adjust_refine dinfos ml_sch liq_anno)
@@ -105,7 +105,7 @@ and adjust_annotation_b dinfos b_ml b_usr =
 and adjust_annotation_case dinfos case_ml case_usr =
   let args =                    
     List.map
-      (fun (x, ml_sch) -> (x, Ml.mk_refine_top_sch dinfos ml_sch))
+      (fun (x, ml_sch) -> (x, Ml.mk_refine_ignore_sch dinfos ml_sch))
       case_ml.argNames
   in
   let t' = adjust_annotation dinfos case_ml.body case_usr.body in
@@ -119,7 +119,7 @@ and adjust_annotation_f dinfos f_ml f_usr =
   |PFun ((x, ml_sch), t_ml),
    PFun ((y, None), t_usr) when x = y ->
     let t' = adjust_annotation dinfos t_ml t_usr in
-    PFun ((x, Ml.mk_refine_top_sch dinfos ml_sch), t')
+    PFun ((x, Ml.mk_refine_ignore_sch dinfos ml_sch), t')
   |PFun ((x, ml_sch), t_ml),
    PFun ((y, Some usr_ty), t_usr) when x = y ->
     let t' = adjust_annotation dinfos t_ml t_usr in
@@ -163,6 +163,7 @@ let liqInfer z3_env dinfos qualifiers env ta_t =
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs)
+                  |> Constraint.remove_dummy_loop                
   in
   let simple_cs_ann = List.concat (List.map split_cons cs_ann)
                       |> Constraint.remove_ignore                    
@@ -189,9 +190,11 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs)
+                  |> Constraint.remove_dummy_loop
   in
   let simple_cs_ann = List.concat (List.map split_cons cs_ann)
                       |> Constraint.remove_ignore
+
   in    
   let () = (Printf.printf "cs_length:%d \n" (List.length cs)) in
   let () =  (Printf.printf "simple_cs_length:%d \n" (List.length simple_cs)) in

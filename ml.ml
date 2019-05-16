@@ -89,6 +89,31 @@ and mk_refine_base_bot dinfos t =
   |MLFun _ -> invalid_arg "function type in base"
 
 
+            
+let rec mk_refine_ignore dinfos t =
+  match t with
+  |MLFun (t1, t2) ->
+    let t= Id.genid "t" in
+    let t1' = mk_refine_ignore dinfos t1 in
+    let t2' = mk_refine_ignore dinfos t2 in
+    Type.TFun ((t, t1'), t2')
+  |MLVar _ |MLBool |MLInt |MLData _ ->
+    Type.TScalar ((mk_refine_base_ignore dinfos t), Formula.Var (Formula.BoolS, Id.ignore_id)) 
+   
+and mk_refine_base_ignore dinfos t =
+  match t with
+  |MLBool -> Type.TBool
+  |MLInt ->  Type.TInt
+  |MLData (data, ts) ->
+    let ts' = List.map (mk_refine_ignore dinfos) ts in
+    let data_info = M.find data dinfos in
+    let pa_shape_list = Data_info.instantiate_pred_param_shape data_info ts' in
+    let pas = List.map (fun (_,shape) -> Formula.genIgnorePa_shape shape) pa_shape_list in
+    Type.TData (data, ts', pas) 
+  |MLVar a ->
+    Type.TAny a
+  |MLFun _ -> invalid_arg "function  type in base"
+
 
 
 let rec string_of_t t :string= let open Printf in
@@ -155,7 +180,10 @@ let mk_refine_top_sch dinfos ((alist, t):schema) =
   ((alist,[],mk_refine_top dinfos t))
 
 let mk_refine_bot_sch dinfos ((alist, t):schema) =
-  ((alist,[],mk_refine_bot dinfos t))  
+  ((alist,[],mk_refine_bot dinfos t))
+
+let mk_refine_ignore_sch dinfos ((alist, t):schema) =
+  ((alist, [], mk_refine_ignore dinfos t))
                                                 
 
 (*--------------------------------------------------*)
