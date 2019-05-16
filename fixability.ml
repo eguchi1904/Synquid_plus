@@ -317,7 +317,7 @@ type t = |UnBound of {waitNum: int ref
                    ;bound: bound}
          |Fixable of {senv:Formula.Senv.t
                      ;pendingSortSubst: Formula.sort_subst
-                     ;pol: Polarity.t
+                     ;pol: Polarity.t (* pol fixable or neg fixable *)
                      ;bound: bound}
 
 

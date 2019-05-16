@@ -457,10 +457,10 @@ let rec replace_ignore sc  =
   match sc with
   |SWF (env, (senv, phi)) -> SWF (env, (senv, Formula.substitution ignore2top phi))
   |SSub (env, phi1, phi2) ->
-    let phi2' = Formula.substitution ignore2top phi2 in
-    let phi1' = Formula.substitution ignore2bot phi1 in
+    (* let phi2' = Formula.substitution ignore2top phi2 in *)
+    (* let phi1' = Formula.substitution ignore2bot phi1 in *)
     let env' = Liq.env_substitute_F ignore2top env in
-    SSub (env', phi1', phi2')
+    SSub (env', phi1, phi2)
     
 let rec remove_ignore = function
   |SSub (_, e1, e2)::left when (S.mem Id.ignore_id (Formula.fv e1)

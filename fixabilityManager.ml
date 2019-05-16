@@ -170,15 +170,22 @@ let tell_related_predicate_constraint_is_fixed t graph assign cfix_state c
   
   
   
-let try_to_fix t assign p c =
+let try_to_fix t assign p c pol =
   let fixability_stack = Hashtbl.find t.table (p, c) in
-  Fixability.try_to_fix assign (Stack.top fixability_stack)
+  let fixability = (Stack.top fixability_stack) in
+  match fixability with
+  |Fixability.Fixable rc ->
+    if rc.pol = pol then
+      Fixability.try_to_fix assign fixability
+    else
+      None
+  |_ -> None
 
 
-let gather_solution_from_cs t assign p cs ~change:cfix_state =
+let gather_solution_from_cs t assign p cs pol ~change:cfix_state =
   List.fold_left
     (fun acc c ->
-      (match try_to_fix t assign p c with
+      (match try_to_fix t assign p c pol with
        |Some qformula ->
          let () = CFixState.fix cfix_state c in
          (c, qformula)::acc
@@ -211,13 +218,13 @@ let pull_solution t graph assign p priority
   let unfixed_pos_cs = List.filter (CFixState.isnt_fixed cfix_state) (G.pos_cs graph p) in
   let unfixed_neg_cs =  List.filter (CFixState.isnt_fixed cfix_state) (G.neg_cs graph p) in
   if priority.Priority.pol = Polarity.pos then
-    let solution_asc = gather_solution_from_cs t assign p unfixed_pos_cs
+    let solution_asc = gather_solution_from_cs t assign p unfixed_pos_cs Polarity.pos
                                                ~change:cfix_state
     in
     let new_fixed_cs = List.map fst solution_asc in
     solution_asc, new_fixed_cs
   else
-    let solution_asc = gather_solution_from_cs t assign p unfixed_neg_cs
+    let solution_asc = gather_solution_from_cs t assign p unfixed_neg_cs Polarity.neg
                                                ~change:cfix_state
     in
     let new_fixed_cs = List.map fst solution_asc in
