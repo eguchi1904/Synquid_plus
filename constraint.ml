@@ -4,7 +4,7 @@ exception Constraint of string
 
 type cons = |WF of (Liq.env * Liq.t)
             |Sub of {body: (Liq.env * Liq.t * Liq.t)
-                    ;recEnv: Liq.env}
+                    ;defining: Liq.env}
 
 (* synquidの型systemではunknown predicate が入ると、envからformulaの抽出の仕方が定まらないので、
 simple_consでも、type envを持つ必要がある *)
@@ -13,7 +13,7 @@ type simple_cons =
   (* SWF:: env,senv|-phi, envは、制約生成時の型環境。 *)
   |SWF of Liq.env * (Formula.Senv.t * Formula.t) 
   |SSub of {body:(Liq.env * Formula.t * Formula.t)
-           ;recEnv:Liq.env}
+           ;defining:Liq.env}
                           
 
 type pure_simple_cons = |PSWF of ((Id.t * Formula.sort) list * Formula.t)
@@ -103,7 +103,7 @@ let is_valid_simple_cons = function
 
 (* use Liq.env2formula_all  *)
 let is_valid_simple_cons_all = function
- |SSub (env, e1, e2 ) -> (* env/\e => sita*P *)
+ |SSub {body = (env, e1, e2 )} -> (* env/\e => sita*P *)
     let env_formula = Liq.env2formula_all env  in
     let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
     let z3_p,p_s = UseZ3.convert p in
@@ -114,7 +114,7 @@ let is_valid_simple_cons_all = function
        List.for_all (fun x_sort -> Formula.Senv.mem2 x_sort senv) x_sort_list
 
 let is_satisifiable_simple_cons_all = function
- |SSub (env, e1, e2 ) -> (* env/\e => sita*P *)
+ |SSub {body = (env, e1, e2 )} -> (* env/\e => sita*P *)
     let env_formula = Liq.env2formula_all env  in
     let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
     let z3_p,p_s = UseZ3.convert p in
@@ -139,26 +139,30 @@ let assert_p_well_formedness = function
                              else
                                true
                            | _ -> true)
-              (Formula.list_and phi)
-
+                 (Formula.list_and phi)
+   
+(* bodyへの代入 *)
 let subst_cons sita = function
   |WF (env, ty) -> WF (Liq.env_substitute_F sita env, Liq.substitute_F sita ty)
-  |Sub (env, ty1, ty2) ->Sub ((Liq.env_substitute_F sita env, Liq.substitute_F sita ty1,
-                               Liq.substitute_F sita ty2))
+  |Sub {body = (env, ty1, ty2); defining = defining} ->
+    Sub {body = (Liq.env_substitute_F sita env, Liq.substitute_F sita ty1,
+                 Liq.substitute_F sita ty2)
+        ;defining = defining}
    
 
 let subst_simple_cons sita = function
-  |SSub (env, e1, e2) ->
-    SSub (Liq.env_substitute_F sita env,
-          Formula.substitution sita e1,
-          Formula.substitution sita e2)
+  |SSub {body = (env, e1, e2); defining = defining} ->
+    SSub {body = (Liq.env_substitute_F sita env,
+                  Formula.substitution sita e1,
+                  Formula.substitution sita e2)
+         ;defining = defining}
   |SWF (env, (senv, e)) ->
     SWF (env, (senv, Formula.substitution sita e))
     
    
 let unknown_p_in_simple_cons = function
   |SWF (_, (senv, e)) -> Formula.extract_unknown_p e
-  |SSub (e_env, e1, e2) -> (S.union
+  |SSub {body = (e_env, e1, e2)} -> (S.union
                              (Liq.env_extract_unknown_p e_env)
                              (S.union
                                 (Formula.extract_unknown_p e1)
@@ -179,7 +183,7 @@ let replace_unknown_p_to_top scons =
 
 let positive_negative_unknown_p = function
   |SWF _ -> invalid_arg "constraint.positive_negative_unknown_p: well formedness constraint"
-  |SSub (env, e1, e2) ->
+  |SSub {body = (env, e1, e2)} ->
     let env_formula_all = Liq.env2formula_all env in
     let phi = Formula.Implies ((Formula.And (env_formula_all, e1)), e2) in
     Formula.positive_negative_unknown_p phi
@@ -192,7 +196,7 @@ let is_predicate_normal_position = function
     List.for_all
       (fun e -> Formula.is_unknown_p e || S.is_empty (Formula.extract_unknown_p e))
       (env_formula_list@e_list)
-  |SSub (env, e1, e2) ->
+  |SSub {body = (env, e1, e2)} ->
     let env_formula_list = Liq.env2formula_all env |> Formula.list_and in
     let e1_list = Formula.list_and e1 in
     let e2_list = Formula.list_and e2 in
@@ -205,9 +209,9 @@ let is_predicate_normal_position = function
  *)
 let mk_qformula_from_positive_cons env p = function
   |SWF _ -> invalid_arg "constraint.mk_qformula_from_positive_cons"
-  |SSub (cons_env, e1, Formula.Unknown (_, _, _, p'))
+  |SSub {body = (cons_env, e1, Formula.Unknown (_, _, _, p')) }
        when p' <> p -> invalid_arg "constraint.mk_qformula_from_positive_cons"
-  |SSub (cons_env, e1, Formula.Unknown (senv, sort_sita, sita, _)) ->
+  |SSub {body = (cons_env, e1, Formula.Unknown (senv, sort_sita, sita, _))} ->
     (*  \phi(x,y) -> [x |-> e(x,y)].P(x) *)
     (* sitaの中のformulaには、sort_sitaが適用済みということで良いのかな *)
     (match Liq.env_suffix cons_env env with
@@ -265,9 +269,9 @@ let mk_qformula_from_positive_cons env p = function
     
 let mk_qformula_from_negative_cons env p = function
   |SWF _ -> invalid_arg "constraint.mk_qformula_from_negative_cons"
-  |SSub (cons_env, e1, e2)
+  |SSub {body = (cons_env, e1, e2)}
        when S.mem p (Formula.extract_unknown_p e2)-> invalid_arg "constraint.mk_qformula_from_negative_cons"
-  |SSub (cons_env, e1, e2)  ->
+  |SSub {body = (cons_env, e1, e2)}  ->
     (match Liq.env_suffix cons_env env with
      |None -> invalid_arg "constraint.mk_qformula: cons_env and env mismatch"
      |Some env' ->
@@ -317,7 +321,7 @@ let mk_qformula_from_negative_cons env p = function
    
 
 (* env|-(\x.p1) <:(\y.p2) などからsimple_consを生成 *)
-let pa_subtyping_to_simple_cons env (args1, p1) (args2, p2) =
+let pa_subtyping_to_simple_cons env defining (args1, p1) (args2, p2) =
   (* まず、p2の引数をp1に合わせる。 *)
   let rec mk_subst args1 args2 =
     List.fold_left2
@@ -337,7 +341,7 @@ let pa_subtyping_to_simple_cons env (args1, p1) (args2, p2) =
   let sita2 =mk_subst args1 args2  in
   let p2' = Formula.substitution sita2 p2 in
   (* let env_f = Liq.env2formula env (S.union (Formula.fv p1) (Formula.fv p2')) in *)
-  (SSub (env, p1, p2'))
+  SSub {body = (env, p1, p2'); defining = defining}
   
                           
 (* spit cons to simple_cons list *)
@@ -367,10 +371,11 @@ let rec split_cons' top_env (c:cons) =
         |Liq.TVar _ -> assert false (* becase TVar will be unused *)))
   |WF (env, Liq.TBot) -> []
 
-  |Sub (env,
-        Liq.TFun ((x, ty1_in), ty1_out),
-        Liq.TFun ((y, ty2_in), ty2_out)  ) -> (* ty1_in -> ty1_out <: ty2_in -> ty2_out *)
-    let simple_cons_in = split_cons' top_env (Sub (env, ty2_in, ty1_in)) in
+  |Sub {body = (env,
+                Liq.TFun ((x, ty1_in), ty1_out),
+                Liq.TFun ((y, ty2_in), ty2_out)  )
+       ;defining = defining} -> (* ty1_in -> ty1_out <: ty2_in -> ty2_out *)
+    let simple_cons_in = split_cons' top_env (Sub {body = (env, ty2_in, ty1_in);defining = defining}) in
     let env2 = Liq.env_add env (y, ty2_in) in
     let ty1_out' =
       if x = y then
@@ -379,33 +384,37 @@ let rec split_cons' top_env (c:cons) =
         let y_sort = (match Liq.type2sort ty2_in with Some s -> s| _ -> assert false) in
         let y_var = Formula.Var (y_sort, y) in
         Liq.substitute_F (M.singleton x y_var) ty1_out in (* [y/x]ty1_out *)
-    let simple_cons_out = split_cons' top_env (Sub (env2, ty1_out', ty2_out)) in
+    let simple_cons_out = split_cons' top_env (Sub {body = (env2, ty1_out', ty2_out)
+                                                   ;defining = defining})
+    in
     simple_cons_in@simple_cons_out
-  |Sub (env,
-        Liq.TScalar (b1, phi1),
-        Liq.TScalar (b2, phi2) ) ->
+  |Sub {body = (env,
+                Liq.TScalar (b1, phi1),
+                Liq.TScalar (b2, phi2))
+       ;defining = defining} ->
     (* let phi_env = Liq.env2formula env (S.union (Formula.fv phi1) (Formula.fv phi2)) in *)
     (match b1,b2 with
      |(Liq.TData (data, tys1, pas1)),(Liq.TData (data', tys2, pas2)) when data = data' ->
        let tys_simple_cons =
-         List.concat (List.map2 (fun ty1 ty2 -> split_cons' top_env (Sub (env, ty1, ty2))) tys1 tys2)
+         List.concat (List.map2 (fun ty1 ty2 -> split_cons' top_env (Sub {body = (env, ty1, ty2)
+                                                                    ;defining = defining})) tys1 tys2)
        in
        let pas_simple_cons =
-         List.map2 (pa_subtyping_to_simple_cons env) pas1 pas2
+         List.map2 (pa_subtyping_to_simple_cons env defining) pas1 pas2
        in
-       (SSub (env, phi1, phi2))::(tys_simple_cons@pas_simple_cons)
+       (SSub {body = (env, phi1, phi2); defining = defining})::(tys_simple_cons@pas_simple_cons)
      |(Liq.TBool,Liq.TBool)  |(Liq.TInt,Liq.TInt) ->
-       [SSub (env, phi1, phi2)]
+       [SSub {body = (env, phi1, phi2); defining = defining}]
      |(Liq.TAny i, Liq.TAny i') when i = i' ->
-       [SSub (env, phi1, phi2)]
+       [SSub {body = (env, phi1, phi2); defining = defining}]
      |(Liq.TVar _, Liq.TVar _) -> assert false  (* becase TVar will be unused *)
 
      |(_, _) ->
        (Printf.printf "base type miss match:%s vs %s\n" (Liq.b2string b1) (Liq.b2string b2));
        assert false    (* basetype miss match *)
     )
-  |Sub (env, Liq.TBot, _) -> []
-  |Sub  (env, ty1, ty2) ->
+  |Sub {body = (env, Liq.TBot, _)} -> []
+  |Sub  {body = (env, ty1, ty2)} ->
     (Printf.printf "shape miss match:%s vs %s" (Liq.t2string ty1) (Liq.t2string ty2));
     assert false        (* shape miss match *)
        
@@ -423,18 +432,18 @@ let rec separate_unknown_simple_cons = function
     let unknown_p_wf_cons_list = List.map (fun p -> SWF (env, (senv, p))) unknown_p_list in
     let otheres_p_wf_cons = SWF(env, (senv, (Formula.and_list others))) in
     otheres_p_wf_cons :: unknown_p_wf_cons_list
-  |SSub (env, phi1, result) ->
+  |SSub {body = (env, phi1, result); defining = defining} ->
     let unknown_p_list, others =
       Formula.list_and result
       |> List.partition (function |Formula.Unknown _ -> true
                                   | _                -> false
                         )
     in
-    let unknown_p_sub_cons_list = List.map (fun p -> SSub (env, phi1, p)) unknown_p_list in
+    let unknown_p_sub_cons_list = List.map (fun p -> SSub {body = (env, phi1, p); defining = defining}) unknown_p_list in
     if others = [] then
       unknown_p_sub_cons_list
     else
-      let ohthers_p_sub_cons = SSub (env, phi1, (Formula.and_list others)) in
+      let ohthers_p_sub_cons = SSub {body = (env, phi1, (Formula.and_list others)); defining = defining} in
       ohthers_p_sub_cons :: unknown_p_sub_cons_list
                         
 let split_cons c =
@@ -444,7 +453,7 @@ let split_cons c =
     let () = ignore (List.for_all assert_p_well_formedness ret) in
     List.map separate_unknown_simple_cons ret
     |> List.concat
-  |Sub (env, ty1, ty2) ->
+  |Sub {body = (env, ty1, ty2)} ->
     split_cons' env c
     |> List.map separate_unknown_simple_cons 
     |> List.concat
@@ -458,22 +467,22 @@ let rec replace_ignore sc  =
   let ignore2bot =  M.singleton Id.ignore_id (Formula.Bool false) in
   match sc with
   |SWF (env, (senv, phi)) -> SWF (env, (senv, Formula.substitution ignore2top phi))
-  |SSub (env, phi1, phi2) ->
+  |SSub {body = (env, phi1, phi2); defining = defining} ->
     (* let phi2' = Formula.substitution ignore2top phi2 in *)
     (* let phi1' = Formula.substitution ignore2bot phi1 in *)
     let env' = Liq.env_substitute_F ignore2top env in
-    SSub (env', phi1, phi2)
+    SSub {body = (env', phi1, phi2); defining = defining}
     
 let rec remove_ignore = function
-  |SSub (_, e1, e2)::left when (S.mem Id.ignore_id (Formula.fv e1)
-                          ||S.mem Id.ignore_id (Formula.fv e2))
+  |SSub {body = (_, e1, e2)}::left when (S.mem Id.ignore_id (Formula.fv e1)
+                                         ||S.mem Id.ignore_id (Formula.fv e2))
    ->
     remove_ignore left
   | sc::left -> (replace_ignore sc)::(remove_ignore left)
   |[] -> []
 
 let rec remove_dummy_loop = function
-  |(SSub (_, phi2, Formula.Unknown (_, _, sita2, p2)) as c):: left ->
+  |(SSub {body = (_, phi2, Formula.Unknown (_, _, sita2, p2))} as c):: left ->
     let p2_exists =
       (Formula.list_and phi2)
       |> List.exists
@@ -489,36 +498,40 @@ let rec remove_dummy_loop = function
 
 
 let rec add_dummy_start_point_constraint = function
-  |SSub (env, e1, Formula.Bool tr) ::left when tr = true ->
+  |SSub {body = (env, e1, Formula.Bool tr); defining = defining} ::left when tr = true ->
     let st_point = Formula.list_and e1
                    |> List.fold_left
                         (fun acc phi ->
                           match phi with
-                          |Formula.Unknown _ -> (SSub (env, phi, Formula.Bool true))::acc
+                          |Formula.Unknown _ -> (SSub {body = (env, phi, Formula.Bool true);
+                                                       defining = defining})
+                                                ::acc
                           |_ -> acc)
                         []
     in
     st_point @ (add_dummy_start_point_constraint left)
-  |SSub (env, e1, e2) :: left when (S.is_empty (Formula.extract_unknown_p e2)) ->
+  |SSub {body = (env, e1, e2);defining = defining} :: left when (S.is_empty (Formula.extract_unknown_p e2)) ->
     let st_point = Formula.list_and e1
                    |> List.fold_left
                         (fun acc phi ->
                           match phi with
-                          |Formula.Unknown _ -> (SSub (env, phi, Formula.Bool true))::acc
+                          |Formula.Unknown _ -> (SSub {body = (env, phi, Formula.Bool true);
+                                                       defining = defining})
+                                                ::acc
                           |_ -> acc)
                         []
     in
-    (SSub (env, e1, e2))::st_point@(add_dummy_start_point_constraint left)
+    (SSub {body = (env, e1, e2); defining = defining})::st_point@(add_dummy_start_point_constraint left)
   |sc :: left -> sc :: (add_dummy_start_point_constraint left)
   |[] -> []
     
        
 let rec remove_obviously_valid = function
-  |SSub (_, Formula.Bool false, _) ::left ->
+  |SSub {body = (_, Formula.Bool false, _)} ::left ->
     remove_obviously_valid left
-  |SSub (_, _, Formula.Bool true ) ::left ->
+  |SSub {body = (_, _, Formula.Bool true)} ::left ->
     remove_obviously_valid left
-  |(SSub (_, phi2, Formula.Unknown (_, _, sita2, p2)) as c):: left ->
+  |(SSub {body = (_, phi2, Formula.Unknown (_, _, sita2, p2))} as c):: left ->
     let p2_exists =
       (Formula.list_and phi2)
       |> List.exists

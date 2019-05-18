@@ -5,7 +5,9 @@ exception Constraint of string
 (* -------------------------------------------------- *)
 (* type constraint: well formedness / subtyping  *)
 (* -------------------------------------------------- *)                          
-type cons = WF of (Liq.env * Liq.t) | Sub of (Liq.env * Liq.t * Liq.t)
+type cons = |WF of (Liq.env * Liq.t)
+            |Sub of {body: (Liq.env * Liq.t * Liq.t)
+                    ;defining: Liq.env}                                           
 
 
 val subst_cons : Formula.subst -> cons -> cons
@@ -19,9 +21,12 @@ val cons_list_to_string_human : cons list -> string
 
 (* -------------------------------------------------- *)
 (* formula constraints: well formedness / implication  *)
-(* -------------------------------------------------- *)                            
-type simple_cons = |SWF of Liq.env * (Formula.Senv.t * Formula.t) 
-                   |SSub of (Liq.env * Formula.t * Formula.t)
+(* -------------------------------------------------- *)
+type simple_cons =
+  (* SWF:: env,senv|-phi, envは、制約生成時の型環境。 *)
+  |SWF of Liq.env * (Formula.Senv.t * Formula.t) 
+  |SSub of {body:(Liq.env * Formula.t * Formula.t)
+           ;defining:Liq.env}  
                           
 
 val split_cons : cons -> simple_cons list

@@ -104,7 +104,7 @@ let fresh_from_annotation dinfos env anno =
 
 (* 生成するunknown predicateは、少なくとも一つクリーンな（pendign substなどがない）
 well formued constratint を持つ
-defining定義している途中の型
+defining定義している途中の型環境
  *)
 let rec cons_gen dinfos env defining (t:Liq.schema TaSyn.t) req_ty =
   match t with
