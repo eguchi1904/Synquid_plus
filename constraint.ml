@@ -188,6 +188,13 @@ let positive_negative_unknown_p = function
     let phi = Formula.Implies ((Formula.And (env_formula_all, e1)), e2) in
     Formula.positive_negative_unknown_p phi
 
+let defining_unknown_in_simple_cons = function
+  |SWF _ -> invalid_arg "outer_ps: well formuedness constraint"
+  |(SSub {body = (env, e1, e2); defining = defining} as c) ->
+    let ps = unknown_p_in_simple_cons c in
+    (*定義が終了したものだけを返す  *)
+    S.filter (fun p -> (Liq.env_mem defining p)) ps
+    
     
 let is_predicate_normal_position = function
   |SWF (env, (senv, e))->

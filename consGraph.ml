@@ -54,6 +54,7 @@ sig
                ;senv:Formula.Senv.t               
                ;pos: cLavel list
                ;neg: cLavel list
+               ;outer: (PreferedDirection.t * cLavel list) option (* let x:p = .. in <outer> *)
                }
 
 
@@ -63,8 +64,8 @@ sig
            }
 
   val log: t -> unit
-
-  val create: S.t -> S.t ->  Constraint.simple_cons list -> t
+ 
+  val create: S.t -> S.t -> S.t -> S.t -> Constraint.simple_cons list -> t
 
   val iter_p: (pLavel -> unit) -> t -> unit
 
@@ -105,7 +106,7 @@ sig
   val update_direction2down: t -> pLavel -> unit    
 
     
-  end =  struct
+  end = struct
          
   type cLavel = int
 
@@ -130,6 +131,7 @@ sig
                ;senv:Formula.Senv.t               
                ;pos: cLavel list
                ;neg: cLavel list
+               ;outer: (PreferedDirection.t * cLavel list) option
                }
 
   type t = {cTable: cNode array; cNodeNum: int;
@@ -145,6 +147,7 @@ sig
                ;senv =  p_node.senv
                ;pos =  p_node.pos
                ;neg =  p_node.neg
+               ;outer = p_node.outer
                   }
     in
     t.pTable.(p) <- p_node'
@@ -158,6 +161,7 @@ sig
                ;senv =  p_node.senv
                ;pos =  p_node.pos
                ;neg =  p_node.neg
+               ;outer = p_node.outer               
                   }
     in
     t.pTable.(p) <- p_node'
@@ -171,6 +175,7 @@ let update_direction2down t p =
                ;senv =  p_node.senv
                ;pos =  p_node.pos
                ;neg =  p_node.neg
+               ;outer = p_node.outer               
                   }
     in
     t.pTable.(p) <- p_node'    
@@ -347,10 +352,10 @@ let update_direction2down t p =
       (incr clav_count);
       c_lav
       
-    type 'a adj_map = {pos: ('a list) array; neg: ('a list) array}
+    type 'a adj_map = {pos: ('a list) array; neg: ('a list) array; defining: ('a list) array }
 
     let create_adj_map n =
-      {pos = Array.make n []; neg = Array.make n [] }
+      {pos = Array.make n []; neg = Array.make n []; defining = Array.make n [] }
 
     let add_pos adj_map k v =
       let l = adj_map.pos.(k) in
@@ -361,8 +366,14 @@ let update_direction2down t p =
       let l = adj_map.neg.(k) in
       if not (List.mem v l) then      
         adj_map.neg.(k) <- (v::l)
+
+    let add_defining adj_map k v =
+      let l = adj_map.neg.(k) in
+      if not (List.mem v l) then      
+        adj_map.defining.(k) <- (v::l)
       
-    let add_p_map p_hash p_map c_lav pos_ps neg_ps othere_ps =
+      
+    let add_p_map p_hash p_map c_lav pos_ps neg_ps othere_ps outer_ps =
         let () = S.iter
                    (fun p ->
                      let p_lav = Hashtbl.find p_hash p in
@@ -382,9 +393,16 @@ let update_direction2down t p =
                  (add_pos p_map p_lav c_lav))
                othere_ps
         in
+        let () = S.iter
+                   (fun p ->
+                     let p_lav = Hashtbl.find p_hash p in
+                     add_defining p_map p_lav c_lav)
+                   outer_ps
+        in        
         ()
+
         
-    let add_c_map p_hash c_map c_lav pos_ps neg_ps othere_ps =
+    let add_c_map p_hash c_map c_lav pos_ps neg_ps othere_ps outer_ps =
         let () = S.iter
                    (fun p ->
                      let p_lav = Hashtbl.find p_hash p in
@@ -404,6 +422,12 @@ let update_direction2down t p =
                  (add_pos c_map c_lav p_lav))
                othere_ps
         in
+        let () = S.iter
+                   (fun p ->
+                     let p_lav = Hashtbl.find p_hash p in
+                     add_defining c_map c_lav p_lav)
+                   outer_ps
+        in
         ()        
       
     (* p_map, c_mapを作成 *)
@@ -412,12 +436,13 @@ let update_direction2down t p =
         let pos_ps, neg_ps, othere_ps =
           Constraint.positive_negative_unknown_p c
         in
+        let outer_ps = Constraint.outer_unknown_in_simple_cons c in
         let pos_ps_list = S.elements pos_ps in
         let neg_ps_list = S.elements neg_ps in
         let othere_ps_list = S.elements othere_ps in        
         let c_lav = add_c_array c_array c in
-        let () = add_p_map p_hash p_map c_lav pos_ps neg_ps othere_ps in
-        let () = add_c_map p_hash c_map c_lav pos_ps neg_ps othere_ps in
+        let () = add_p_map p_hash p_map c_lav pos_ps neg_ps othere_ps outer_ps in
+        let () = add_c_map p_hash c_map c_lav pos_ps neg_ps othere_ps outer_ps in
         scan_sub_cs p_hash c_array p_map c_map other
         
       |(Constraint.SWF _)::other ->
@@ -470,6 +495,7 @@ let update_direction2down t p =
                          ;senv = Formula.Senv.empty
                          ;pos = []
                          ;neg = []
+                         ;outer = None
                        }
 
     let mk_prefered_dict p up_ps down_ps =
@@ -480,8 +506,15 @@ let update_direction2down t p =
       else
         PreferedDirection.any
                      
-                       
-    let mk_p_table up_ps down_ps p_count p_hash p_map p_env_array p_senv_array =
+    let mk_outer p p_lav up_ps_out down_ps_out defining =
+      if S.mem p up_ps_out then
+        Some (PreferedDirection.up, defining.(p_lav))
+      else if S.mem p down_ps_out then
+        Some (PreferedDirection.down, defining.(p_lav))
+      else
+        None
+      
+    let mk_p_table up_ps down_ps up_ps_out down_ps_out p_count p_hash p_map p_env_array p_senv_array =
       let p_table = Array.make p_count dummy_p_node in
       let () = Hashtbl.iter
                  (fun p p_lav ->
@@ -492,6 +525,7 @@ let update_direction2down t p =
                                       ;senv = p_senv_array.(p_lav)
                                       ;pos = p_map.pos.(p_lav)
                                       ;neg = p_map.neg.(p_lav)
+                                      ;outer = mk_outer p p_lav up_ps_out down_ps_out p_map.defining
                                       }
                  )
                  p_hash
@@ -500,10 +534,10 @@ let update_direction2down t p =
         
 
       
-    let mk_graph up_ps donw_ps p_hash c_array p_map c_map p_env_array p_senv_array =
+    let mk_graph up_ps donw_ps up_ps_out down_ps_out p_hash c_array p_map c_map p_env_array p_senv_array =
       let c_table = mk_c_table c_array c_map in
       let p_table =
-        mk_p_table up_ps donw_ps (!plav_count) p_hash p_map p_env_array p_senv_array
+        mk_p_table up_ps donw_ps up_ps_out down_ps_out (!plav_count) p_hash p_map p_env_array p_senv_array
       in
       {cTable = c_table; cNodeNum = !clav_count
       ;pTable = p_table; pNodeNum = !plav_count
@@ -511,9 +545,8 @@ let update_direction2down t p =
       }
       
       
-      
                    
-    let f up_ps down_ps cs =
+    let f up_ps down_ps up_ps_out down_ps_out cs =
       let sub_cs, wf_cs = List.partition
                             (function
                              |Constraint.SSub _ -> true
@@ -532,7 +565,7 @@ let update_direction2down t p =
       let p_senv_array = Array.make p_count Formula.Senv.empty in
       (* initialize p_env_array p_senv_array *)
       let () = scan_wf_cs p_hash p_env_array p_senv_array wf_cs in
-      mk_graph up_ps down_ps p_hash c_array p_map c_map p_env_array p_senv_array
+      mk_graph up_ps down_ps up_ps_out down_ps_out p_hash c_array p_map c_map p_env_array p_senv_array
       
     end
 

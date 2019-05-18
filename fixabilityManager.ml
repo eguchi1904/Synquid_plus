@@ -99,6 +99,7 @@ let add_affect affect p c q =
   |Some pset -> Hashtbl.replace affect (p,c) (PSet.add q pset)
   |None -> Hashtbl.add affect (p,c) (PSet.singleton q)
 
+         
 let update_affect t p c wait_ps = (* p,cを解くためには、wait_psが必要等情報をadd *)
   PSet.iter
     (fun q -> add_affect t.affect q c p)

@@ -49,6 +49,7 @@ val add_dummy_start_point_constraint : simple_cons list -> simple_cons list
 val subst_simple_cons : Formula.subst -> simple_cons -> simple_cons
 val unknown_p_in_simple_cons : simple_cons -> S.t
 val replace_unknown_p_to_top : simple_cons -> simple_cons
+val defining_unknown_in_simple_cons : simple_cons -> S.t
   
 val is_predicate_normal_position : simple_cons -> bool
 val positive_negative_unknown_p : simple_cons -> (S.t * S.t * S.t)

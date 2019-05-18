@@ -26,6 +26,8 @@ let to_fixable_level  {fixable = fixable; unfixable =unfixable} =
   
 type t = {posRatio: fixRatio array
          ;negRatio: fixRatio array
+         ;outerRatio: fixRatio array
+         ;
          }
 
 let of_string graph t =
