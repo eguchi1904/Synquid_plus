@@ -3,7 +3,8 @@ module Liq = Type
 exception Constraint of string           
 
 type cons = |WF of (Liq.env * Liq.t)
-            |Sub of (Liq.env * Liq.t * Liq.t)
+            |Sub of {body: (Liq.env * Liq.t * Liq.t)
+                    ;recEnv: Liq.env}
 
 (* synquidの型systemではunknown predicate が入ると、envからformulaの抽出の仕方が定まらないので、
 simple_consでも、type envを持つ必要がある *)
@@ -11,7 +12,8 @@ simple_consでも、type envを持つ必要がある *)
 type simple_cons =
   (* SWF:: env,senv|-phi, envは、制約生成時の型環境。 *)
   |SWF of Liq.env * (Formula.Senv.t * Formula.t) 
-                   |SSub of (Liq.env * Formula.t * Formula.t)
+  |SSub of {body:(Liq.env * Formula.t * Formula.t)
+           ;recEnv:Liq.env}
                           
 
 type pure_simple_cons = |PSWF of ((Id.t * Formula.sort) list * Formula.t)
@@ -20,7 +22,7 @@ type pure_simple_cons = |PSWF of ((Id.t * Formula.sort) list * Formula.t)
 
 let cons2string = function
   |WF (env, ty) -> Printf.sprintf "WF\n %s\n%s\n" (Liq.env2string env) (Liq.t2string_sort ty)
-  |Sub (env, ty1, ty2) ->
+  |Sub {body = (env, ty1, ty2)} ->
     Printf.sprintf "Sub\n %s\n%s <: %s\n"
                    (Liq.env2string env) (Liq.t2string_sort ty1)  (Liq.t2string_sort ty2)
 
@@ -28,7 +30,7 @@ let cons2string_human = function
   |WF (env, ty) ->
     let bindings = String.concat "; " (Liq.env_bindings env) in
         Printf.sprintf "WF\n %s\n%s" bindings (Liq.t2string ty)
-  |Sub (env, ty1, ty2) ->
+  |Sub {body = (env, ty1, ty2)} ->
     Printf.sprintf "Sub\n%s \n<:\n %s"
                    (Liq.t2string ty1)  (Liq.t2string ty2)
 
@@ -48,7 +50,7 @@ let scons2string = function
                    senv_str
                    (Formula.p2string e1)
     
-  |SSub (env, e1, e2) ->
+  |SSub {body = (env, e1, e2)} ->
     Printf.sprintf "--------------------------------------------------\n%s\n--------------------------------------------------\n%s <:%s\n"
                    (Liq.env2string env)
                    (Formula.p2string e1)
@@ -56,7 +58,7 @@ let scons2string = function
 
  
 let inst_scons sita = function
-  |SSub (env, e1, e2) ->
+  |SSub {body = (env, e1, e2)} ->
     let e1' = Formula.substitution sita e1 in
     let e2' = Formula.substitution sita e2 in    
     let env_formula = Liq.env2formula env (S.union (Formula.fv e1') (Formula.fv e2')) in
@@ -66,7 +68,7 @@ let inst_scons sita = function
 let scons2string_human sita sc=
   match sc with
   |SWF _ -> scons2string  sc
-  |SSub (env, e1, e2) ->
+  |SSub {body = (env, e1, e2)} ->
     let (env_fomula, e1, e2) = inst_scons sita sc in
     let env_fomula_list = Formula.list_and env_fomula in
     let env_fomula_list_str =
@@ -82,7 +84,7 @@ let scons2string_human sita sc=
                           
 (* use Liq.env2formula_all  *)     
 let is_valid_simple_cons = function
-  |SSub (env, e1, e2 ) -> (* env/\e => sita*P *)
+  |SSub {body = (env, e1, e2 )} -> (* env/\e => sita*P *)
     let env_formula = Liq.env2formula env (S.union (Formula.fv e1) (Formula.fv e2)) in
     let p = (Formula.Implies ( (Formula.And (env_formula,e1)), e2)) in
     let z3_p,p_s = UseZ3.convert p in
