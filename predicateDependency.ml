@@ -115,10 +115,10 @@ let rec prop_up p pg_graph (tord: PNode.t -> int) escape_ps  acc_ps =
     let acc_ps = PSet.add p acc_ps in
     PG.fold_succ
       (fun q acc->
-        if tord p = tord q then
-          acc
-        else
-          let () = assert (tord p > tord q) in
+        (* if tord p = tord q then *)
+        (*   acc *)
+        (* else *)
+          let () = assert (tord p >= tord q) in
           prop_up q pg_graph tord escape_ps acc 
       )
       pg_graph

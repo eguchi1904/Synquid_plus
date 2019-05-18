@@ -103,8 +103,11 @@ let fresh_from_annotation dinfos env anno =
   new_tmp, [WF (env, new_tmp)], new_ann_cs
 
 (* 生成するunknown predicateは、少なくとも一つクリーンな（pendign substなどがない）
-well formued constratint を持つ *)
-let rec cons_gen dinfos env (t:Liq.schema TaSyn.t) req_ty =
+well formued constratint を持つ
+rec_env < env
+再帰定義中の関数の環境
+ *)
+let rec cons_gen dinfos env rec_env (t:Liq.schema TaSyn.t) req_ty =
   match t with
   |TaSyn.PLet ((x, (alist, [],ty)), t1, t2) when S.mem x (TaSyn.fv t1)-> (* recursive def *)
     let new_tmp_x, new_tmp_cs, new_ann_cs = fresh_from_annotation dinfos env ty in
@@ -114,15 +117,17 @@ let rec cons_gen dinfos env (t:Liq.schema TaSyn.t) req_ty =
     let () = log_tmp x new_tmp_x in
     (* disable let polimorphism for predicate *)
     let env2 =  (Liq.env_add_schema env (x, new_tmp_x_sch)) in
-    let (t1', c1, ann_c1) = cons_gen dinfos env2 t1 new_tmp_x in
+    let rec_env2 =  (Liq.env_add_schema rec_env (x, new_tmp_x_sch)) in (* add to rec_env *)
+    let (t1', c1, ann_c1) = cons_gen dinfos env2 rec_env2 t1 new_tmp_x in
     (* let env2 =  (Liq.env_add env (x, tmp1)) in *)
-    let (t2', c2, ann_c2) = cons_gen dinfos env2 t2 req_ty in
+    let (t2', c2, ann_c2) = cons_gen dinfos env2 rec_env t2 req_ty in
     (TaSyn.PLet ((x, new_tmp_x_sch), t1', t2'),
      new_tmp_cs@c1@c2,
      new_ann_cs@ann_c1@ann_c2
     )
   |TaSyn.PLet ((x, (alist,[], ty)), t1, t2) ->
-    let new_tmp_x, new_tmp_cs, new_ann_cs = fresh_from_annotation dinfos env ty in      let (t1', c1, ann_c1) = cons_gen dinfos env t1 new_tmp_x in
+    let new_tmp_x, new_tmp_cs, new_ann_cs = fresh_from_annotation dinfos env ty in
+    let (t1', c1, ann_c1) = cons_gen dinfos env rec_env t1 new_tmp_x in
     (* disable let polimorphism for predicate *)
     let new_tmp_x_sch = (alist, [], new_tmp_x) in
    (* logging *)
@@ -130,7 +135,7 @@ let rec cons_gen dinfos env (t:Liq.schema TaSyn.t) req_ty =
     let () = log_tmp x new_tmp_x in
     let env2 =  (Liq.env_add_schema env (x, new_tmp_x_sch )) in
     (* let env2 =  (Liq.env_add env (x, tmp1)) in *)
-    let (t2', c2, ann_c2) = cons_gen dinfos env2 t2 req_ty in
+    let (t2', c2, ann_c2) = cons_gen dinfos env2 rec_env t2 req_ty in
     (TaSyn.PLet ((x, new_tmp_x_sch), t1',t2'),
      new_tmp_cs@c1@c2,
      new_ann_cs@ann_c1@ann_c2
@@ -138,26 +143,26 @@ let rec cons_gen dinfos env (t:Liq.schema TaSyn.t) req_ty =
   |TaSyn.PLet _ -> assert false
    
   |TaSyn.PE e ->
-    let (e', (Liq.TLet (c_env, tmp_e)), c, ann_c) = cons_gen_e dinfos env e in
+    let (e', (Liq.TLet (c_env, tmp_e)), c, ann_c) = cons_gen_e dinfos env rec_env e in
     let new_c = [Sub ((Liq.env_append env c_env), tmp_e, req_ty)] in
     let () = log_cons "" new_c in
     (TaSyn.PE e', new_c@c, ann_c )
   |TaSyn.PI b ->
-    let b', c, ann_c = cons_gen_b dinfos env b req_ty in
+    let b', c, ann_c = cons_gen_b dinfos env rec_env b req_ty in
     (TaSyn.PI b', c, ann_c)
   |TaSyn.PF f ->
-    let f', c, ann_c = cons_gen_f dinfos env f req_ty in
+    let f', c, ann_c = cons_gen_f dinfos env rec_env f req_ty in
     (TaSyn.PF f', c, ann_c)
   |TaSyn.PHole -> assert false
                 
-and cons_gen_e dinfos env e =
+and cons_gen_e dinfos env rec_env e =
   match e with
   |TaSyn.PAppFo (e1, e2) ->
-    (match cons_gen_e dinfos env e1 with
+    (match cons_gen_e dinfos env rec_env e1 with
      (* e1 :: x:tmp_in -> tmp_out *)
      |e1', (Liq.TLet (c_env1, (Liq.TFun ((x, tmp_in), tmp_out) ) )), c1, ann_c1 ->
        let open Formula in
-       let e2', Liq.TLet (c_env2, tmp2), c2, ann_c2 = cons_gen_e dinfos env e2 in
+       let e2', Liq.TLet (c_env2, tmp2), c2, ann_c2 = cons_gen_e dinfos env rec_env e2 in
        (match tmp2 with
         | Liq.TScalar (b, Eq (Var (_, valvar), e2_value))
              when  valvar = Id.valueVar_id ->
@@ -226,8 +231,8 @@ and cons_gen_e dinfos env e =
       |> Ml.ta_infer_f (Ml.shape_env env)
       |> fresh (Liq.mk_sort_env env) dinfos
     in
-    let (f1', c_f1, c_f1_ann) = cons_gen_f dinfos env f1 tmp_f1 in
-    (match cons_gen_e dinfos env e1 with
+    let (f1', c_f1, c_f1_ann) = cons_gen_f dinfos env rec_env f1 tmp_f1 in
+    (match cons_gen_e dinfos env rec_env e1 with
      |e1', (Liq.TLet (c_env1, Liq.TFun ((x, tmp_in), tmp_out) )), c_e1, c_e1_ann ->
        let new_c =    [(Sub (Liq.env_append env c_env1, tmp_f1, tmp_in));
                        WF (env, tmp_f1)]
@@ -339,7 +344,7 @@ and cons_gen_e dinfos env e =
               |> fresh (Liq.mk_sort_env env) dinfos
     in
     let new_c = [WF (env, tmp)] in
-    let (f_in', c_f, c_f_anno) = cons_gen_f dinfos env f_in tmp in
+    let (f_in', c_f, c_f_anno) = cons_gen_f dinfos env rec_env f_in tmp in
     (* logging *)
     let () = log_place "inner function" (TaSyntax.PF f_in) in
     let () = log_tmp "inner function" tmp in
@@ -363,12 +368,12 @@ and cons_gen_e dinfos env e =
     
 
 
-and cons_gen_b dinfos env b req_ty =
+and cons_gen_b dinfos env rec_env b req_ty =
   match b with
   |TaSyn.PIf (e1, t2, t3) ->
     (* logging *)
     let () = log_place "if judgement" (TaSyntax.PE e1) in 
-    let (e1', (Liq.TLet (c_env1, tmp1)), c1, c1_ann) = cons_gen_e dinfos env e1 in
+    let (e1', (Liq.TLet (c_env1, tmp1)), c1, c1_ann) = cons_gen_e dinfos env rec_env e1 in
     (match tmp1 with
      |Liq.TScalar (Liq.TBool, phi) ->
        let phi_true =           (* [true/_v]phi *)
@@ -385,10 +390,10 @@ and cons_gen_b dinfos env b req_ty =
        let env_false = Liq.env_add_F (Liq.env_append env c_env1) phi_false in
        (* logging *)
        let () = log_place "if true" t2 in 
-       let (t2', c2, c2_ann) = cons_gen dinfos env_true t2 req_ty in
+       let (t2', c2, c2_ann) = cons_gen dinfos env_true rec_env t2 req_ty in
        (* logging *)
        let () = log_place "if false" t3 in 
-       let (t3', c3, c3_ann) = cons_gen dinfos env_false t3 req_ty in
+       let (t3', c3, c3_ann) = cons_gen dinfos env_false rec_env t3 req_ty in
        (TaSyn.PIf (e1', t2', t3'),
         c1@c2@c3,
         c1_ann@c2_ann@c3_ann)
@@ -399,9 +404,9 @@ and cons_gen_b dinfos env b req_ty =
     (Printf.printf "match temp:\n%s\n" (Liq.t2string req_ty));
     (* logging *)
     let () = log_place "match scru" (TaSyntax.PE e1) in 
-    let (e1', e1_tmp, c1, c1_ann) = cons_gen_e dinfos env e1 in
+    let (e1', e1_tmp, c1, c1_ann) = cons_gen_e dinfos env rec_env e1 in
     let case_list', case_list_c, case_list_c_ann =
-      List.map (cons_gen_case dinfos env req_ty e1_tmp) case_list
+      List.map (cons_gen_case dinfos env rec_env req_ty e1_tmp) case_list
       |> (fun l ->List.fold_right
                     (fun  (case, c, c_ann) (case_list, cs, cs_ann)->
                       case::case_list,
@@ -414,9 +419,9 @@ and cons_gen_b dinfos env b req_ty =
      case_list_c@c1,
      case_list_c_ann)
 
-and cons_gen_case dinfos env req_ty e_tmp  {TaSyn.constructor= con;
-                                            TaSyn.argNames = x_sch_list;
-                                            TaSyn.body = t}
+and cons_gen_case dinfos env rec_env req_ty e_tmp  {TaSyn.constructor= con;
+                                                    TaSyn.argNames = x_sch_list;
+                                                    TaSyn.body = t}
   =
   match e_tmp with
   |Liq.TLet (c_env1, (Liq.TScalar (Liq.TData (i, tys, pas), phi))) ->
@@ -447,7 +452,7 @@ and cons_gen_case dinfos env req_ty e_tmp  {TaSyn.constructor= con;
                     (M.singleton Id.valueVar_id z_var) phi)
     in
     
-    let (t', c_t, c_t_ann) = cons_gen dinfos env' t req_ty in
+    let (t', c_t, c_t_ann) = cons_gen dinfos env' rec_env t req_ty in
     let x_sch_list' = List.map (fun (x,ty) -> (x, Liq.mk_mono_schmea ty)) x_t_list in
     ({TaSyn.constructor = con;
      TaSyn.argNames = x_sch_list';
@@ -456,7 +461,7 @@ and cons_gen_case dinfos env req_ty e_tmp  {TaSyn.constructor= con;
     c_t_ann)
   | _ -> assert false
 
-and cons_gen_f dinfos env f req_ty =
+and cons_gen_f dinfos env rec_env f req_ty =
   match f with
   |(TaSyn.PFun ((x, x_sch_ann), t)) ->
     (match req_ty with
@@ -466,7 +471,7 @@ and cons_gen_f dinfos env f req_ty =
        (match Liq.type2sort req_ty_in with
         |None ->                   (* x' and x do not occur in req_ty_out  *)
           let env' =  (Liq.env_add env (x, req_ty_in)) in
-          let (t', c_t, c_t_ann) = cons_gen dinfos env' t req_ty_out in
+          let (t', c_t, c_t_ann) = cons_gen dinfos env' rec_env t req_ty_out in
           (TaSyn.PFun ((x, Liq.mk_mono_schmea req_ty_in), t'),
            c_t,
            c_ann@c_t_ann)
@@ -474,7 +479,7 @@ and cons_gen_f dinfos env f req_ty =
           let env' =  (Liq.env_add env (x', req_ty_in)) in
           (* adjust argument variable to require type *)
           let replaced_t = TaSyn.replace (M.singleton x x') t in (* [x->x'] *)
-          let (t', c_t, c_t_ann) = cons_gen dinfos env' replaced_t req_ty_out in
+          let (t', c_t, c_t_ann) = cons_gen dinfos env' rec_env  replaced_t req_ty_out in
           (TaSyn.PFun ((x', Liq.mk_mono_schmea req_ty_in), t'),
            c_t,
           c_ann@c_t_ann)
@@ -507,8 +512,11 @@ let cons_gen_infer dinfos env t  =
   let () = log_tmp "toplevel" tmp in
   let () = log_cons "" [new_c] in
 
-  let (t', cs, cs_ann) = cons_gen dinfos env t tmp in
+  let (t', cs, cs_ann) = cons_gen dinfos env Liq.env_empty t tmp in
   let cs = new_c::cs in
   (t', tmp, cs, cs_ann)
 
+  
+let cons_gen_check dinfos env t req_ty =
+  cons_gen dinfos env Liq.env_empty t req_ty
   
