@@ -97,9 +97,9 @@ let mk_tmp dinfos env t =
   let tmp = fresh senv dinfos (Ml.ta_infer (Ml.shape_env env) t) in
   tmp
 
-let fresh_from_annotation dinfos env anno =
+let fresh_from_annotation dinfos env defining anno =
   let new_tmp = fresh (Liq.mk_sort_env env) dinfos (Ml.shape anno) in
-  let new_ann_cs = [Sub (env, new_tmp, anno); WF (env, anno)] in
+  let new_ann_cs = [Sub {body = (env, new_tmp, anno); defining = defining}; WF (env, anno)] in
   new_tmp, [WF (env, new_tmp)], new_ann_cs
 
 (* 生成するunknown predicateは、少なくとも一つクリーンな（pendign substなどがない）
@@ -109,7 +109,7 @@ defining定義している途中の型環境
 let rec cons_gen dinfos env defining (t:Liq.schema TaSyn.t) req_ty =
   match t with
   |TaSyn.PLet ((x, (alist, [],ty)), t1, t2) when S.mem x (TaSyn.fv t1)-> (* recursive def *)
-    let new_tmp_x, new_tmp_cs, new_ann_cs = fresh_from_annotation dinfos env ty in
+    let new_tmp_x, new_tmp_cs, new_ann_cs = fresh_from_annotation dinfos env defining ty in
     let new_tmp_x_sch = (alist, [], new_tmp_x) in
     (* logging *)
     let () = log_cons ""  new_tmp_cs in
@@ -125,7 +125,7 @@ let rec cons_gen dinfos env defining (t:Liq.schema TaSyn.t) req_ty =
      new_ann_cs@ann_c1@ann_c2
     )
   |TaSyn.PLet ((x, (alist,[], ty)), t1, t2) ->
-    let new_tmp_x, new_tmp_cs, new_ann_cs = fresh_from_annotation dinfos env ty in
+    let new_tmp_x, new_tmp_cs, new_ann_cs = fresh_from_annotation dinfos env defining ty in
     (* disable let polimorphism for predicate *)
     let new_tmp_x_sch = (alist, [], new_tmp_x) in    
     let defining_x = Liq.env_add_schema defining (x, new_tmp_x_sch) in
@@ -144,7 +144,7 @@ let rec cons_gen dinfos env defining (t:Liq.schema TaSyn.t) req_ty =
    
   |TaSyn.PE e ->
     let (e', (Liq.TLet (c_env, tmp_e)), c, ann_c) = cons_gen_e dinfos env defining e in
-    let new_c = [Sub ((Liq.env_append env c_env), tmp_e, req_ty)] in
+    let new_c = [Sub {body = ((Liq.env_append env c_env), tmp_e, req_ty); defining = defining}] in
     let () = log_cons "" new_c in
     (TaSyn.PE e', new_c@c, ann_c )
   |TaSyn.PI b ->
@@ -168,7 +168,9 @@ and cons_gen_e dinfos env defining e =
              when  valvar = Id.valueVar_id ->
            let tmp_out' = Liq.substitute_F (M.singleton x e2_value) tmp_out in
            let c_env = (Liq.env_append c_env1 c_env2)  in
-           let new_c = [(Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in))] in
+           let new_c = [(Sub {body = (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in);
+                              defining = defining})]
+           in
            (* logging *)
            let e1_ty_str =  (Liq.t2string_sort (Liq.TFun ((x, tmp_in), tmp_out) )) in
            let () = log_place(Printf.sprintf "application:%s" e1_ty_str) (TaSyntax.PE e) in 
@@ -182,7 +184,9 @@ and cons_gen_e dinfos env defining e =
              when  valvar = Id.valueVar_id ->
            let tmp_out' = Liq.substitute_F (M.singleton x e2_value) tmp_out in
            let c_env = (Liq.env_append c_env1 c_env2)  in
-           let new_c = [(Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in))] in
+           let new_c = [(Sub {body = (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in);
+                              defining = defining})]
+           in
            (* logging *)
            let e1_ty_str =  (Liq.t2string_sort (Liq.TFun ((x, tmp_in), tmp_out) )) in           
            let () = log_place (Printf.sprintf "application:%s" e1_ty_str)  (TaSyntax.PE e) in 
@@ -206,7 +210,8 @@ and cons_gen_e dinfos env defining e =
           (*                             (Formula.substitution *)
           (*                                (M.singleton Id.valueVar_id x') tmp2_phi)) *)
           (* in *)
-          let new_c =[Sub (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in)] in
+          let new_c =[Sub {body = (Liq.env_append env (Liq.env_append c_env1 c_env2), tmp2, tmp_in);
+                          defining = defining}] in
           
           (* logging *)
           let e1_ty_str =  (Liq.t2string_sort (Liq.TFun ((x, tmp_in), tmp_out) )) in           
@@ -234,7 +239,8 @@ and cons_gen_e dinfos env defining e =
     let (f1', c_f1, c_f1_ann) = cons_gen_f dinfos env defining f1 tmp_f1 in
     (match cons_gen_e dinfos env defining e1 with
      |e1', (Liq.TLet (c_env1, Liq.TFun ((x, tmp_in), tmp_out) )), c_e1, c_e1_ann ->
-       let new_c =    [(Sub (Liq.env_append env c_env1, tmp_f1, tmp_in));
+       let new_c =    [(Sub {body = (Liq.env_append env c_env1, tmp_f1, tmp_in);
+                             defining = defining});
                        WF (env, tmp_f1)]
        in
        (* logging *)
@@ -298,7 +304,7 @@ and cons_gen_e dinfos env defining e =
        in
        (* typeのinstantiate *)
        let tys_tmp, tys_wf_cs, tys_ann_cs =
-         List.map (fresh_from_annotation dinfos env) tys
+         List.map (fresh_from_annotation dinfos env defining) tys
          |> (fun l -> List.fold_right (* fold-leftにすると,tys_tmpの順番が反転してしまう *)
                         (fun (tmp, tmp_cs, ann_cs)  (acc_tmp, acc_tmp_cs, acc_ann_cs) ->
                           (tmp::acc_tmp), (tmp_cs@acc_tmp_cs), (ann_cs@acc_ann_cs))
@@ -357,7 +363,7 @@ and cons_gen_e dinfos env defining e =
      
   |TaSyn.PAuxi (g, sch) ->
     let ty = Liq.schema2ty sch in
-    let g_tmp, g_tmp_cs, g_ann_cs = fresh_from_annotation dinfos Liq.env_empty ty in
+    let g_tmp, g_tmp_cs, g_ann_cs = fresh_from_annotation dinfos Liq.env_empty defining ty in
     let () = log_tmp "auxi" g_tmp in
     let () = log_cons "" g_tmp_cs in
     let g_sch = Liq.mk_mono_schmea g_tmp in
@@ -467,7 +473,7 @@ and cons_gen_f dinfos env defining f req_ty =
     (match req_ty with
      |Liq.TFun ((x', req_ty_in), req_ty_out) ->
        let x_ty_ann = Liq.schema2ty x_sch_ann in
-       let c_ann = [Sub (env, req_ty_in, x_ty_ann); WF (env, x_ty_ann)] in
+       let c_ann = [Sub {body = (env, req_ty_in, x_ty_ann);defining = defining}; WF (env, x_ty_ann)] in
        (match Liq.type2sort req_ty_in with
         |None ->                   (* x' and x do not occur in req_ty_out  *)
           let env' =  (Liq.env_add env (x, req_ty_in)) in

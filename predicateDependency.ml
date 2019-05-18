@@ -52,7 +52,7 @@ module PG = struct
 
 
   let add_dependecy_from_c p2pnode pg_graph =function     (* (negS.t, pos_list)  *)
-    |Constraint.SSub (env, e1, e2) ->
+    |Constraint.SSub {body = (env, e1, e2)} ->
       let p_e1 = Formula.extract_unknown_p e1 in
       let p_e2 = Formula.extract_unknown_p e2 in
       let p_e1_list = S.elements p_e1 |> List.map p2pnode in

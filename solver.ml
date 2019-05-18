@@ -30,12 +30,12 @@ exception RefineErr of string
 let refine assign c=
   let open Constraint in
   match c with
-  |SSub (_, _, Formula.Unknown(_, sort_sita, sita, p)) ->
+  |SSub {body = (_, _, Formula.Unknown(_, sort_sita, sita, p))} ->
     let c' = Constraint.subst_simple_cons assign c
              |> Constraint.replace_unknown_p_to_top
     in
     (match c' with
-     |SSub (env, e, _) ->
+     |SSub {body = (env, e, _)} ->
        let p_phi_list = M.find p assign |> Formula.list_and in
        let env_phi = Liq.env2formula_all env in
        let p_phi_list =

@@ -43,7 +43,7 @@ let log_refine mes k_list before_pcandi after_pcandi c =
   in
   let related_unknown_p =
     match c with
-    |SSub (env, e, ks) ->      
+    |SSub {body = (env, e, ks)} ->      
       S.union (Formula.extract_unknown_p ks)
               (S.union (Formula.extract_unknown_p e)
                        (Liq.env_extract_unknown_p env))
@@ -132,15 +132,15 @@ let subst_inv (sita:Formula.subst) :Formula.subst =
 
 let rec extend_qualifiers cs (qs: Qualifier.t list) =
   match cs with
-  |SSub (env, Formula.Unknown _, Formula.Unknown _) :: cs' -> 
+  |SSub {body = (env, Formula.Unknown _, Formula.Unknown _)} :: cs' -> 
   (* raise (Invalid_argument "predicateunknown vs predicateunknown") *)
     extend_qualifiers cs' qs
-  |SSub (env, Formula.Unknown (_, _, sita, i), e) :: cs'
+  |SSub {body = (env, Formula.Unknown (_, _, sita, i), e)} :: cs'
        when S.is_empty (Formula.extract_unknown_p e)->
     (* let sita_inv = subst_inv sita in *)
     (* let e' = Formula.substitution sita_inv e in *)
     extend_qualifiers cs' ((Qualifier.formula_to_qualifier e)::qs)
-  |SSub (env, e, Formula.Unknown (_, _, sita, i)) :: cs'
+  |SSub {body = (env, e, Formula.Unknown (_, _, sita, i))} :: cs'
           when S.is_empty (Formula.extract_unknown_p e) ->
     (* let sita_inv = subst_inv sita in *)
     (* let e' = Formula.substitution sita_inv e in *)
@@ -152,7 +152,7 @@ let rec extend_qualifiers cs (qs: Qualifier.t list) =
 
 
 let rec k_positive_pos cs = match cs with
-  |SSub (env, e1, e2) :: cs' ->
+  |SSub {body = (env, e1, e2)} :: cs' ->
     let env_formula = Liq.env2formula env (S.union (Formula.fv e1) (Formula.fv e2)) in
     let e2_list = Formula.list_and e2 in
     let k_set_e2 = List.fold_left
@@ -268,7 +268,7 @@ let filter_qualifiers sita_pcandi env e (sort_sita_i, sita_i, qs) =
 (* filterしても、自由変数の出現がへり、invalidのままということがありえる *)     
 let rec refine z3_env pcandi c =       (* cがvalidになるようにする。 *)
   match c with
-  |SSub (env, e, ks) ->
+  |SSub {body = (env, e, ks)} ->
     let k_list = Formula.list_and ks in
     let sita_pcandi = M.map (fun tlist -> Formula.and_list tlist) pcandi in
     let (env_phi,_,_) = inst_scons sita_pcandi c in

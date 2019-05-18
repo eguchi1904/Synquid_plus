@@ -530,7 +530,7 @@ module Constructor = struct
     
   let gen_fixability_map graph c =
     match c with
-    |Constraint.SSub (env, e1, (Formula.Unknown(senv, sort_sita, sita, p) as e2)) ->
+    |Constraint.SSub {body = (env, e1, (Formula.Unknown(senv, sort_sita, sita, p) as e2))} ->
 
       let env_e1 = Liq.env_add_F env e1 in      
       let neg_map = gen_fixability_map_neg graph env_e1
@@ -552,7 +552,7 @@ module Constructor = struct
         let env = G.pLavel_of_id graph p |> G.get_p_env graph in
         let bound, wait_pc = upgrade_unbound M.empty env unbound in
         M.add p (bound, wait_pc) neg_map
-    |Constraint.SSub (env, e1, e2) ->
+    |Constraint.SSub {body = (env, e1, e2)} ->
       (assert (S.is_empty (Formula.extract_unknown_p e2)) );
       let env_e1 = Liq.env_add_F env e1 in            
       gen_fixability_map_neg graph env_e1
