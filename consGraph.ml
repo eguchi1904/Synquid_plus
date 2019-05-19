@@ -93,6 +93,12 @@ sig
     
   val neg_cs: t -> pLavel -> cLavel list
 
+  val outer_cs: t -> pLavel -> pLavel list option
+
+  val outer_prefered_direction: t -> pLavel -> PreferedDirection.t option
+
+  val is_outer: t -> pLavel -> cLavel -> bool
+
   val get_p_env: t -> pLavel -> Liq.env
 
   val is_upp_p: t -> pLavel -> bool
@@ -323,6 +329,22 @@ let update_direction2down t p =
 
   let neg_cs graph p =
     graph.pTable.(p).neg
+
+  let outer_cs graph p =
+    match graph.pTable.(p).outer with
+    |Some (direc, outer_cs) -> Some outer_cs
+    |None -> None
+
+  let outer_prefered_direction graph p =
+    match graph.pTable.(p).outer with
+    |Some (direc, outer_cs) -> Some direc
+    |None -> None    
+
+  let is_outer graph p c =
+    match graph.pTable.(p).outer with
+    |Some (direc, outer_cs) -> List.mem c outer_cs
+    |None -> false
+    
 
   let get_p_env graph p =
     graph.pTable.(p).env

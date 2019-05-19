@@ -26,31 +26,49 @@ let state_to_string = function
   |ZeroFixable -> "ZeroFixable"
 
 
-                
-let calc_p_info p state pol =
-  match state with
+let calc_fixable_cons_info  =function
   |Fixed _ -> invalid_arg "calc_priority: already fixed"
   |AllFixable rc ->
     PredicateInfo.{fixLevel = PredicateFixableLevel.all
-                  ;otherPCount =Some  !(rc.otherPCount)
-                  ;fixableNum = Some !(rc.fixableNum)
-                  ;pol = pol
-             ;lavel = p
-    }
+                  ;otherPCount = Some  !(rc.otherPCount)
+                  ;fixableNum = Some !(rc.fixableNum)}
   |PartialFixable ->
     PredicateInfo.{fixLevel = PredicateFixableLevel.partial
-             ;otherPCount = None
-             ;fixableNum = None
-             ;pol = pol
-             ;lavel = p
-    }
+                  ;otherPCount = None
+                  ;fixableNum = None}
+
   |ZeroFixable ->
     PredicateInfo.{fixLevel = PredicateFixableLevel.zero
-             ;otherPCount = None
-             ;fixableNum = None
-             ;pol = pol
-             ;lavel = p
-    }      
+                  ;otherPCount = None
+                  ;fixableNum = None}
+
+  
+let is_outer_polarity graph p pol =
+  ((G.outer_prefered_direction graph p) = Some ConsGraph.PreferedDirection.down && pol = Polarity.pos)
+||  ((G.outer_prefered_direction graph p) = Some ConsGraph.PreferedDirection.up && pol = Polarity.neg)
+  
+                
+let calc_p_info graph p state outer_state_opt pol =
+  let whole_info = calc_fixable_cons_info state in
+  match outer_state_opt with
+  |Some outer_state ->
+    (* polがouterの向きと一致している時だけ、predicateInfoにout sateの情報を入れる *)
+    if is_outer_polarity graph p pol then
+      let outer_info = calc_fixable_cons_info outer_state in
+      PredicateInfo.{wholeInfo = whole_info
+                    ;outerInfo = Some outer_info
+                    ;pol = pol
+                    ;lavel = p}
+    else
+      PredicateInfo.{wholeInfo = whole_info
+                    ;outerInfo = None
+                    ;pol = pol
+                    ;lavel = p}    
+  |None ->
+    PredicateInfo.{wholeInfo = whole_info
+                  ;outerInfo = None
+                  ;pol = pol
+                  ;lavel = p}    
 
 
 
@@ -93,28 +111,43 @@ let is_fixed t p =
 
 let isnt_fixed t p = not (is_fixed t p)
 
+let othere_pmap_of_allfixable_pos t p =
+  match t.posTable.(G.int_of_pLavel p) with
+  |AllFixable {otherPMap = other_pmap} -> Some other_pmap
+  | _ -> None
+
+let othere_pmap_of_allfixable_neg t p =
+  match t.negTable.(G.int_of_pLavel p) with
+  |AllFixable {otherPMap = other_pmap} -> Some other_pmap
+  | _ -> None
+
+let othere_pmap_of_allfixable_outer t p =
+  match t.outerTable.(G.int_of_pLavel p) with
+  |Some (AllFixable {otherPMap = other_pmap}) -> Some other_pmap
+  | _ -> None              
+
 (* ************************************************** *)
 (* queueにstateを反映させる関数群 *)
 (* ************************************************** *)
                    
-let push2queue_pos q state ~change:queue =
-  let p_info = calc_p_info q state Polarity.pos in
+let push2queue_pos graph q state outer_sate_opt ~change:queue =
+  let p_info = calc_p_info graph q state outer_sate_opt Polarity.pos in
   let priority = PriorityQueue.calc_priority queue p_info in
   PriorityQueue.push_pos queue q priority
 
-let push2queue_neg q state ~change:queue =
-  let p_info = calc_p_info q state Polarity.neg in
+let push2queue_neg graph q state outer_state_opt ~change:queue =
+  let p_info = calc_p_info graph q state outer_state_opt  Polarity.neg in
   let priority = PriorityQueue.calc_priority queue p_info in
   PriorityQueue.push_neg queue q priority  
 
 
-let update_queue_pos q state ~change:queue =
-  let p_info = calc_p_info q state Polarity.pos in
+let update_queue_pos graph q state outer_state_opt ~change:queue =
+  let p_info = calc_p_info graph q state outer_state_opt Polarity.pos in
   let priority = PriorityQueue.calc_priority queue p_info in
   PriorityQueue.update_pos queue q priority
 
-let update_queue_neg q state ~change:queue =
-  let p_info = calc_p_info q state Polarity.neg in
+let update_queue_neg graph q state outer_state_opt ~change:queue =
+  let p_info = calc_p_info graph q state outer_state_opt Polarity.neg in
   let priority = PriorityQueue.calc_priority queue p_info in
   PriorityQueue.update_neg queue q priority  
 
@@ -125,20 +158,38 @@ let update_queue_neg q state ~change:queue =
 (* ここで、unfixのやつにしか伝播させないという工夫が必要だな、 *)
 let fix {posTable = pos_table
         ;negTable =  neg_table
+        ;outerTable = outer_table
         ;posAffect =  pos_affect
-        ;negAffect =  neg_affect } p
+        ;negAffect =  neg_affect
+        ;outerAffect = outer_affect} graph p
         ~may_change:queue =
   let p = G.int_of_pLavel p in
   pos_table.(p) <- Fixed pos_table.(p);
-  neg_table.(p) <- Fixed neg_table.(p);  
+  neg_table.(p) <- Fixed neg_table.(p);
+  (match outer_table.(p) with
+   |Some outer_state -> outer_table.(p) <- Some (Fixed outer_state)
+   |None -> ()
+  );
+  let () = (PMap.iter
+              (fun q i ->
+                let q_state_opt = outer_table.(G.int_of_pLavel q) in
+                match  q_state_opt with
+                |Some (Fixed _)-> ()
+                |Some (AllFixable rc) ->
+                  (rc.otherPCount := !(rc.otherPCount) - i);
+                (* queueへの変更は、pos affect かneg affectの反映の時に行われるのでここではしない *)
+                |_ -> ())
+              outer_affect.(p) )
+  in  
   let () = (PMap.iter
               (fun q i ->
                 let q_state = pos_table.(G.int_of_pLavel q) in
                 match  q_state with
                 |Fixed _-> ()
                 |AllFixable rc ->
+                  let q_outer_state_opt = outer_table.(G.int_of_pLavel q) in
                   (rc.otherPCount := !(rc.otherPCount) - i);
-                  push2queue_pos q q_state  ~change:queue
+                  push2queue_pos graph q q_state q_outer_state_opt ~change:queue
                 |_ -> ())
               pos_affect.(p) )
   in
@@ -148,47 +199,72 @@ let fix {posTable = pos_table
                 match  q_state with                    
                 |Fixed _ ->  ()
                 |AllFixable  rc ->
+                  let q_outer_state_opt = outer_table.(G.int_of_pLavel q) in                  
                   (rc.otherPCount := !(rc.otherPCount) - i);
-                  push2queue_neg q q_state ~change:queue                  
+                  push2queue_neg graph q q_state q_outer_state_opt ~change:queue                  
                 |_ -> ())
               neg_affect.(p) )      
   in
   ()
 
 
-
+(* 
+   unfixが呼ばれた時の状態:
+   　pos_table.(p) = Fixed pre_state  
+   neg_table.(p) = Fixed pre_state
+   outer_table.(p) = Fixed pre_state
+   pos_affet.(p) = <pがfixした時の状態を保持している>
+   neg_affect, outer_affectも同様
+*)
 let unfix {posTable = pos_table
           ;negTable =  neg_table
+          ;outerTable = outer_table
           ;posAffect =  pos_affect
-          ;negAffect =  neg_affect } p
+          ;negAffect =  neg_affect
+          ;outerAffect = outer_affect} graph p
           ~may_change:queue =
   let p = G.int_of_pLavel p  in
   let () = (PMap.iter
               (fun q i ->
+                let q_state_opt = outer_table.(G.int_of_pLavel q) in
+                match  q_state_opt with
+                |Some (Fixed _)-> ()
+                |Some (AllFixable rc) ->
+                  (rc.otherPCount := !(rc.otherPCount) + i);
+                (* queueへの変更は、pos affect かneg affectの反映の時に行われるのでここではしない *)
+                |_ -> ())
+              outer_affect.(p) )
+
+  in
+  let () = (PMap.iter
+              (fun q i ->
                 let q_state = pos_table.(G.int_of_pLavel q) in
-                match  q_state with                      
+                match  q_state with
                 |Fixed _-> ()
                 |AllFixable rc ->
+                  let q_outer_state_opt = outer_table.(G.int_of_pLavel q) in
                   (rc.otherPCount := !(rc.otherPCount) + i);
-                  push2queue_pos q q_state ~change:queue
-                |_ -> assert false)
+                  push2queue_pos graph q q_state q_outer_state_opt ~change:queue
+                |_ -> ())
               pos_affect.(p) )
   in
   let () = (PMap.iter
               (fun q i ->
                 let q_state = neg_table.(G.int_of_pLavel q) in
-                match  q_state with                                        
+                match  q_state with                    
                 |Fixed _ ->  ()
-                |AllFixable rc ->
-                  (rc.otherPCount := !(rc.otherPCount) + i);
-                  push2queue_neg q q_state ~change:queue                                    
-                |_ -> assert false)
-              neg_affect.(p) )      
+                |AllFixable  rc ->
+                  let q_outer_state_opt = outer_table.(G.int_of_pLavel q) in                  
+                  (rc.otherPCount := !(rc.otherPCount) - i);
+                  push2queue_neg graph q q_state q_outer_state_opt ~change:queue                  
+                |_ -> ())
+              neg_affect.(p) )        
   in      
   match pos_table.(p), neg_table.(p) with
-  |pos_pre_state, neg_pre_state ->
+  |Fixed pos_pre_state, Fixed neg_pre_state ->
     pos_table.(p) <- pos_pre_state;
     neg_table.(p) <- neg_pre_state
+  |_ -> assert false
 
 
 let list_unfixed state_table p adj_list =
@@ -206,6 +282,11 @@ let update_affect affect p othere_unknown_map =
   PMap.iter
     (fun q i -> affect.(G.int_of_pLavel q) <- PMap.add p i affect.(G.int_of_pLavel q) )
     othere_unknown_map
+
+let update_affect_if_all_fixable affect p updated_state =
+  match updated_state with
+  |AllFixable rc -> update_affect affect p rc.otherPMap
+  | _ -> ()
 
   
 let remove_affect affect p othere_unknown_map =
@@ -237,54 +318,6 @@ let count_unknown unknown_map =
     0      
   
 
-(* partial -> allfiable
-       zero -> allfixable
-       にupdateするときは特別, affect mapを必要とするため *)       
-let pos_update2allfixable' t p fixable_num (othere_unknown_map: int PMap.t) = 
-  let pos_table = t.posTable in
-  match pos_table.(G.int_of_pLavel p) with
-  |Fixed _ | AllFixable _ ->
-    invalid_arg "pos_update2allfixable: decreasing update"
-  |PartialFixable |ZeroFixable ->
-    let unknown_count = count_unknown othere_unknown_map in
-    let state = AllFixable {fixableNum = ref fixable_num
-                           ;otherPCount = ref unknown_count
-                           ;otherPMap = othere_unknown_map}
-    in
-    pos_table.(G.int_of_pLavel p) <- state;
-    (update_affect t.posAffect p othere_unknown_map);
-    state
-    
-    
-let neg_update2allfixable' t p fixable_num (othere_unknown_map: int PMap.t) = 
-  let neg_table = t.negTable in
-  match neg_table.(G.int_of_pLavel p) with
-  |Fixed _ | AllFixable _ ->
-    invalid_arg "neg_update2allfixable: decreasing update"
-  |PartialFixable |ZeroFixable ->
-    let unknown_count = count_unknown othere_unknown_map in
-    let state = AllFixable {fixableNum = ref fixable_num
-                           ;otherPCount = ref unknown_count
-                           ;otherPMap = othere_unknown_map}
-    in
-    neg_table.(G.int_of_pLavel p) <- state;
-    (update_affect t.negAffect p othere_unknown_map);
-    state
-    
-    
-let pos_update2allfixable t p (othere_unknown_map: int PMap.t)
-                          fixable_num ~change:queue =
-  let updated_state = pos_update2allfixable' t p fixable_num othere_unknown_map in
-  update_queue_pos p updated_state ~change:queue
-
-  
-  
-
-let neg_update2allfixable t p (othere_unknown_map: int PMap.t)
-                          fixable_num ~change:queue =
-  let updated_state = neg_update2allfixable' t p fixable_num othere_unknown_map in
-  update_queue_neg p updated_state ~change:queue  
-  
   
 (* backtraceでこうなることもあるね、
      affectから自分を消してから変更する*)
@@ -311,19 +344,6 @@ let fixable_level_to_fix_state fixable_level fixable_num (calc_othere_p: unit ->
   else
     assert false
     
-    
-
-let update_table table p fixable_level =
-  if fixable_level = PredicateFixableLevel.partial then
-    let () = table.(G.int_of_pLavel p) <- PartialFixable in
-    PartialFixable
-  else if fixable_level = PredicateFixableLevel.zero then
-    let () = table.(G.int_of_pLavel p) <- ZeroFixable in
-    ZeroFixable
-  else if fixable_level = PredicateFixableLevel.all then
-    invalid_arg "update: use update2allfixable!"            
-  else
-    assert false
 
 (* update pos table by fixable level (and othere auxiliary info) *)
 let pos_update' t p fixable_level fixable_num calc_ohere_p =
@@ -334,10 +354,12 @@ let pos_update' t p fixable_level fixable_num calc_ohere_p =
     remove_affect t.posAffect p rc.otherPMap;
     let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_ohere_p in
     let () = pos_table.(G.int_of_pLavel p) <- new_state in
+    let () = update_affect_if_all_fixable t.posAffect p new_state in    
     new_state
   |PartialFixable |ZeroFixable ->
     let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_ohere_p in
-    let () = pos_table.(G.int_of_pLavel p) <- new_state in    
+    let () = pos_table.(G.int_of_pLavel p) <- new_state in
+    let () = update_affect_if_all_fixable t.posAffect p new_state in        
     new_state
 
     
@@ -350,10 +372,12 @@ let neg_update' t p fixable_level fixable_num calc_other_p =
     remove_affect t.negAffect p rc.otherPMap;
     let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_other_p in
     let () = neg_table.(G.int_of_pLavel p) <- new_state in
+    let () = update_affect_if_all_fixable t.negAffect p new_state in    
     new_state
   |PartialFixable |ZeroFixable ->
     let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_other_p in
     let () = neg_table.(G.int_of_pLavel p) <- new_state in
+    let () = update_affect_if_all_fixable t.negAffect p new_state in
     new_state
 
 (* update outer table by fixable level (and othere auxiliary info) *)
@@ -365,38 +389,45 @@ let outer_update' t p fixable_level fixable_num calc_other_p =
     remove_affect t.outerAffect p rc.otherPMap;
     let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_other_p in
     let () = outer_table.(G.int_of_pLavel p) <- Some new_state in
+    let () = update_affect_if_all_fixable t.outerAffect p new_state in        
     new_state
   |Some PartialFixable |Some ZeroFixable ->
     let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_other_p in
     let () = outer_table.(G.int_of_pLavel p) <- Some new_state in
+    let () = update_affect_if_all_fixable t.outerAffect p new_state in            
     new_state
   |None -> invalid_arg "outer_update: try to update outer state of predicate without outer constraints "
 
-let pos_update t p fixable_level
-               ~change:queue = 
-  let updated_state = (pos_update' t p fixable_level) in
-  update_queue_pos p updated_state ~change:queue
-
-let neg_update t p fixable_level
-               ~change:queue = 
-  let updated_state = (neg_update' t p fixable_level) in
-  update_queue_neg p updated_state ~change:queue
-
+  
 let pos_update t graph p
                ~pos_info:(fixable_level, calc_othere_p, fixable_num)
                ~outer_info:outer_info
-               ~chage:queue
+               ~change:queue
   =
   match outer_info with
   |Some (fixable_level_out, calc_othere_out, fixable_num_out) ->
     let updated_state_pos = pos_update' t p fixable_level fixable_num calc_othere_p in
     let updated_state_outer = outer_update' t p fixable_level_out fixable_num_out calc_othere_out in
-    
-    
-    
-    
-    
+    update_queue_pos graph p updated_state_pos (Some updated_state_outer) ~change:queue
+  |None ->
+    let updated_state_pos = pos_update' t p fixable_level fixable_num calc_othere_p in
+    update_queue_pos graph p updated_state_pos None ~change:queue
 
+    
+let neg_update t graph p
+               ~neg_info:(fixable_level, calc_othere_p, fixable_num)
+               ~outer_info:outer_info
+               ~change:queue
+  =
+  match outer_info with
+  |Some (fixable_level_out, calc_othere_out, fixable_num_out) ->
+    let updated_state_neg = neg_update' t p fixable_level fixable_num calc_othere_p in
+    let updated_state_outer = outer_update' t p fixable_level_out fixable_num_out calc_othere_out in
+    update_queue_neg graph p updated_state_neg (Some updated_state_outer) ~change:queue
+  |None ->
+    let updated_state_neg = neg_update' t p fixable_level fixable_num calc_othere_p in
+    update_queue_neg graph p updated_state_neg None ~change:queue        
+    
   
 let pos_decr_othere_p_form_allfixable' t p (rm_map:int PMap.t) = 
   let pos_table = t.posTable in
