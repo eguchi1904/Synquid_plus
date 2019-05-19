@@ -26,8 +26,7 @@ let to_fixable_level  {fixable = fixable; unfixable =unfixable} =
   
 type t = {posRatio: fixRatio array
          ;negRatio: fixRatio array
-         ;outerRatio: fixRatio array
-         ;
+         ;outerRatio: fixRatio option array
          }
 
 let of_string graph t =
@@ -47,7 +46,13 @@ let of_string graph t =
     (ratio_array2str t.posRatio)
     (ratio_array2str t.negRatio)
   
-        
+
+let unfixable2fixable_fixratio ~change:{ fixable = fixable_ref; unfixable = unfixable_ref } =
+    (assert (!unfixable_ref > 0));
+    (decr unfixable_ref);
+    (incr fixable_ref);
+    let fixable_level_change =(!fixable_ref = 1) || (!unfixable_ref = 0) in
+    fixable_level_change
 
 (* 要求:
      pはfixedではない、
@@ -55,41 +60,69 @@ let of_string graph t =
      unfixableをfixableにする
  *)
 (* unfixable--; fixable++ *)
-let unfixable2fixable t p pol (calc_othere_p:unit -> int PMap.t)
+let unfixable2fixable t graph c p pol (calc_othere_p:unit -> int PMap.t) (calc_othere_outer_opt:(unit -> int PMap.t) option )
                       ~may_change:(pfix_state, queue) =
-  if pol = Polarity.pos then
-    let fix_ratio = t.posRatio.(G.int_of_pLavel p) in
-    let unfixable = fix_ratio.unfixable in
-    let fixable = fix_ratio.fixable in
-    (assert (!unfixable > 0));
-    (decr unfixable);
-    (incr fixable);
-    if !unfixable = 0 then
-      let map = calc_othere_p () in
-      PFixState.pos_update2allfixable pfix_state p map
-                                      !fixable ~change:queue
-    else if !fixable = 1 then
-      PFixState.pos_update pfix_state p (to_fixable_level fix_ratio)
-                           ~change:queue
+  let is_outer = G.is_outer graph c p in
+  if is_outer then
+    begin
+      match t.outerRatio.(G.int_of_pLavel p), calc_othere_outer_opt with
+      |None, _ |_ , None -> assert false
+      |Some fix_ratio_outer, Some calc_othere_outer ->
+        let change_outer = unfixable2fixable_fixratio ~change:fix_ratio_outer in       
+        if pol = Polarity.pos then
+          let fix_ratio_pos = t.posRatio.(G.int_of_pLavel p) in
+          let change = unfixable2fixable_fixratio ~change:fix_ratio_pos in    
+          if change || change_outer then
+            let new_fix_level = to_fixable_level fix_ratio_pos in
+            let new_fix_level_outer = to_fixable_level fix_ratio_outer in
+            PFixState.pos_update pfix_state p
+                                 ~pos_info:(new_fix_level, calc_othere_p, !(fix_ratio_pos.fixable))
+                                 ~outer_info:(Some (new_fix_level_outer, calc_othere_p_outer, !(fix_ratio_outer.fixable)))
+                                 ~change:queue
+          else
+            ()
+        else if pol = Polarity.neg then
+          let fix_ratio_neg = t.negRatio.(G.int_of_pLavel p) in
+          let change = unfixable2fixable_fixratio ~change:fix_ratio_neg in         
+          if change || change_outer then
+            let new_fix_level = to_fixable_level fix_ratio_neg in
+            let new_fix_level_outer = to_fixable_level fix_ratio_outer in
+            PFixState.neg_update pfix_state p
+                                 ~neg_info:(new_fix_level, calc_othere_p, !(fix_ratio_neg.fixable))
+                                 ~outer_info:(Some (new_fix_level_outer, calc_othere_p_outer, !(fix_ratio_outer.fixable)))
+                                 ~change:queue
+          else
+            ()
+        else
+          assert false
+    end           
+  else                          (* not outer *)
+    if pol = Polarity.pos then
+      let fix_ratio_pos = t.posRatio.(G.int_of_pLavel p) in
+      let change = unfixable2fixable_fixratio ~change:fix_ratio_pos in          
+      if change then
+        let new_fix_level = to_fixable_level fix_ratio_pos in
+        PFixState.pos_update pfix_state p
+                             ~pos_info:(new_fix_level, calc_othere_p, !(fix_ratio_pos.fixable))
+                             ~outer_info:None
+                             ~change:queue        
+      else
+        ()
+    else if pol = Polarity.neg then
+      let fix_ratio_neg = t.negRatio.(G.int_of_pLavel p) in
+      let change = unfixable2fixable_fixratio ~change:fix_ratio_neg in
+      if change then
+        let new_fix_level = to_fixable_level fix_ratio_neg in
+        PFixState.neg_update pfix_state p
+                             ~neg_info:(new_fix_level, calc_othere_p, !(fix_ratio_pos.fixable))
+                             ~outer_info:None
+                             ~change:queue
+      else
+        ()
     else
-      ()
-  else
-    let fix_ratio = t.negRatio.(G.int_of_pLavel p) in
-    let unfixable = fix_ratio.unfixable in
-    let fixable = fix_ratio.fixable in
-    (assert (!unfixable > 0));      
-    (decr unfixable);
-    (incr fixable);
-    if !unfixable = 0 then
-      let map = calc_othere_p () in
-      PFixState.neg_update2allfixable pfix_state p map
-                                      !fixable ~change:queue
-    else if !fixable = 1 then
-      PFixState.neg_update pfix_state p (to_fixable_level fix_ratio)
-                           ~change:queue
-    else
-      ()    
-
+      assert false
+     
+        
 
 (* fixable--; unfixalbe (unchange)  *)
 let remove_fixable t p pol (calc_removing_othere_p:unit -> int PMap.t)

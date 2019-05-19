@@ -58,10 +58,11 @@ let calc_p_info p state pol =
    
 type t = {posTable: state array
          ;negTable: state array
+         ;outerTable: state option array
          
          ;posAffect: int PMap.t array
          ;negAffect: int PMap.t array
-
+         ;outerAffect: int PMap.t array
          }
 
 
@@ -155,7 +156,7 @@ let fix {posTable = pos_table
   ()
 
 
-(* この時点で、pをunfixしたことによる、fixableLevelの変化は反映されていないといけない *)
+
 let unfix {posTable = pos_table
           ;negTable =  neg_table
           ;posAffect =  pos_affect
@@ -296,6 +297,22 @@ let neg_update2allfixable t p (othere_unknown_map: int PMap.t)
 (*   |_ -> invalid_arg "pos_update_from_allfixable: not allfixable" *)
 (* 上がるのにも下がるのにも対応する backtraceがあるので *)
 
+let fixable_level_to_fix_state fixable_level fixable_num (calc_othere_p: unit -> int PMap.t) =
+  if fixable_level = PredicateFixableLevel.partial then
+    PartialFixable
+  else if fixable_level = PredicateFixableLevel.zero then
+    ZeroFixable
+  else if fixable_level = PredicateFixableLevel.all then
+    let othere_unknown_map = calc_othere_p () in
+    let unknown_count = count_unknown othere_unknown_map in
+    AllFixable {fixableNum = ref fixable_num
+               ;otherPCount = ref unknown_count
+               ;otherPMap = othere_unknown_map}
+  else
+    assert false
+    
+    
+
 let update_table table p fixable_level =
   if fixable_level = PredicateFixableLevel.partial then
     let () = table.(G.int_of_pLavel p) <- PartialFixable in
@@ -307,27 +324,53 @@ let update_table table p fixable_level =
     invalid_arg "update: use update2allfixable!"            
   else
     assert false
-  
-let pos_update' t p fixable_level =
+
+(* update pos table by fixable level (and othere auxiliary info) *)
+let pos_update' t p fixable_level fixable_num calc_ohere_p =
   let pos_table = t.posTable in
   match pos_table.(G.int_of_pLavel p) with
   |Fixed _ -> invalid_arg "pos_update:attempt to update fixed predicate "
   |AllFixable rc ->
     remove_affect t.posAffect p rc.otherPMap;
-    update_table pos_table p fixable_level
+    let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_ohere_p in
+    let () = pos_table.(G.int_of_pLavel p) <- new_state in
+    new_state
   |PartialFixable |ZeroFixable ->
-    update_table pos_table p fixable_level
+    let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_ohere_p in
+    let () = pos_table.(G.int_of_pLavel p) <- new_state in    
+    new_state
 
-
-let neg_update' t p fixable_level =
+    
+(* update neg table by fixable level (and othere auxiliary info) *)
+let neg_update' t p fixable_level fixable_num calc_other_p =
   let neg_table = t.negTable in
   match neg_table.(G.int_of_pLavel p) with
   |Fixed _ -> invalid_arg "neg_update:attempt to update fixed predicate "
   |AllFixable rc ->
     remove_affect t.negAffect p rc.otherPMap;
-    update_table neg_table p fixable_level
+    let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_other_p in
+    let () = neg_table.(G.int_of_pLavel p) <- new_state in
+    new_state
   |PartialFixable |ZeroFixable ->
-    update_table neg_table p fixable_level
+    let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_other_p in
+    let () = neg_table.(G.int_of_pLavel p) <- new_state in
+    new_state
+
+(* update outer table by fixable level (and othere auxiliary info) *)
+let outer_update' t p fixable_level fixable_num calc_other_p =
+  let outer_table = t.outerTable in
+  match outer_table.(G.int_of_pLavel p) with
+  |Some (Fixed _) -> invalid_arg "neg_update:attempt to update fixed predicate "
+  |Some (AllFixable rc) ->
+    remove_affect t.outerAffect p rc.otherPMap;
+    let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_other_p in
+    let () = outer_table.(G.int_of_pLavel p) <- Some new_state in
+    new_state
+  |Some PartialFixable |Some ZeroFixable ->
+    let new_state = fixable_level_to_fix_state fixable_level fixable_num calc_other_p in
+    let () = outer_table.(G.int_of_pLavel p) <- Some new_state in
+    new_state
+  |None -> invalid_arg "outer_update: try to update outer state of predicate without outer constraints "
 
 let pos_update t p fixable_level
                ~change:queue = 
@@ -338,6 +381,21 @@ let neg_update t p fixable_level
                ~change:queue = 
   let updated_state = (neg_update' t p fixable_level) in
   update_queue_neg p updated_state ~change:queue
+
+let pos_update t graph p
+               ~pos_info:(fixable_level, calc_othere_p, fixable_num)
+               ~outer_info:outer_info
+               ~chage:queue
+  =
+  match outer_info with
+  |Some (fixable_level_out, calc_othere_out, fixable_num_out) ->
+    let updated_state_pos = pos_update' t p fixable_level fixable_num calc_othere_p in
+    let updated_state_outer = outer_update' t p fixable_level_out fixable_num_out calc_othere_out in
+    
+    
+    
+    
+    
 
   
 let pos_decr_othere_p_form_allfixable' t p (rm_map:int PMap.t) = 

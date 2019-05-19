@@ -373,7 +373,7 @@ let update_direction2down t p =
         adj_map.defining.(k) <- (v::l)
       
       
-    let add_p_map p_hash p_map c_lav pos_ps neg_ps othere_ps outer_ps =
+    let add_p_map p_hash p_map c_lav pos_ps neg_ps othere_ps defining_ps =
         let () = S.iter
                    (fun p ->
                      let p_lav = Hashtbl.find p_hash p in
@@ -397,12 +397,12 @@ let update_direction2down t p =
                    (fun p ->
                      let p_lav = Hashtbl.find p_hash p in
                      add_defining p_map p_lav c_lav)
-                   outer_ps
+                  defining_ps
         in        
         ()
 
         
-    let add_c_map p_hash c_map c_lav pos_ps neg_ps othere_ps outer_ps =
+    let add_c_map p_hash c_map c_lav pos_ps neg_ps othere_ps defining_ps =
         let () = S.iter
                    (fun p ->
                      let p_lav = Hashtbl.find p_hash p in
@@ -426,7 +426,7 @@ let update_direction2down t p =
                    (fun p ->
                      let p_lav = Hashtbl.find p_hash p in
                      add_defining c_map c_lav p_lav)
-                   outer_ps
+                   defining_ps
         in
         ()        
       
@@ -436,13 +436,13 @@ let update_direction2down t p =
         let pos_ps, neg_ps, othere_ps =
           Constraint.positive_negative_unknown_p c
         in
-        let outer_ps = Constraint.outer_unknown_in_simple_cons c in
+        let defining_ps = Constraint.defining_unknown_in_simple_cons c in
         let pos_ps_list = S.elements pos_ps in
         let neg_ps_list = S.elements neg_ps in
         let othere_ps_list = S.elements othere_ps in        
         let c_lav = add_c_array c_array c in
-        let () = add_p_map p_hash p_map c_lav pos_ps neg_ps othere_ps outer_ps in
-        let () = add_c_map p_hash c_map c_lav pos_ps neg_ps othere_ps outer_ps in
+        let () = add_p_map p_hash p_map c_lav pos_ps neg_ps othere_ps defining_ps in
+        let () = add_c_map p_hash c_map c_lav pos_ps neg_ps othere_ps defining_ps in
         scan_sub_cs p_hash c_array p_map c_map other
         
       |(Constraint.SWF _)::other ->
@@ -506,11 +506,13 @@ let update_direction2down t p =
       else
         PreferedDirection.any
                      
-    let mk_outer p p_lav up_ps_out down_ps_out defining =
-      if S.mem p up_ps_out then
-        Some (PreferedDirection.up, defining.(p_lav))
-      else if S.mem p down_ps_out then
-        Some (PreferedDirection.down, defining.(p_lav))
+    let mk_outer p p_lav up_ps_out down_ps_out p_map =
+      if S.mem p up_ps_out then (* outがup: outerはneg cs / neg_csのうちでdefiningでないものを選ぶ *)
+        let outer_cs = List.filter (fun c -> not (List.mem c p_map.defining.(p_lav))) p_map.neg.(p_lav) in
+        Some (PreferedDirection.up, outer_cs)
+      else if S.mem p down_ps_out then (* outerがdown: outerはpos cs *)
+        let outer_cs = List.filter (fun c -> not (List.mem c p_map.defining.(p_lav))) p_map.pos.(p_lav) in
+        Some (PreferedDirection.down, outer_cs)
       else
         None
       
@@ -525,7 +527,7 @@ let update_direction2down t p =
                                       ;senv = p_senv_array.(p_lav)
                                       ;pos = p_map.pos.(p_lav)
                                       ;neg = p_map.neg.(p_lav)
-                                      ;outer = mk_outer p p_lav up_ps_out down_ps_out p_map.defining
+                                      ;outer = mk_outer p p_lav up_ps_out down_ps_out p_map
                                       }
                  )
                  p_hash

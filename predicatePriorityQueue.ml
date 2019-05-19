@@ -84,9 +84,12 @@ end
 
 
 module PredicateInfo = struct
-  type t ={fixLevel: PredicateFixableLevel.t
-          ;otherPCount: int option
-          ;fixableNum: int option
+  type fixable_cons_info = {fixLevel: PredicateFixableLevel.t
+                           ;otherPCount: int option
+                           ;fixableNum: int option}
+                         
+  type t ={wholeInfo: fixable_cons_info
+          ;outerInfo: fixable_cons_info option
           ;pol: Polarity.t
           ;lavel: G.pLavel }
 
@@ -95,7 +98,8 @@ end
     
 module Priority = struct
   (* the most important factor is fixable level *)
-  type t = {fixLevel: PredicateFixableLevel.t
+  type t = {fixLevelIncludeOuter: PredicateFixableLevel.t (* max (fix_levle, outer_fix_level) *)
+           ;fixLevel: PredicateFixableLevel.t
            ;preferedPol: PreferedPolarity.t
            ;otherPCount: int
            ;fixableNum:int
@@ -113,7 +117,8 @@ module Priority = struct
     
   (* priorityの値が小さい方が優先順位が低い
    言葉の意味が反転してしまっている*)
-  let max = {fixLevel = PredicateFixableLevel.zero
+  let max = {fixLevelIncludeOuter = PredicateFixableLevel.zero
+            ;fixLevel = PredicateFixableLevel.zero
             ;preferedPol = PreferedPolarity.neg
             ;otherPCount = max_int
             ;fixableNum = max_int
@@ -122,7 +127,9 @@ module Priority = struct
           
   let compare rc1 rc2 =
     (*  *)
-    if rc1.fixLevel <> rc2.fixLevel then
+    if rc1.fixLevelIncludeOuter <> rc2.fixLevelIncludeOuter then
+      compare rc1.fixLevelIncludeOuter rc2.fixLevelIncludeOuter
+    else if rc1.fixLevel <> rc2.fixLevel then
       compare rc1.fixLevel rc2.fixLevel
     else if rc1.preferedPol <> rc2.preferedPol then
       compare rc1.preferedPol rc2.preferedPol
@@ -249,26 +256,42 @@ end  = struct
     let p = p_info.PredicateInfo.lavel in
     let prefer = t.preferedPol.(G.int_of_pLavel p) in
     let pol = p_info.PredicateInfo.pol in
-    let init_fix_level = p_info.PredicateInfo.fixLevel in
-    (* ad-hoc *)
-    let fix_level = PredicateFixableLevel.add_twisted_info
-                      init_fix_level
-                      pol
-                      prefer
-                      p_info.PredicateInfo.fixableNum                  
+    let init_fix_level_whole = p_info.PredicateInfo.wholeInfo.fixLevel in
+    let init_fix_level_outer =
+      match p_info.PredicateInfo.outerInfo with
+      |Some {fixLevel = fix_level} -> fix_level
+      |None -> PredicateFixableLevel.zero
     in
+    let fixable_num_out =
+      match p_info.PredicateInfo.outerInfo with
+      |Some {fixableNum = fixable_num} -> fixable_num
+      |None -> None
+    in
+    (* ad-hoc / 今となってはこれが必要かどうかは微妙だ。*)
+    let fix_level_whole = PredicateFixableLevel.add_twisted_info
+                            init_fix_level_whole
+                            pol
+                            prefer
+                            p_info.PredicateInfo.wholeInfo.fixableNum                  
+    in
+    let fix_level_outer = PredicateFixableLevel.add_twisted_info
+                            init_fix_level_outer
+                            pol
+                            prefer
+                            fixable_num_out
+    in    
     let pc_count =
-      match p_info.PredicateInfo.otherPCount with
+      match p_info.wholeInfo.otherPCount with
       |Some i-> i
       |None -> -1               (* dummy *)
     in
     let fixable_num =
-      match p_info.PredicateInfo.fixableNum with
+      match p_info.wholeInfo.fixableNum with
       |Some i-> i
       |None -> -1               (* dummy *)
     in    
-    
-    Priority.{fixLevel = fix_level
+    Priority.{fixLevelIncludeOuter = min fix_level_whole fix_level_outer
+             ;fixLevel = fix_level_whole
              ;preferedPol = prefer
              ;otherPCount = pc_count
              ;fixableNum =  fixable_num

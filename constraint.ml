@@ -192,8 +192,9 @@ let defining_unknown_in_simple_cons = function
   |SWF _ -> invalid_arg "outer_ps: well formuedness constraint"
   |(SSub {body = (env, e1, e2); defining = defining} as c) ->
     let ps = unknown_p_in_simple_cons c in
+    let defining_ps = Liq.env_extract_unknown_p defining in
     (*定義が終了したものだけを返す  *)
-    S.filter (fun p -> (Liq.env_mem defining p)) ps
+    S.filter (fun p -> (S.mem p defining_ps)) ps
     
     
 let is_predicate_normal_position = function
