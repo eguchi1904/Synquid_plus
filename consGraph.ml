@@ -402,7 +402,7 @@ sig
         adj_map.neg.(k) <- (v::l)
 
     let add_defining adj_map k v =
-      let l = adj_map.neg.(k) in
+      let l = adj_map.defining.(k) in
       if not (List.mem v l) then      
         adj_map.defining.(k) <- (v::l)
       

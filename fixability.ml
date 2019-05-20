@@ -158,7 +158,7 @@ let mk_flatten_subst senv sita =
                       Formula.Eq (Formula.Var (x_sort, x), e))
                |> Formula.and_list
   in
-  Formula.subst_compose delta freshing_sita
+  Formula.subst_compose delta freshing_sita (* variable to variable substitution *)
   , eq_phi
 
 let extract_argument_vars senv env =
@@ -173,6 +173,20 @@ let extract_argument_vars senv env =
 (*   let () = assert false in *)
 (*   ret *)
   
+let apply_flatten_sita_to_env assign flatten_sita env =
+  let flatten_replace = mk_replace_table flatten_sita in
+  let flatten_sita_for_fv =    
+    M.filter (fun x _ -> not (Liq.env_mem env x) && (x <> Id.valueVar_id)) flatten_sita
+  in
+ (* bindされていない、_v以外の変数への代入を行う 
+    これが必要になってしまったのは、matchのところでfreeなzをconditionに入れてしまうせい
+*)  
+  let env'  = Liq.env_substitute_F flatten_sita_for_fv env in  
+  let env'' =  Liq.env_substitute_F assign env' (* x:T .. -> x':T.. *)
+              |>Liq.env_replace flatten_replace
+  in
+  env''
+  
 
 (* envはpが定義されたところでの環境 *)
 let mk_bound assign senv env pending_sita = function
@@ -181,10 +195,7 @@ let mk_bound assign senv env pending_sita = function
      |None -> invalid_arg "Solver.mk_bound: cons_env and env mismatch"
      |Some local_env ->
        let flatten_sita, eq_phi = mk_flatten_subst senv pending_sita in
-       let flatten_replace = mk_replace_table flatten_sita in
-       let local_env' = Liq.env_substitute_F assign local_env (* ここはやらなくても良い *)
-                        |>Liq.env_replace flatten_replace     (* envの変数をreplaceするための関数 *)
-       in
+       let local_env' = apply_flatten_sita_to_env assign flatten_sita local_env in
        let e1' = Formula.substitution assign e1 
                  |>Formula.substitution flatten_sita
        in
@@ -221,15 +232,11 @@ let mk_bound assign senv env pending_sita = function
        let pending_sita_debug = M.bindings pending_sita in
        let flatten_replace = mk_replace_table flatten_sita in       
        let flatten_sita_debug = M.bindings flatten_sita in
-       let local_env' = Liq.env_substitute_F assign local_env (* ここはやらなくても良い *)
-                        |>Liq.env_replace flatten_replace
-       in
+       let local_env' = apply_flatten_sita_to_env assign flatten_sita local_env in       
        let e1' = Formula.substitution assign e1 
                  |>Formula.substitution flatten_sita
        in
-       let cons_front_env' = Liq.env_substitute_F assign cons_front_env
-                             |>Liq.env_substitute_F flatten_sita
-       in
+       let cons_front_env' = apply_flatten_sita_to_env assign flatten_sita cons_front_env in       
        let require_env = Liq.env_add_F cons_front_env' eq_phi in
        let require = (require_env, e1') in
        let require_fv = Liq.env2formula_all require_env

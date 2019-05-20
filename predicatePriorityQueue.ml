@@ -141,7 +141,7 @@ module Priority = struct
     else if rc1.pol <> rc2.pol then
       compare rc1.pol rc2.pol
     else
-      compare rc1.lavel rc2.lavel (* 反転 *)
+      compare rc2.lavel rc1.lavel (* 反転 *)
     
 end
             
@@ -275,12 +275,13 @@ end  = struct
                             prefer
                             p_info.PredicateInfo.wholeInfo.fixableNum                  
     in
-    let fix_level_outer = PredicateFixableLevel.add_twisted_info
-                            init_fix_level_outer
-                            pol
-                            prefer
-                            fixable_num_out
-    in    
+    (* let fix_level_outer = PredicateFixableLevel.add_twisted_info *)
+    (*                         init_fix_level_outer *)
+    (*                         pol *)
+    (*                         prefer *)
+    (*                         fixable_num_out *)
+    (* in     *)
+    let fix_level_outer = init_fix_level_outer in (* twistにしない *)
     let pc_count =
       match p_info.wholeInfo.otherPCount with
       |Some i-> i

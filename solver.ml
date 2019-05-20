@@ -321,7 +321,19 @@ let get_qfree_sol graph assign p_lav sol pol fixability =
           invalid_arg "not implimented yet" (* refineする *)
       end
     else
-      false
+      (* 遅くなるかもしれないけど *)
+      let c' = Constraint.subst_simple_cons assign (G.cons_of_cLavel graph c_lavel) in
+      match c' with
+      |Constraint.SSub {body = (env, e1,e2)}when S.is_empty (Formula.extract_unknown_p e2) ->
+        let is_already_valid =
+          Constraint.replace_unknown_p_to_top c'
+          |> Constraint.is_valid_simple_cons_all in
+        if is_already_valid then
+          let () = CFixState.fix cfix_state c_lavel in
+          true
+        else
+          false
+      |_ -> false
     
     
      
