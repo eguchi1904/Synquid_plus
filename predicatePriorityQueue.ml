@@ -107,7 +107,8 @@ module Priority = struct
            ;lavel: G.pLavel }
 
   let to_string graph t =
-    Printf.sprintf "{%s; otherPCouunt:%d; fixableNum:%d; %s; %s}"
+    Printf.sprintf "{(%s, %s); otherPCouunt:%d; fixableNum:%d; %s; %s}"
+                   (PredicateFixableLevel.to_string t.fixLevelIncludeOuter)    
                    (PredicateFixableLevel.to_string t.fixLevel)
                    t.otherPCount
                    t.fixableNum

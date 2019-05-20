@@ -43,7 +43,8 @@ sig
   val create : int -> t
 
   val outer_registor :
-    t -> G.pLavel -> (int * int) option -> unit
+    t -> G.pLavel -> (int * int * (unit -> int PMap.t)) option
+    -> change:PredicateFixState.t -> unit
     
   val pos_registor :
     t -> G.t 

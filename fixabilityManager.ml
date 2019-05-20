@@ -357,12 +357,19 @@ module Constructor = struct
         )
     |None -> None
 
-  let outer_registor graph t ~change:fixable_count=
+  let outer_registor graph t ~change:(fixable_count, pfix_state)=
     G.iter_p
       (fun p ->
         let fixable_unfixable_opt = outer_count_fixable_unfixable_opt t graph p in
+        let calc_out_opt = gen_calc_othere_outer_opt_init t graph p in
+        let out_info =
+          match fixable_unfixable_opt, calc_out_opt with
+          |Some (fixable, unfixable), Some calc_othere -> Some (fixable, unfixable, calc_othere)
+          |None, None -> None
+          |_ -> assert false
+        in            
         PFixableConstraintCounter.Constructor.outer_registor
-        fixable_count p fixable_unfixable_opt
+        fixable_count p out_info ~change:pfix_state
       )
     graph
          
@@ -400,7 +407,7 @@ module Constructor = struct
     let fixable_count = PFixableConstraintCounter.Constructor.create p_num in
     let pfix_state = PFixState.Constructor.create p_num in
     let queue = PriorityQueue.create up_p_set down_p_set p_num in
-    let () = outer_registor graph t ~change:fixable_count in
+    let () = outer_registor graph t ~change:(fixable_count, pfix_state) in
     let () = pos_registor graph t ~change:(fixable_count, pfix_state, queue) in
     let () = neg_registor graph t ~change:(fixable_count, pfix_state, queue) in    
     (t, fixable_count, pfix_state, queue)

@@ -93,6 +93,21 @@ let table_to_string graph table =
                  table
   in
   str
+
+let outer_table_to_string graph table =
+  let _, str = Array.fold_left
+                 (fun (i,acc_str) state_opt ->
+                   match state_opt with
+                   |Some state ->
+                     let str = (G.id_of_int graph i)^ " -> " ^ (state_to_string state) in
+                     (i+1, acc_str ^ "\n" ^ str)
+                   |None ->
+                     let str = (G.id_of_int graph i)^ " -> None" in
+                     (i+1, acc_str ^ "\n" ^ str))
+                 (0, "")
+                 table
+  in
+  str  
   
 
 let to_string graph t =
@@ -100,6 +115,8 @@ let to_string graph t =
   ^(table_to_string graph t.posTable)
   ^"\nneg table\n"
   ^(table_to_string graph t.negTable)
+  ^"\nouter table\n"
+  ^(outer_table_to_string graph t.outerTable)  
       
       
 
@@ -440,6 +457,13 @@ module Constructor = struct
                     ;negAffect = Array.make size PMap.empty
                     ;outerAffect = Array.make size PMap.empty
                     }
+
+  let outer_register t p fixable_level_out fixable_num_out calc_other_out =
+    let outer_table = t.outerTable in
+    let new_state = fixable_level_to_fix_state fixable_level_out fixable_num_out calc_other_out in
+    let () = outer_table.(G.int_of_pLavel p) <- Some new_state in
+    let () = update_affect_if_all_fixable t.outerAffect p new_state in            
+    ()    
 
   let pos_registor = pos_update
     

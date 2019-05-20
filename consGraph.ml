@@ -238,6 +238,7 @@ sig
       (fun p acc_str ->
         let pos_cs = t.pTable.(p).pos in
         let neg_cs = t.pTable.(p).neg in
+        let out_cs_opt = t.pTable.(p).outer in
         let pos_cs_str = pos_cs
                          |> List.map string_of_int
                          |> String.concat ","
@@ -246,11 +247,22 @@ sig
                          |> List.map string_of_int
                          |> String.concat ","
         in
+        let out_cs_str =
+          match out_cs_opt with
+          |None -> "none"
+          |Some (prefer, outer_cs) ->
+            outer_cs
+            |> List.map string_of_int
+            |> String.concat ","
+            |> (fun s->
+             "out_direc:"^(PreferedDirection.to_string prefer)^"["^s^"]")
+        in
         let str = Printf.sprintf
-                    "\n%s -pos->[%s]; -neg->[%s]"
+                    "\n%s -pos->[%s]; -neg->[%s]; -outer->%s"
                     (id_of_pLavel t p)
                     pos_cs_str
                     neg_cs_str
+                    out_cs_str
         in
         acc_str^str)
     t

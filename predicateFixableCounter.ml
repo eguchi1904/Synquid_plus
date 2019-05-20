@@ -41,10 +41,29 @@ let of_string graph t =
     in
     str
   in
+  let out_ratio_array2str arr =
+    let _,str = Array.fold_left
+                  (fun (i,acc_str)  fix_ratio_opt ->
+                    match fix_ratio_opt with
+                    |Some {fixable = fixable; unfixable =unfixable} ->
+                      let p_id = G.id_of_int graph i in
+                      let str = Printf.sprintf "%s -> {fixable = %d; unfixable = %d}\n" p_id !fixable !unfixable in
+                      (i+1,acc_str^str)
+                    |None ->
+                      let p_id = G.id_of_int graph i in
+                      let str = Printf.sprintf "%s ->None" p_id in
+                      (i+1,acc_str^str) 
+                  )
+                  (0,"")
+                  arr
+    in
+    str
+  in
   Printf.sprintf
-    "Pos ratio\n--------------------------------------------------\n%s\nNeg ratio\n--------------------------------------------------\n%s"
+    "Pos ratio\n--------------------------------------------------\n%s\nNeg ratio\n--------------------------------------------------\n%s\nOut Ratio\n--------------------------------------------------\n%s"
     (ratio_array2str t.posRatio)
     (ratio_array2str t.negRatio)
+    (out_ratio_array2str t.outerRatio)
   
 
 let unfixable2fixable_fixratio ~change:{ fixable = fixable_ref; unfixable = unfixable_ref } =
@@ -322,12 +341,14 @@ module Constructor = struct
                      negRatio = Array.make size dummy_ratio;
                      outerRatio = Array.make size None}
 
-  let outer_registor t p fixable_unfixable_opt =
-    match fixable_unfixable_opt with
-    |Some (fixable_c, unfixable_c) ->
+  (* tと、pfix_stateのouterの値を初期化する *)
+  let outer_registor t p outer_info_opt ~change:pfix_state =
+    match outer_info_opt with
+    |Some (fixable_c, unfixable_c, calc_othere_out) ->
       let fix_ratio = {fixable = ref fixable_c; unfixable = ref unfixable_c } in
       let () = t.outerRatio.(G.int_of_pLavel p) <- Some fix_ratio in
-      ()
+      let fix_level = to_fixable_level fix_ratio in
+      PFixState.Constructor.outer_register pfix_state p fix_level fixable_c calc_othere_out
     |None ->
       let () = t.outerRatio.(G.int_of_pLavel p) <- None in
       ()
