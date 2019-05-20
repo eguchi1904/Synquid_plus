@@ -429,102 +429,20 @@ let neg_update t graph p
     update_queue_neg graph p updated_state_neg None ~change:queue        
     
   
-let pos_decr_othere_p_form_allfixable' t p (rm_map:int PMap.t) = 
-  let pos_table = t.posTable in
-  match pos_table.(G.int_of_pLavel p) with
-  |Fixed _ |PartialFixable |ZeroFixable ->
-    invalid_arg "neg_decr_othere_p_form_allfixable: not allfixable"
-  |AllFixable rc ->
-    (sub_affect t.posAffect p rm_map);
-    let removing_unknown_count = count_unknown rm_map in
-    let new_state =
-      AllFixable {fixableNum = ref !(rc.fixableNum)
-                 ;otherPCount = ref (!(rc.otherPCount) - removing_unknown_count)
-                 ;otherPMap = sub_unknown_map rc.otherPMap rm_map}
-    in
-    let () = pos_table.(G.int_of_pLavel p) <- new_state in
-    new_state
-
-    
-let neg_decr_othere_p_form_allfixable' t p (rm_map:int PMap.t) =
-  let neg_table = t.negTable in
-  match neg_table.(G.int_of_pLavel p) with
-  |Fixed _ |PartialFixable |ZeroFixable ->
-    invalid_arg "neg_decr_othere_p_form_allfixable: not allfixable"
-  |AllFixable rc ->
-    (sub_affect t.negAffect p rm_map);
-    let removing_unknown_count = count_unknown rm_map in
-    let new_state =
-      AllFixable {fixableNum = ref !(rc.fixableNum)
-                 ;otherPCount = ref (!(rc.otherPCount) - removing_unknown_count)
-                 ;otherPMap = sub_unknown_map rc.otherPMap rm_map}
-    in
-    let () = neg_table.(G.int_of_pLavel p) <- new_state in
-    new_state
-
-    
-let pos_decr_othere_p_form_allfixable t p (rm_map:int PMap.t) ~change:queue =
-  let updated_state = pos_decr_othere_p_form_allfixable' t p rm_map in
-  update_queue_pos p updated_state ~change:queue
-
-
-  
-let neg_decr_othere_p_form_allfixable t p (rm_map:int PMap.t) ~change:queue =
-  let updated_state = neg_decr_othere_p_form_allfixable' t p rm_map in
-  update_queue_neg p updated_state ~change:queue  
-  
-  
-
-  
 module Constructor = struct
 
   let dummy_state = ZeroFixable
   
   let create size = {posTable = Array.make size dummy_state
                     ;negTable = Array.make size dummy_state
+                    ;outerTable = Array.make size None
                     ;posAffect = Array.make size PMap.empty
                     ;negAffect = Array.make size PMap.empty
+                    ;outerAffect = Array.make size PMap.empty
                     }
 
-  let pos_registor t p fixable_level ~change:queue =
-    let state = update_table t.posTable p fixable_level in (* fixable_level = allの時はinvalid *)
-    update_queue_pos p state ~change:queue
-
+  let pos_registor = pos_update
     
-    
-  let neg_registor t p fixable_level ~change:queue =
-    let state = update_table t.negTable p fixable_level in (* fixable_level = allの時はinvalid *)
-    update_queue_neg p state ~change:queue    
-
-
-  let pos_registor_allfixable t p (othere_unknown_map: int PMap.t) fixable_num
-                              ~change:queue
-    = 
-    let unknown_count = count_unknown othere_unknown_map in
-    let state = AllFixable {fixableNum = ref fixable_num
-                           ;otherPCount = ref unknown_count
-                           ;otherPMap = othere_unknown_map}
-    in
-    let () = t.posTable.(G.int_of_pLavel p) <- state in
-    let () = update_affect t.posAffect p othere_unknown_map in
-    update_queue_pos p state ~change:queue
-
-
-
-    
-  let neg_registor_allfixable t p (othere_unknown_map: int PMap.t) fixable_num 
-                              ~change:queue
-    =
-    let unknown_count = count_unknown othere_unknown_map in
-    let state = AllFixable {fixableNum = ref fixable_num
-                           ;otherPCount = ref unknown_count
-                           ;otherPMap = othere_unknown_map}
-    in
-    let () = t.negTable.(G.int_of_pLavel p) <- state in
-    let () = update_affect t.negAffect p othere_unknown_map in
-    update_queue_neg p state ~change:queue 
-
-
-
+  let neg_registor = neg_update
 
 end

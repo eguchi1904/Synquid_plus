@@ -129,6 +129,8 @@ let remove_fixable_fixratio ~change:{ fixable = fixable_ref; unfixable = unfixab
     let is_partial2zero = !unfixable_ref > 0 && !fixable_ref = 0 in
     is_all2all||is_partial2zero
 
+(* calc_ohtereが呼ばれるのは、all2allの変化の時のみなのでassert failしない
+ *)
 let gen_calc_othere_pos pfix_state p calc_removing_othere_p = 
   fun () ->
     let rm_map = calc_removing_othere_p () in
@@ -244,7 +246,11 @@ let remove_unfixable_fixratio ~change:{fixable = fixable_ref; unfixable = unfixa
     to_all
     
 (* unfixable-- *)
-(* これは同じパターンばかりで抽象化できる。 *)
+(* 
+remove_fixable
+remove_unfixable
+unfixable2fixable
+これは同じパターンばかりで抽象化できる。 *)
 let remove_unfixable t graph p c pol (calc_othere_p:unit -> int PMap.t) (calc_othere_outer_opt:(unit -> int PMap.t) option )
                      ~may_change:(pfix_state, queue) =
   let is_outer = G.is_outer graph p c in
@@ -313,33 +319,59 @@ module Constructor = struct
   let dummy_ratio = {fixable = ref (-1) ; unfixable = ref (-1) } 
 
   let create size = {posRatio = Array.make size dummy_ratio;
-                     negRatio = Array.make size dummy_ratio }
+                     negRatio = Array.make size dummy_ratio;
+                     outerRatio = Array.make size None}
 
-
-  let pos_registor t p fixable_c unfixable_c (calc_other:unit -> int PMap.t)
-                   ~change:(pfix_state, queue) = 
+  let outer_register t p fixable_c unfixable_c  =
     let fix_ratio = {fixable = ref fixable_c; unfixable = ref unfixable_c } in
-    let () = t.posRatio.(G.int_of_pLavel p) <- fix_ratio in
-    (* pfix_stateへの反映 *) 
-    let fixable_lev = to_fixable_level fix_ratio in
-    if fixable_lev  = PredicateFixableLevel.all then
-      let map = calc_other () in
-      PFixState.Constructor.pos_registor_allfixable pfix_state p map fixable_c ~change:queue
-    else
-      PFixState.Constructor.pos_registor pfix_state p fixable_lev ~change:queue
+    let () = t.outerRatio.(G.int_of_pLavel p) <- Some fix_ratio in
+    ()
 
-
-  let neg_registor t p fixable_c unfixable_c (calc_other:unit -> int PMap.t)
+  (* outer_registerを読んだ後に呼び出す *)
+  let pos_registor t graph p fixable_c unfixable_c calc_other calc_other_out_opt
                    ~change:(pfix_state, queue) = 
-    let fix_ratio = {fixable = ref fixable_c; unfixable = ref unfixable_c } in
-    let () = t.negRatio.(G.int_of_pLavel p) <- fix_ratio in
+    let fix_ratio_pos = {fixable = ref fixable_c; unfixable = ref unfixable_c } in
+    let () = t.posRatio.(G.int_of_pLavel p) <- fix_ratio_pos in
     (* pfix_stateへの反映 *)
-    let fixable_lev = to_fixable_level fix_ratio in
-    if fixable_lev  = PredicateFixableLevel.all then
-      let map = calc_other () in
-      PFixState.Constructor.neg_registor_allfixable pfix_state p map fixable_c ~change:queue
-    else
+    let fix_level_pos = to_fixable_level fix_ratio_pos in    
+    match t.outerRatio.(G.int_of_pLavel p), calc_other_out_opt with
+    |Some fix_ratio_out, Some calc_other_out ->
+      let fix_level_out = to_fixable_level fix_ratio_out in
+      PFixState.pos_update
+        pfix_state graph p
+        ~pos_info:(fix_level_pos, calc_other, fixable_c)
+        ~outer_info:(Some (fix_level_out, calc_other_out, !(fix_ratio_out.fixable)))
+        ~change:queue
+    |None, None ->
+      PFixState.pos_update
+        pfix_state graph p
+        ~pos_info:(fix_level_pos, calc_other, fixable_c)
+        ~outer_info:None
+        ~change:queue
+    |_ -> assert false
 
-      PFixState.Constructor.neg_registor pfix_state p fixable_lev ~change:queue
-    
+      
+  (* outer_registerを読んだ後に呼び出す *)
+  let neg_registor t graph p fixable_c unfixable_c calc_other calc_other_out_opt
+                   ~change:(pfix_state, queue) = 
+    let fix_ratio_neg = {fixable = ref fixable_c; unfixable = ref unfixable_c } in
+    let () = t.negRatio.(G.int_of_pLavel p) <- fix_ratio_neg in
+    (* pfix_stateへの反映 *)
+    let fix_level_neg = to_fixable_level fix_ratio_neg in    
+    match t.outerRatio.(G.int_of_pLavel p), calc_other_out_opt with
+    |Some fix_ratio_out, Some calc_other_out ->
+      let fix_level_out = to_fixable_level fix_ratio_out in
+      PFixState.neg_update
+        pfix_state graph p
+        ~neg_info:(fix_level_neg, calc_other, fixable_c)
+        ~outer_info:(Some (fix_level_out, calc_other_out, !(fix_ratio_out.fixable)))
+        ~change:queue
+    |None, None ->
+      PFixState.neg_update
+        pfix_state graph p
+        ~neg_info:(fix_level_neg, calc_other, fixable_c)
+        ~outer_info:None
+        ~change:queue
+    |_ -> assert false
+
 end
