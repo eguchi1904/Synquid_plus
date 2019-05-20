@@ -47,7 +47,7 @@ val replace_e: Id.t M.t ->('a e) -> ('a e)
 val replace_b: Id.t M.t ->('a b) -> ('a b)
 val replace_f: Id.t M.t  ->('a f) -> ('a f)  
 
-  
+val fold_let_anno: (Id.t -> 'a -> 'b -> 'b) ->'a t -> 'b -> 'b
                
 val fv: 'a t -> S.t
 

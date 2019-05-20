@@ -418,3 +418,50 @@ and get_auxi_anno_f  = function
 and get_auxi_anno_case  {constructor = cons; argNames = xs; body = t} =
   get_auxi_anno t
 
+  
+
+let rec fold_let_anno (f:Id.t -> 'a -> 'b -> 'b) (t:'a t) (seed:'b) =
+  match t with
+  |PLet ((x, anno), t1, t2) ->
+    f x anno seed
+    |> fold_let_anno f t1
+    |> fold_let_anno f t2
+  |PE e -> fold_let_anno_e f e seed
+  |PI b -> fold_let_anno_b f b seed
+  |PF fundec -> fold_let_anno_f f fundec seed
+  |PHole -> seed
+and fold_let_anno_e f e seed =
+  match e with
+  |PSymbol _ -> seed
+  |PAuxi _ -> seed
+  |PInnerFun f_in -> fold_let_anno_f f f_in seed
+                   
+  |PAppFo (e1, e2) ->
+    fold_let_anno_e f e1 seed
+    |> fold_let_anno_e f e2
+  |PAppHo (e1, fterm) ->
+    fold_let_anno_e f e1 seed
+    |> fold_let_anno_f f fterm
+
+and fold_let_anno_b f b seed =
+  match b with
+  |PIf (e, t1, t2) ->
+    fold_let_anno_e f e seed
+    |> fold_let_anno f t1
+    |> fold_let_anno f t2
+  |PMatch (e, cases) ->
+    fold_let_anno_e f e seed
+    |> List.fold_right (fold_let_anno_case f) cases
+
+and fold_let_anno_case f case seed =
+  fold_let_anno f case.body seed
+
+and fold_let_anno_f f fterm seed =
+  match fterm with
+  |PFun ((x, anno), t) ->
+    fold_let_anno f t seed
+  |PFix ((_, body_f)) -> fold_let_anno_f f body_f seed
+    
+     
+    
+  

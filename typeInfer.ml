@@ -149,6 +149,9 @@ let extract_goal ta_t =
       (S.empty, S.empty)
   in
   (auxi_ty_map, up_ps, neg_ps)
+
+
+  
   
   
   

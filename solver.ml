@@ -351,7 +351,7 @@ let get_qfree_sol graph assign p_lav sol pol fixability =
         log graph ("pop:"^(G.id_of_pLavel graph p)
                    ^"priority:"^(Priority.to_string graph priority)) t
       in
-      let () = PFixState.fix t.pFixState p
+      let () = PFixState.fix t.pFixState graph p
                              ~may_change:t.queue
       in
       let () = CFixState.prop_p_fix t.cFixState graph p in
@@ -402,8 +402,8 @@ let rec iter_fix graph state assign = (* stateは外に置きたいほんとは 
     
     
         
-let f up_ps down_ps qualifyers cs =
-  let graph = G.create up_ps down_ps cs in
+let f up_ps down_ps up_ps_out down_ps_out qualifyers cs =
+  let graph = G.create up_ps down_ps up_ps_out down_ps_out cs in
   let () = G.log graph in  
   let up_ps, down_ps = PredicateDependency.prop_direction ~may_change:graph up_ps down_ps in
   let () = G.log graph in
