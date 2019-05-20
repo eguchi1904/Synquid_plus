@@ -151,8 +151,17 @@ let extract_goal ta_t =
   (auxi_ty_map, up_ps, neg_ps)
 
 
-  
-  
+(* let f:T = .. in..contents
+の、T中のunknown predicateを集める
+ *)
+let extract_outer (ta_t:Liq.schema TaSyn.t) =
+  TaSyn.fold_let_anno
+    (fun x sch (up_ps_out, down_ps_out) ->
+      let pos_ps, neg_ps, othere_ps = Liq.positive_negative_unknown_p (Liq.schema2ty sch) in
+      (assert (S.is_empty othere_ps));
+      ((S.union up_ps_out pos_ps), (S.union down_ps_out neg_ps)))
+    ta_t
+  (S.empty, S.empty)
   
   
     
@@ -191,6 +200,7 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
                          (TaSyntax.syn2string Liq.schema2string_sort ta_t')
   in
   let auxi_ty_map, up_ps, neg_ps = extract_goal ta_t' in
+  let up_ps_out, down_ps_out = extract_outer ta_t' in
   (* (Printf.printf "\ntmp: %s\n" (Liq.t2string tmp)); *)
   (* (print_string (cons_list_to_string cs)); *)
   let simple_cs = List.concat (List.map split_cons cs)
@@ -210,7 +220,7 @@ let liqCheck z3_env dinfos qualifiers env ta_t req_ty =
   (* logging *)
     try
       (* let p_assign = ConsSolver.find_predicate z3_env qualifiers simple_cs env req_ty in *)
-      let p_assign = Solver.f up_ps neg_ps qualifiers (simple_cs_ann@simple_cs) in
+      let p_assign = Solver.f up_ps neg_ps up_ps_out down_ps_out qualifiers (simple_cs_ann@simple_cs) in
       let auxi_ty_map = M.map (Liq.substitute_F p_assign) auxi_ty_map in
       
     (* logging *)

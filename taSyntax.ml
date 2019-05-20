@@ -418,8 +418,8 @@ and get_auxi_anno_f  = function
 and get_auxi_anno_case  {constructor = cons; argNames = xs; body = t} =
   get_auxi_anno t
 
-  
 
+  
 let rec fold_let_anno (f:Id.t -> 'a -> 'b -> 'b) (t:'a t) (seed:'b) =
   match t with
   |PLet ((x, anno), t1, t2) ->
