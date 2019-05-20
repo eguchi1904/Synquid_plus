@@ -322,10 +322,15 @@ module Constructor = struct
                      negRatio = Array.make size dummy_ratio;
                      outerRatio = Array.make size None}
 
-  let outer_register t p fixable_c unfixable_c  =
-    let fix_ratio = {fixable = ref fixable_c; unfixable = ref unfixable_c } in
-    let () = t.outerRatio.(G.int_of_pLavel p) <- Some fix_ratio in
-    ()
+  let outer_registor t p fixable_unfixable_opt =
+    match fixable_unfixable_opt with
+    |Some (fixable_c, unfixable_c) ->
+      let fix_ratio = {fixable = ref fixable_c; unfixable = ref unfixable_c } in
+      let () = t.outerRatio.(G.int_of_pLavel p) <- Some fix_ratio in
+      ()
+    |None ->
+      let () = t.outerRatio.(G.int_of_pLavel p) <- None in
+      ()
 
   (* outer_registerを読んだ後に呼び出す *)
   let pos_registor t graph p fixable_c unfixable_c calc_other calc_other_out_opt

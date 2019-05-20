@@ -93,7 +93,7 @@ sig
     
   val neg_cs: t -> pLavel -> cLavel list
 
-  val outer_cs: t -> pLavel -> pLavel list option
+  val outer_cs: t -> pLavel -> cLavel list option
 
   val outer_prefered_direction: t -> pLavel -> PreferedDirection.t option
 
@@ -172,16 +172,16 @@ sig
     in
     t.pTable.(p) <- p_node'
 
-let update_direction2down t p =
+  let update_direction2down t p =
     let p_node = t.pTable.(p) in
     let p_node' = {lavel = p_node.lavel
-               ;value =  p_node.value
-               ;preferedDirection = PreferedDirection.down
-               ;env =  p_node.env
-               ;senv =  p_node.senv
-               ;pos =  p_node.pos
-               ;neg =  p_node.neg
-               ;outer = p_node.outer               
+                  ;value =  p_node.value
+                  ;preferedDirection = PreferedDirection.down
+                  ;env =  p_node.env
+                  ;senv =  p_node.senv
+                  ;pos =  p_node.pos
+                  ;neg =  p_node.neg
+                  ;outer = p_node.outer               
                   }
     in
     t.pTable.(p) <- p_node'    
@@ -190,7 +190,7 @@ let update_direction2down t p =
     for p = 0 to t.pNodeNum - 1 do
       f p
     done
-
+    
   let fold_p f t seed =
     let acc = ref seed in
     let () = for p = 0 to t.pNodeNum - 1 do

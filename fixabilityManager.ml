@@ -91,7 +91,21 @@ let count_other_unknown_in_unfix_cs t graph assign cfix_state pol p =
   else
     (G.neg_cs graph p)
     |> List.filter (fun c -> not (CFixState.is_fixed cfix_state c))
-    |> count_other_unknown_in_cs t graph assign  p      
+    |> count_other_unknown_in_cs t graph assign  p
+
+
+let gen_calc_othere t graph asign cfix_state pol p =
+  (fun () -> count_other_unknown_in_unfix_cs t graph asign cfix_state pol p)
+
+let gen_calc_othere_outer_opt t graph assign cfix_state  p =
+  match G.outer_cs graph p with
+  |Some outer_cs ->
+    Some (fun () ->
+        (List.filter (CFixState.isnt_fixed cfix_state) outer_cs)
+        |>count_other_unknown_in_cs t graph assign p
+      )
+  |None -> None
+  
   
   
 let add_affect affect p c q =
@@ -117,11 +131,10 @@ let decr_wait_num t assign graph cfix_state q c
     (* (q c)がFixableになった時の処理 *)
     (match new_fixability with
      |Fixability.Fixable rc ->
-       let calc = (fun () ->
-           count_other_unknown_in_unfix_cs t graph assign cfix_state rc.pol q)
-       in
+       let calc = gen_calc_othere t graph assign cfix_state rc.pol q in
+       let calc_out_opt = gen_calc_othere_outer_opt t graph assign cfix_state q in
        (* qがallfixableになったら、calcを呼び出してothereUnknownの数 を集計する *)
-       PFixableConstraintCounter.unfixable2fixable pfixable_counter q rc.pol calc
+       PFixableConstraintCounter.unfixable2fixable pfixable_counter graph q c rc.pol calc calc_out_opt
                                                    ~may_change:(pfix_state, queue)
      |_ -> ())
   |None -> ()
@@ -140,14 +153,13 @@ let tell_constraint_predicate_is_fixed t graph assign cfix_state p c
 let tell_predicate_constraint_is_fixed t graph assign cfix_state c q pol
                                        ~may_change:(pfixable_counter, pfix_state, queue) =
   if is_fixable t q c then
-    let gen_rm_pmap =(fun () -> count_other_unknown_in_c t graph assign q c) in
-    PFixableConstraintCounter.remove_fixable pfixable_counter q pol gen_rm_pmap
+    let calc_rm_other =(fun () -> count_other_unknown_in_c t graph assign q c) in
+    PFixableConstraintCounter.remove_fixable pfixable_counter graph q c pol calc_rm_other
                                              ~may_change:(pfix_state, queue)
   else
-    let gen_pmap = (fun () -> count_other_unknown_in_unfix_cs
-                                t graph assign cfix_state pol q)
-    in
-    PFixableConstraintCounter.remove_unfixable pfixable_counter q pol gen_pmap
+    let calc = gen_calc_othere t graph assign cfix_state pol q in
+    let calc_out_opt = gen_calc_othere_outer_opt t graph assign cfix_state q in    
+    PFixableConstraintCounter.remove_unfixable pfixable_counter graph q c pol calc calc_out_opt
                                                ~may_change:(pfix_state, queue)
 
 
@@ -283,6 +295,24 @@ module Constructor = struct
     in
     t
 
+  let outer_count_fixable_unfixable_opt t graph p =
+    match G.outer_cs graph p with
+    |Some outer_cs ->
+      let fixable, unfixable =
+        List.fold_left
+          (fun (fixable, unfixable) c ->
+            if is_fixable t p c then
+              (fixable + 1, unfixable)
+            else
+              (fixable, unfixable + 1)
+          )
+          (0, 0)
+          outer_cs
+      in
+      Some (fixable, unfixable)
+    |None -> None
+
+           
   let pos_count_fixable_unfixable t graph p =
     List.fold_left
       (fun (fixable, unfixable) c ->
@@ -307,17 +337,45 @@ module Constructor = struct
       (G.neg_cs graph p)
     
 
+
+  let gen_calc_othere_init t graph pol p =
+    if pol = Polarity.pos then
+      (fun () ->
+        (G.pos_cs graph p)
+        |> count_other_unknown_in_cs t graph M.empty p)
+    else
+      (fun () ->
+        (G.neg_cs graph p)
+        |> count_other_unknown_in_cs t graph M.empty p)
+    
+      
+  let gen_calc_othere_outer_opt_init t graph  p =
+    match G.outer_cs graph p with
+    |Some outer_cs ->
+      Some (fun () ->
+          count_other_unknown_in_cs t graph M.empty p outer_cs
+        )
+    |None -> None
+
+  let outer_registor graph t ~change:fixable_count=
+    G.iter_p
+      (fun p ->
+        let fixable_unfixable_opt = outer_count_fixable_unfixable_opt t graph p in
+        PFixableConstraintCounter.Constructor.outer_registor
+        fixable_count p fixable_unfixable_opt
+      )
+    graph
+         
   (* この時点で、tの初期化は完了している *)
   let pos_registor graph t ~change:(fixable_count, pfix_state, queue) =
     G.iter_p
       (fun p ->
-        let gen_pmap = (fun () -> count_other_unknown_in_cs t graph M.empty p
-                                                            (G.pos_cs graph p)
-                       )
-        in
+        let calc = gen_calc_othere_init t graph Polarity.pos p in
+        let calc_out_opt = gen_calc_othere_outer_opt_init t graph p in        
         let fixable, unfixable = pos_count_fixable_unfixable t graph p in
-        PFixableConstraintCounter.Constructor.pos_registor fixable_count p fixable unfixable gen_pmap
-                                                           ~change:(pfix_state, queue)
+        PFixableConstraintCounter.Constructor.pos_registor
+          fixable_count graph p fixable unfixable calc calc_out_opt
+          ~change:(pfix_state, queue)
       )
       graph
 
@@ -325,15 +383,14 @@ module Constructor = struct
   let neg_registor graph t ~change:(fixable_count, pfix_state, queue) =
     G.iter_p
       (fun p ->
-        let gen_pmap = (fun () -> count_other_unknown_in_cs t graph M.empty p
-                                                            (G.neg_cs graph p)
-                       )
-        in
+        let calc = gen_calc_othere_init t graph Polarity.neg p in
+        let calc_out_opt = gen_calc_othere_outer_opt_init t graph p in        
         let fixable, unfixable = neg_count_fixable_unfixable t graph p in
-        PFixableConstraintCounter.Constructor.neg_registor fixable_count p fixable unfixable gen_pmap
-                                                           ~change:(pfix_state, queue)
+        PFixableConstraintCounter.Constructor.neg_registor
+          fixable_count graph p fixable unfixable calc calc_out_opt
+          ~change:(pfix_state, queue)
       )
-    graph    
+      graph    
         
   (* up_pset, down_p_setは、queueをcreateするために必要 *)
   let f up_p_set down_p_set graph =
@@ -343,6 +400,7 @@ module Constructor = struct
     let fixable_count = PFixableConstraintCounter.Constructor.create p_num in
     let pfix_state = PFixState.Constructor.create p_num in
     let queue = PriorityQueue.create up_p_set down_p_set p_num in
+    let () = outer_registor graph t ~change:fixable_count in
     let () = pos_registor graph t ~change:(fixable_count, pfix_state, queue) in
     let () = neg_registor graph t ~change:(fixable_count, pfix_state, queue) in    
     (t, fixable_count, pfix_state, queue)

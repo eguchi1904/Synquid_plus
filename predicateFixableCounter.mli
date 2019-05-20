@@ -41,6 +41,10 @@ module Constructor:
 sig
   val dummy_ratio : fixRatio
   val create : int -> t
+
+  val outer_registor :
+    t -> G.pLavel -> (int * int) option -> unit
+    
   val pos_registor :
     t -> G.t 
     -> G.pLavel 
