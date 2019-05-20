@@ -500,17 +500,21 @@ let rec substitute_pa (pa_sita:Formula.pa M.t) (t:t) =
        
 
 (* 暗黙に、unknown predicate変数のvar変数に重なりがないことを過程している *)
+(* 環境的には先頭から代入していく *)
 let rec env_substitute_F (sita:Formula.subst) (env:env) :env=
-    List.fold_right
-      (fun env_elm acc ->
-        match env_elm with
-        |P p ->
-          env_add_F acc (Formula.substitution sita p)
-        |B (x, (arg1,arg2,ty)) ->
-          env_add_schema acc (x,(arg1, arg2, substitute_F sita ty))
-      )
-      env
-      env_empty
+  let env', _ = List.fold_right
+                  (fun env_elm (acc,sita) ->
+                    match env_elm with
+                    |P p ->
+                      (env_add_F acc (Formula.substitution sita p), sita)
+                    |B (x, (arg1,arg2,ty)) ->
+                      (env_add_schema acc (x,(arg1, arg2, substitute_F (M.remove Id.valueVar_id sita) ty)),
+                       M.remove x sita)
+                  )
+                  env
+                  (env_empty, sita)
+  in
+  env'
 
 
 (* 環境の先頭から置換していく *)

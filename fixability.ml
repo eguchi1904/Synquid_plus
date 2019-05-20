@@ -176,9 +176,9 @@ let extract_argument_vars senv env =
 let apply_flatten_sita_to_env assign flatten_sita env =
   let flatten_replace = mk_replace_table flatten_sita in
   let flatten_sita_for_fv =    
-    M.filter (fun x _ -> not (Liq.env_mem env x) && (x <> Id.valueVar_id)) flatten_sita
+    M.filter (fun x _ -> not (Liq.env_mem env x)) flatten_sita
   in
- (* bindされていない、_v以外の変数への代入を行う 
+ (* bindされていない変数への代入を行う 
     これが必要になってしまったのは、matchのところでfreeなzをconditionに入れてしまうせい
 *)  
   let env'  = Liq.env_substitute_F flatten_sita_for_fv env in  
