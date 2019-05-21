@@ -5,7 +5,7 @@ OCAMLLDFLAGS += -thread -ccopt -Wl,-rpath,"/Users/eguchishingo/.opam/ocaml-base-
 
 
 
-PACKS = Z3 Ocamlgraph Core
+PACKS = Z3 Ocamlgraph Core Str
 
 
 
@@ -22,11 +22,9 @@ type.mli type.ml preSyntax.ml data_info.mli data_info.ml  mk_tmp.ml parser.mly l
  ml.mli ml.ml qualifier.mli qualifier.ml constraint.mli constraint.ml\
 consGen.mli consGen.ml\
 consGraph.ml predicatePriorityQueue.ml predicateFixState.ml predicateFixableCounter.ml constraintFixState.ml fixability.ml fixabilityManager.ml predicateDependency.ml solver.mli solver.ml consSolver.mli consSolver.ml  typeInfer.mli typeInfer.ml\
-step2.ml step3.ml  main.ml
+step2.ml step3.ml run_synquid.ml main.ml
 
 RESULT = main
-
-
 
 include OCamlMakefile
 

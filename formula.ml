@@ -205,7 +205,7 @@ let rec p2string = function
   |Implies (t1,t2) ->
     Printf.sprintf "%s ==> %s" (p2string t1) (p2string t2)
   |Iff (t1,t2) ->
-    Printf.sprintf "%s <=> %s" (p2string t1) (p2string t2)
+    Printf.sprintf "%s <==> %s" (p2string t1) (p2string t2)
   |Union (t1,t2) ->
     Printf.sprintf "(%s + %s)" (p2string t1) (p2string t2)
   |Intersect (t1,t2) ->

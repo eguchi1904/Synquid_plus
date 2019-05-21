@@ -47,22 +47,25 @@ let mk_data_cons_list :((Id.t * Type.schema) list ->  ((Id.t * Type.schema) list
 　f_name: 合成目標の関数名
 　tmp:テンプレート（本物）
  *)
-
   
-let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * Syntax.t * ((Id.t * Type.schema) list))
-  = (* cons_envにはコンストラクタの情報 *)
-  (print_string (Syntax.syn2string tmp));
-  (Printf.printf "cons_env\n%s" (Type.env2string (Type.env_add_schema_list Type.env_empty cons_env)));
-  let fundecs'  = until_assoc f_name fundecs in
-  let env :Type.env = Type.env_add_schema_list Type.env_empty (fundecs'@cons_env)  in
-  let t = List.assoc f_name fundecs in
-  (Printf.fprintf stderr
-                  "%s :: %s\n"
-                  f_name
-                  (Type.schema2string t));
-  f_name, tmp, (g  data_infos qualifiers env tmp t)
+let apply_synquid data_infos minfos fundecs auxi_sch_list =
+  let auxi_goals = List.map (fun (auxi, _) -> (auxi, Syntax.PHole )) auxi_sch_list in
+  Run_synquid.f data_infos minfos (auxi_sch_list@fundecs) auxi_goals
 
-let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * (Type.t option TaSyntax.t) * ((Id.t * Type.schema) list))
+(* 
+テンプレートから、道の補助関数に要求される肩を推論し、synquidに投げた結果を返す
+
+input:
+f = tmp(unknown auxiliary functions include)
+
+output:
+"
+auxi_1 = ..
+auxi_2 = ..
+f = tmp
+"
+*)
+let g' data_infos minfos qualifiers cons_env fundecs  (f_name, tmp) :Id.t * string 
   =
   let fundecs' = until_assoc f_name fundecs in (* 自分は覗く *)
   let init_env = (Type.env_add_schema_list Type.env_empty (cons_env@fundecs')) in
@@ -71,8 +74,15 @@ let g' data_infos qualifiers cons_env fundecs  (f_name, tmp) :(Id.t * (Type.t op
   match TypeInfer.f_check z3_env data_infos qualifiers init_env tmp f_sch with
   |Ok auxi_ty_list ->
     let auxi_sch_list:(Id.t * Type.schema) list =
-      List.map (fun (g,ty) -> (g, (ts,ps,ty))) auxi_ty_list in
-    f_name, tmp, auxi_sch_list
+      List.map (fun (g,ty) -> (g, (ts,ps,ty))) auxi_ty_list
+    in
+    begin
+      match apply_synquid data_infos minfos fundecs' auxi_sch_list with
+      |Ok auxi_defs_str ->
+        let tmp_str = TaSyntax.remove_annotations tmp |> Syntax.syn2string in
+        f_name, (auxi_defs_str^ tmp_str)
+      |Error mes -> invalid_arg mes
+    end
   |Error _ -> invalid_arg "check fail: not implimented"
     
     
@@ -122,7 +132,7 @@ let rec infile_name_to_outfile_name:string -> string =
 (*   close_out outchan *)
 
 
-let output2file output_file  (data_info_map, minfos, fundecs, defs) =
+let output2file output_file  (data_info_map, minfos, fundecs, defs, synthesized_result) =
   let outchan =
     (match output_file with  |None -> stdout |Some s -> open_out s) in
   let data_info_str = Data_info.data_info_map_2_string data_info_map in
@@ -139,13 +149,18 @@ let output2file output_file  (data_info_map, minfos, fundecs, defs) =
                         defs
   in
   let defs_str =String.concat "\n\n" defs_str_list in
-  (Printf.fprintf outchan "%s \n\n%s \n\n%s \n\n%s \n"
+  let synthesized_result_str =
+    List.fold_right (fun (f, def_str) acc -> def_str^acc) synthesized_result ""
+  in
+  (Printf.fprintf outchan "%s \n\n%s \n\n%s \n\n%s\n%s"
                   data_info_str
                   minfos_str
                   fundecs_str
-                  defs_str);
+                  defs_str
+                  synthesized_result_str);
   (* 以下で、入力ファイルを書き込み *)
   close_out outchan
+
 
 (* let rec_def x t =  (Syntax.PLet (x,t, Syntax.PE (Syntax.PSymbol x))) *)
 (* let qualifiers = *)
@@ -158,29 +173,6 @@ let output2file output_file  (data_info_map, minfos, fundecs, defs) =
 (*   let qLe = Qualifier.mk_qualifier [x_id; y_id]  (Formula.Le (x, valVar)) in *)
 (*   let qNeq = Qualifier.mk_qualifier [x_id; y_id]  (Formula.Neq (x, valVar)) in *)
 (*   [qLe] *)
-
-
-let ope_defs =
-  let open Formula in
-  let open Type in
-  let x_id =  Id.genid "x" in
-  let x = Var (AnyS "a", x_id) in
-  let y_id =  Id.genid "y" in
-  let y = Var (AnyS "a", y_id) in
-  let valVar = Var (AnyS "a", Id.valueVar_id) in
-  let a_ty = TScalar (TAny "a", Bool true) in
-  ["leq", (["a"], [],TFun ((x_id, a_ty),
-                (TFun ((y_id, a_ty),
-                       TScalar (TBool, Eq (valVar, (Le (x, y))))))));
-   "neq", (["a"], [], TFun ((x_id, a_ty),
-                            (TFun ((y_id, a_ty),
-                                   TScalar (TBool, Eq (valVar, (Neq (x, y))))))));
-   "eq",  (["a"], [], TFun ((x_id, a_ty),
-                            (TFun ((y_id, a_ty),
-                                   TScalar (TBool, Eq (valVar, (Eq (x, y))))))));
-  ]
-
-let ope_defs=[]
 
 
 (* ad-hocの塊 *)
@@ -241,24 +233,19 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   in
 
 
-  
+  (* ************************************************** *)  
   (* synthesith *)
+  (* ************************************************** *)  
   (* let mk_tmp = gen_mk_tmp data_info_map minfos in *)
   (* let syn_goals = Mk_tmp.f mk_tmp fundecs syn_goals in  ひとまずtemplateの自動生成は休憩*) 
-  let f_tmp_g_list:(Id.t * 'a TaSyntax.t * ((Id.t * Type.schema) list)) list
-    = List.map (g' data_info_map qualifiers cons_env fundecs) syn_goals
+  let synthesized_result:(Id.t * string) list
+    = List.map (g' data_info_map minfos qualifiers cons_env fundecs) syn_goals
   in
-  let new_fundecs, new_syn_goals =
-    List.fold_left
-      (fun (acc_fundecs, acc_syn_goals) (id, t, auxi_defs) ->
-        let auxi_goals = List.map (fun (auxi_i, _) -> (auxi_i, TaSyntax.PHole)) auxi_defs in
-        (auxi_defs@acc_fundecs,  auxi_goals@acc_syn_goals))
-      (fundecs, syn_goals)
-      f_tmp_g_list
-  in
-  
   let init_env = (Type.env_add_schema_list Type.env_empty (cons_env@fundecs)) in
+  
+  (* ************************************************** *)
   (* liquid type checking *)
+  (* ************************************************** *)  
   let id_check_result_list =
     List.map
       (fun (x, t) ->
@@ -267,20 +254,21 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
         (x, TypeInfer.f_check z3_env data_info_map qualifiers init_env t  x_ty ))
       check_goal
   in
-  (* liquid type infer *)
   
-  let id_type_list =
+  (* ************************************************** *)  
+  (* liquid type infer *)
+  (* ************************************************** *)  
+  let infered_result =
     List.map
       (fun (x, t) ->
         let z3_env =  UseZ3.mk_z3_env () in
         (x, TypeInfer.f z3_env data_info_map qualifiers init_env  t  ))
       infer_goals
   in
-  let id_sch_list = List.map (fun (id, ty) -> (id, (([],[],ty):Type.schema))) id_type_list in
-  let new_fundecs = ope_defs@new_fundecs@id_sch_list in
-  let new_syn_goals' = List.map (fun (x,syn) -> (x, TaSyntax.remove_annotations syn)) new_syn_goals in
-  let new_defs = (List.map (fun (x,tasyn) -> (x, TaSyntax.remove_annotations tasyn)) infer_goals)@new_syn_goals' in
-  (data_info_map, minfos, new_fundecs, new_defs)
+  let infered_result_sch =
+    List.map (fun (id, ty) -> (id, (Type.mk_mono_schmea ty))) infered_result in
+  let infered_goal' = (List.map (fun (x,tasyn) -> (x, TaSyntax.remove_annotations tasyn)) infer_goals) in
+  (data_info_map, minfos, infered_result_sch, infered_goal', synthesized_result)
 
 
   
