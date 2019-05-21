@@ -113,9 +113,15 @@ and syn2string_e = function
   |PSymbol i -> i
   |PAuxi i -> i
   |PInnerFun f -> (syn2string_f f)
-  |PAppFo (e1,e2) -> Printf.sprintf "%s (%s)" (syn2string_e e1) (syn2string_e e2)
-  |PAppHo (e1, f2) -> Printf.sprintf "%s (%s)" (syn2string_e e1) (syn2string_f f2)
-
+  |PAppFo (e1,e2) ->
+    (match e2 with
+    |PSymbol _ | PAuxi _ |PInnerFun _->
+      Printf.sprintf "%s %s" (syn2string_e e1) (syn2string_e e2)
+    |PAppFo _ | PAppHo _ ->
+      Printf.sprintf "%s (%s)" (syn2string_e e1) (syn2string_e e2)  )
+  |PAppHo (e1, f2) ->
+    Printf.sprintf "%s %s" (syn2string_e e1) (syn2string_f f2)
+   
 and syn2string_b = function
   |PIf (e,t1,t2) ->
     Printf.sprintf "if %s then \n %s \n else %s \n"

@@ -55,4 +55,4 @@ val auxi_exist_t: 'a t -> bool
 
 val get_auxi_anno: 'a t -> 'a M.t
 
-val flatten_local_definition: 
+

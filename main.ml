@@ -64,7 +64,40 @@ auxi_1 = ..
 auxi_2 = ..
 f = tmp
 "
-*)
+ *)
+
+let tmp_to_str f_name tmp =
+  match tmp with
+  |TaSyntax.PLet ((x, _),t1, TaSyntax.PE (TaSyntax.PSymbol (y, _)))
+       when x = f_name && y = f_name ->
+    f_name^" = \n"^(TaSyntax.remove_annotations t1 |> Syntax.syn2string )
+   
+  |_ -> f_name^" = \n"^(TaSyntax.remove_annotations tmp |> Syntax.syn2string )
+
+let report_auxi_infer_is_done auxi_sch_list =
+  let fundecs_str_list = List.map
+                           (fun (fname, schm) ->
+                             Printf.sprintf "%s::%s" fname (Type.schema2string schm))
+                           auxi_sch_list
+  in
+  let fundecs_str = String.concat "\n\n" fundecs_str_list in
+  let str = ("\n\n--------------------------------------------------\n"^
+               "finish type inference of auxiliary functions\n"^
+                 "--------------------------------------------------\n"^
+                   fundecs_str)
+  in
+  Format.eprintf "%s@." str
+
+
+let report_runnig_synquid () =
+  let str = 
+    ("\n--------------------------------------------------\n"^
+       "running synquid... \n"^
+         "--------------------------------------------------\n")
+  in
+  Format.eprintf "%s@." str  
+  
+  
 let g' data_infos minfos qualifiers cons_env fundecs  (f_name, tmp) :Id.t * string 
   =
   let fundecs' = until_assoc f_name fundecs in (* 自分は覗く *)
@@ -76,10 +109,12 @@ let g' data_infos minfos qualifiers cons_env fundecs  (f_name, tmp) :Id.t * stri
     let auxi_sch_list:(Id.t * Type.schema) list =
       List.map (fun (g,ty) -> (g, (ts,ps,ty))) auxi_ty_list
     in
+    let () = report_auxi_infer_is_done auxi_sch_list in
+    let () = report_runnig_synquid () in
     begin
       match apply_synquid data_infos minfos fundecs' auxi_sch_list with
       |Ok auxi_defs_str ->
-        let tmp_str = TaSyntax.remove_annotations tmp |> Syntax.syn2string in
+        let tmp_str = tmp_to_str f_name tmp in
         f_name, (auxi_defs_str^ tmp_str)
       |Error mes -> invalid_arg mes
     end
