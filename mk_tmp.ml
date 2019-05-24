@@ -3,6 +3,8 @@ open Syntax
 open Type
 type data_type_arg_info = {name:Id.t; nth:int; data_id:Id.t}
 
+
+                        
 let gen_g_id () = Id.genid "g_"
                         
 let rec pop_data_type_arg': Type.t ->

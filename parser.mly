@@ -24,6 +24,7 @@ let rec pop_lst = function
 %token WHERE
 %token MEASURE
 %token TERMINATION
+%token TEMPLATE
 %token INTSYMBOL
 %token BOOLSYMBOL
 %token EQUAL
@@ -92,7 +93,11 @@ let rec pop_lst = function
 %type < PreSyntax.measureCase > case
 %type <Type.t> texp
 %type <Formula.t> fexp
+%type < (Type.t * ((Id.t * Type.schema) list * (Id.t * Type.t option TaSyntax.t))) list > templates
+%type < (Id.t * Type.schema) list * (Id.t * Type.t option TaSyntax.t) >template_body
+
 %start toplevel
+%start templates
 
 %%
 
@@ -134,6 +139,16 @@ toplevel:
 
 
 
+templates:
+| NEWLINE templates { $2 }
+| TEMPLATE  COLON COLON texp nl RSQBRAC nl template_body LSQBRAC nl templates
+   { ($4, $8)::$11 }
+| EOF
+  { [] }
+
+template_body:
+| fun_dec_list m3 { ($1, $2) }
+
 
 
 m1: /*ユーザー定義型*/
@@ -169,6 +184,10 @@ fun_dec:
 | ID COLON COLON texp nl /*f:: ~~ */
   { ($1, ( (Type.free_tvar $4), [], $4)) }
 
+fun_dec_list:
+| fun_dec fun_dec_list {$1::$2}
+| { [] }
+
 
 /*measure definition*/
 m2:
@@ -193,9 +212,6 @@ cargs:
 m3:/* query */
 | ID nl EQUAL nl prg nl
 {
- if S.mem $1 (TaSyntax.fv $5) then (* recursive def *)
-     ($1, PLet (($1, None), $5, (PE (PSymbol 	($1,[])))) )
- else
      ($1, $5)
 }
 

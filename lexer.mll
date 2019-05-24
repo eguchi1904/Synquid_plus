@@ -26,6 +26,8 @@ rule main = parse
  { TERMINATION }
 | "qualifier"
  { QUALIFIER }
+| "Template"
+ { TEMPLATE }
 | "let"
  { LET }
 | "="

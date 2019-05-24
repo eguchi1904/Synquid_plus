@@ -15,7 +15,8 @@ type contextual = TLet of env * t
 
 type subst = t M.t                        
 
-            
+val access_refinement :(Formula.t -> Formula.t) -> t -> t
+val access_refinement_sch :(Formula.t -> Formula.t) -> schema -> schema
 
 val free_tvar_base : basetype -> Id.t list
 val free_tvar : t -> Id.t list

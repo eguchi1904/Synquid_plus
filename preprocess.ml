@@ -522,7 +522,12 @@ let rec mk_data_pas (env:(Id.t * schema) list) =
     env
 
 
-
+let recursive_def (fname, prog) =
+  let open TaSyntax in
+  if S.mem fname (TaSyntax.fv prog) then (* recursive def *)
+     (fname, PLet ((fname, None), prog ,(PE (PSymbol (fname,[])))) )
+ else
+   (fname, prog)
     
         
 (* この段階では、envにはコンストラクタのみ入っている。 *)
@@ -545,9 +550,88 @@ let f env minfos fundecs (defs:(Id.t * Type.t option TaSyntax.t) list) =
   (Printf.printf "env\n%s\n\n" (Type.env2string (env_add_schema_list env_empty env' )));
   let fundecs' = fillsort2env senv fundecs' in
   let defs' = fillsort2defs senv defs' in
+  let defs' = List.map recursive_def defs' in (* ここで展開する *)
   (env', fundecs', defs')
+
+(* ************************************************** *)
+(* fill pa arg *) (* 上のfは色々なことを一度にやり過ぎていて意味が分からなくなっているので、部品化していく為の一歩*)
+(* ************************************************** *)
   
+let rec fill_pa_args ((arg_sort,rets):(Formula.pa_shape)) (pa:pa) =
+  match pa with
+  (* ここはいらないと思うんだけど *)
+  (* |([(r,_)],_) when List.mem_assoc r senv_param -> *)
+  (*   let r_shape = List.assoc r senv_param in *)
+  (*   id2pa_shape r r_shape *)
+  |(_,p) ->                  (* pの中で、_0,_1が引数 *)
+    (Id.init_pa_arg_counter ());
+    let args' = List.fold_right
+                 (fun  sort args -> args@[((Id.gen_pa_arg ()), sort)])
+                 arg_sort
+                 []
+    in
+    (* let args' = List.mapi (fun i s ->(Printf.sprintf "_%d" i),s) arg_sort in *)
+    (args', p)
+  
+  
+
+let rec fill_pa_args2type (data_info_map:Data_info.t M.t) t =
+  match t with
+  |TScalar (TData (i, ts, ps), p) when M.mem i data_info_map ->
+    let pred_params :((Id.t * Formula.pa_shape) list) = (M.find i data_info_map).Data_info.pred_param in
+    let shapes = List.map snd pred_params in
+    let ps' = List.map2 (fun  shape pa -> fill_pa_args shape pa) shapes ps in
+    let ts' = List.map (fill_pa_args2type data_info_map ) ts in
+    TScalar (TData (i, ts', ps'), p)
+
+  |TScalar (TData (i, ts, ps), p) ->  assert false
+
+  |TFun ((x,t1), t2) ->
+    let t1' = fill_pa_args2type data_info_map  t1 in
+    let t2' = fill_pa_args2type data_info_map  t2 in
+    TFun ((x,t1'), t2')
+
+  |t -> t
+
+
+(* data_info_mapの情報を元に,predicate parameterの引数を作る
+それの適切なinstantiateなどはあとで
+ *)
+let rec fill_pa_args2schema data_info_map ((ts,ps,t):schema) =
+  let t' = fill_pa_args2type data_info_map t in
+  (ts,ps,t')
+
+
+(* fillsort_to_formula *)
+let fillsort2formula data_info_map minfos e=
+  let senv_cons =
+    M.bindings data_info_map
+    |> List.map
+         (fun (_,data_info) ->
+           data_info.Data_info.cons_list           
+           |> List.map
+                (fun (cons, (_,_,ty)) ->
+                  (cons, type2pashape ty))
+         )
+  |> List.concat
+  in
+  (* let senv_cons = *)
+  (*   List.map (fun (cons,(_,_,c_t)) -> (cons, type2pashape c_t) ) env in *)
+  let senv_mes = List.map
+                   (fun minfo -> (minfo.name, PreSyntax.extend2shape minfo.shape))
+                   minfos
+  in
+  let senv =  senv_cons@senv_mes in (* コンストラクタとmeasureのsort shapeを必要とする *)
+  let fv_e = S.elements (Formula.fv_include_v e) in
+  let senv_var = List.map (fun x -> (x, Formula.UnknownS (Id.genid "qualifier"))) fv_e in
+  fillsort senv [] senv_var e
+  
+
+  
+(* ************************************************** *)
 (* qualifyer *)
+(* ************************************************** *)
+  
   
 let rec fillsort_strict' senv senv_param senv_var = function
   |Bool b -> Bool b, (BoolS, [])

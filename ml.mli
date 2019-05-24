@@ -77,7 +77,7 @@ val mk_refine_ignore_sch: Data_info.t M.t -> schema -> Type.schema
 (*--------------------------------------------------*)
 (* type inference *)
 (*--------------------------------------------------*)
-  
+exception ML_Inf_Err of string
 val unify2: t -> t -> t subst
 val infer: schema env -> (t option) TaSyntax.t -> (schema TaSyntax.t * t)
 val check: schema env -> (t option) TaSyntax.t -> t -> schema TaSyntax.t 

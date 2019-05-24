@@ -20,7 +20,8 @@ type t_pair = {
   pair : Id.t;
   fst : PreSyntax.measureInfo;
   snd : PreSyntax.measureInfo;
-}
+  }
+            
 val mk_data_info : (Id.t * Type.schema) list -> t M.t
 
 val instantiate_pred_param_shape : t -> Type.t list -> (Id.t * Formula.pa_shape) list

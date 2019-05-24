@@ -11,9 +11,24 @@ type t =
    |TData of  Id.t * (t list) * ( Formula.pa list)  (* Di T <p> *)
    |TVar of (Formula.subst) * Id.t                  (* will unuse *)
    |TAny of Id.t                
-          
+
+let rec access_refinement (f:Formula.t -> Formula.t)  = function
+  |TScalar (b, p) -> TScalar (access_refinement_base f b, f p)
+  |TFun((x,t1), t2) -> TFun((x,access_refinement f t1), access_refinement f t2)
+  |TBot -> TBot
+
+and access_refinement_base f = function
+  |TVar _ -> assert false    
+
+  |TData (name, ts, ps) ->
+    let ts' = List.map (access_refinement f) ts in    
+    let ps' = List.map (fun (arg, p) -> (arg, f p)) ps in
+    TData (name, ts', ps')
+  |TInt|TBool|TAny _ as base -> base
 
 type schema =  (Id.t list) * ((Id.t * Formula.pa_shape) list) * t
+             
+let access_refinement_sch f (alist, plist, ty) = (alist, plist, access_refinement f ty)             
 module Eq:sig
   val f: t -> t -> bool
   val f_sch: schema -> schema -> bool  

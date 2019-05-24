@@ -97,8 +97,16 @@ let report_runnig_synquid () =
   in
   Format.eprintf "%s@." str  
   
+let auxi_defs_to_str auxi_sch_list =
+  let fundecs_str_list = List.map
+                           (fun (fname, schm) ->
+                             Printf.sprintf "%s::%s" fname (Type.schema2string schm))
+                       auxi_sch_list
+  in
+  String.concat "\n\n" fundecs_str_list 
   
-let g' data_infos minfos qualifiers cons_env fundecs  (f_name, tmp) :Id.t * string 
+  
+let g' data_infos minfos qualifiers cons_env fundecs synthesis_mode (f_name, tmp)
   =
   let fundecs' = until_assoc f_name fundecs in (* 自分は覗く *)
   let init_env = (Type.env_add_schema_list Type.env_empty (cons_env@fundecs')) in
@@ -110,6 +118,10 @@ let g' data_infos minfos qualifiers cons_env fundecs  (f_name, tmp) :Id.t * stri
       List.map (fun (g,ty) -> (g, (ts,ps,ty))) auxi_ty_list
     in
     let () = report_auxi_infer_is_done auxi_sch_list in
+    if not synthesis_mode then
+      let auxi_sch_str = auxi_defs_to_str auxi_sch_list in
+      (f_name, auxi_sch_str)
+    else
     let () = report_runnig_synquid () in
     begin
       match apply_synquid data_infos minfos fundecs' auxi_sch_list with
@@ -212,7 +224,7 @@ let output2file output_file  (data_info_map, minfos, fundecs, defs, synthesized_
 
 (* ad-hocの塊 *)
 let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
-               Id.t -> Type.schema -> Syntax.t ) = 
+               Id.t -> Type.schema -> Syntax.t ) synthesis = 
   let lexbuf = if file = "" then  Lexing.from_channel stdin
                else let inchan = open_in (file) in
                     Lexing.from_channel inchan
@@ -274,7 +286,7 @@ let main file (gen_mk_tmp: Data_info.t M.t ->  PreSyntax.measureInfo list ->
   (* let mk_tmp = gen_mk_tmp data_info_map minfos in *)
   (* let syn_goals = Mk_tmp.f mk_tmp fundecs syn_goals in  ひとまずtemplateの自動生成は休憩*) 
   let synthesized_result:(Id.t * string) list
-    = List.map (g' data_info_map minfos qualifiers cons_env fundecs) syn_goals
+    = List.map (g' data_info_map minfos qualifiers cons_env fundecs synthesis) syn_goals
   in
   let init_env = (Type.env_add_schema_list Type.env_empty (cons_env@fundecs)) in
   
@@ -311,6 +323,7 @@ let _ =
   let file = ref "" in
   let out_file = ref None in
   let mk_tmp_fun = ref Mk_tmp.fold in
+  let synthesis = ref false in
   (Arg.parse
      [("-tmp",
       (Arg.String
@@ -323,12 +336,16 @@ let _ =
       ("-o",
        (Arg.String
           (fun s -> out_file := Some s)),
-        "output file name")
+       "output file name");
+      ("-synthesis",
+       (Arg.Unit
+          (fun () -> synthesis := true)),
+      "synthesize")
       
      ]
      (fun s -> file := s)
      ("synquid+: using z3 version" ^ Z3.Version.full_version ));
-  let result = main !file !mk_tmp_fun in
+  let result = main !file !mk_tmp_fun !synthesis in
   (Printf.printf "z3_time:%f" !UseZ3.z3_t);
   output2file !out_file result
 
