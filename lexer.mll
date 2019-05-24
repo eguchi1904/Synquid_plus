@@ -101,7 +101,9 @@ rule main = parse
 | '.'
  { DOT }
 | ','
- { COMMA } 
+ { COMMA }
+| '%'
+{ PERCENT }
 
 | "_v"
  { VALVAR }

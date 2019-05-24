@@ -1,0 +1,32 @@
+data BST a where
+ Empty :: BST a
+ Node  :: v: a -> l: BST {a | _v < v} -> r: BST {a | v < _v} -> BST a
+                        
+
+termination measure size :: BST a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node v l r -> size l + size r + 1
+  
+
+measure keys :: BST a -> Set a where
+  Empty -> []
+  Node v l r -> keys l + keys r + [v]
+
+data List a where
+ Nil :: List a
+ Cons :: x: a -> xs: List a -> List a  
+    
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs     
+    
+measure elems :: List a -> Set a where 
+ Nil -> []
+ Cons x xs -> [x] + elems xs
+
+bin2list :: t:BST a -> {List a | elems _v == keys t && len _v == size t}
+
+bin2list = \t.
+ match t with
+  Empty -> Nil
+  Node v l r ->  g_1 v (bin2list l) (bin2list r)

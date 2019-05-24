@@ -60,6 +60,7 @@ let rec pop_lst = function
 %token PIPE
 %token BACKSLASH
 %token DOT
+%token PERCENT
 %token COMMA
 %token VALVAR
 %token TRUE
@@ -141,13 +142,21 @@ toplevel:
 
 templates:
 | NEWLINE templates { $2 }
-| TEMPLATE  COLON COLON texp nl RSQBRAC nl template_body LSQBRAC nl templates
-   { ($4, $8)::$11 }
+| TEMPLATE  COLON COLON texp nl PERCENT PERCENT nl template_body nl PERCENT PERCENT nl templates
+   { ($4, $9)::$14 }
 | EOF
   { [] }
 
+| error
+    { failwith
+     (let line_pos=(Parsing.symbol_start_pos ()).Lexing.pos_bol in
+	(Printf.sprintf "parse error near line %d charactfers %d-%d"
+	   ((Parsing.symbol_start_pos ()).Lexing.pos_lnum)
+	   ((Parsing.symbol_start_pos ()).Lexing.pos_cnum-line_pos)
+	   ((Parsing.symbol_end_pos ()).Lexing.pos_cnum-line_pos))) }
+
 template_body:
-| fun_dec_list m3 { ($1, $2) }
+| nl fun_dec_list nl PERCENT nl m3 { ($2, $6) }
 
 
 
@@ -185,13 +194,13 @@ fun_dec:
   { ($1, ( (Type.free_tvar $4), [], $4)) }
 
 fun_dec_list:
-| fun_dec fun_dec_list {$1::$2}
-| { [] }
+| fun_dec nl fun_dec_list {$1::$3}
+| nl { [] }
 
 
 /*measure definition*/
 m2:
-| MEASURE ID COLON COLON extend_sort_shape WHERE nl cases
+| MEASURE ID  COLON COLON extend_sort_shape WHERE nl cases
  { mk_measureInfo $2 $5 $8 false }
 | TERMINATION MEASURE ID COLON COLON extend_sort_shape WHERE nl cases
  { mk_measureInfo $3 $6 $9 true } 

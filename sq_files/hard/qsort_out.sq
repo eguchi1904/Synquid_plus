@@ -1,0 +1,53 @@
+data RList a <r::a -> a -> Bool> where 
+ Nil :: RList (a) <{(r _0  _1 )}> 
+ Cons :: (x:a -> (xs:RList ({a | (r x  _v )}) <{(r _0  _1 )}>  -> RList (a) <{(r _0  _1 )}> ))
+
+
+data Pair a b  where 
+ Pair :: (xx:a -> (yy:b -> Pair (a) (b)))
+ 
+
+measure fst::Pair a b -> a where 
+ Pair xx yy -> xx 
+
+measure snd::Pair a b -> b where 
+ Pair xx yy -> yy 
+
+termination measure len::RList a -> {Int | (_v  >= 0)} where 
+ Nil  -> 0
+ Cons x xs -> (1 + (len xs ))
+
+measure elems::RList a -> Set a where 
+ Nil  -> []
+ Cons x xs -> ([x ] + (elems xs )) 
+
+ 
+
+
+
+
+
+
+g_1 :: x99:a39 -> x100:RList a39 <True> -> {Pair RList {a39|_v <= x99 && _v <= x99} <True> RList {a39|x99 <= _v} <True>|(len (fst _v) + len (snd _v)) + 1 == 1 + len x100 && (elems (fst _v) + elems (snd _v)) + [x99] == [x99] + elems x100}
+g_1 = \x99 . \x100 . 
+    match x100 with
+      Nil -> Pair Nil Nil
+      Cons x5 x6 -> 
+        match g_1 x99 x6 with
+          Pair x11 x12 -> 
+            if x99 <= x5
+              then Pair x11 (Cons x5 x12)
+              else Pair (Cons x5 x11) x12
+
+qsort = 
+let append = \x.\l1.\l2.
+match l1 with 
+ Nil  -> Cons x l2
+ Cons y ys -> Cons y (append x ys l2)  
+in
+ \l.
+match l with 
+ Nil  -> Nil
+ Cons x xs -> 
+match g_1 x xs with 
+ Pair l1 l2 -> append x (qsort l1) (qsort l2)  

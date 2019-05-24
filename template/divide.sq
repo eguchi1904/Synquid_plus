@@ -1,0 +1,19 @@
+f :: l:RList a <{_}> -> RList a <{_}>
+{
+
+f =
+ let append:: x:a -> l1:RList a <{_}> -> l2:RList a <{_}> ->
+            {RList {a|_} <{_}>|len _v == len l1 + len l2 + 1 && elems _v == elems l1 + elems l2 + [x]} 
+  = \x. \l1. \l2.
+   match l1 with
+     Nil -> Cons x l2
+     Cons y ys -> Cons y (append x ys l2)
+ in
+ \l. match l with
+   Nil -> Nil
+   Cons x xs ->
+     match g_1 x xs with -- len l1 + len l2 = len xs
+       Pair l1 l2 -> append x (f l1) (f l2)
+
+
+}

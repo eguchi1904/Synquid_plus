@@ -1,0 +1,20 @@
+Template :: RList a <{_}> -> b
+%%
+split :: xs: RList a <{True}>-> {Pair (RList a <{True}>) (RList a <{True}>) |((( len (fst _v)) == (len (snd _v))) || (((len (fst _v)) +1) == (len (snd _v)))) && (((len (fst _v)) + (len (snd _v))) == (len xs)) && ((elems (fst _v) + elems (snd _v)) == elems xs) }	
+
+%
+
+f = \l.
+ match l with 
+  Nil  -> g_0 Nil
+  Cons x xs -> 
+    match xs with 
+      Nil  -> g_1 x 
+      Cons y44 ys45 -> 
+       match split l with 
+         Pair l1 l2 -> g_2 (f l1) (f l2)
+	 
+
+%%
+
+

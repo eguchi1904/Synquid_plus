@@ -1,0 +1,19 @@
+data RList a <r :: a -> a -> Bool> where
+  Nil :: RList a <r>
+  Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+  
+termination measure len :: RList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+  
+leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
+
+
+id ::x:a -> a
+
+id = \x. g_1 x
+

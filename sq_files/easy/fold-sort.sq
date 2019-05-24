@@ -1,0 +1,26 @@
+data RList a <r :: a -> a -> Bool> where
+  Nil :: RList a <r>
+  Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+  
+termination measure len :: RList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+  
+leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
+
+
+sort :: l: RList a <{True}> -> {RList a <{_0 <= _1}> | (elems _v == elems l) && (len _v == len l)}
+
+-- sort = \l.
+-- match l with 
+--  Nil  ->  Nil 
+--  Cons y ys ->g_2 y (sort ys)
+ 
+sort = \l.
+match l with 
+ Nil  ->  g_1 Nil 
+ Cons y ys -> (g_2:: x:b -> xs:RList b <{_}> -> RList b <{_}>)  y (sort ys) 

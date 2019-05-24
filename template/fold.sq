@@ -1,0 +1,50 @@
+-- List , RList, Pair, measureの定義に暗黙に依存してる。
+-- 自動生成もできるけど、今はshapeごとに用意しておく
+
+Template :: l:List a -> b
+%%
+-- empty
+%
+
+f = \l.
+match l with 
+ Nil  ->  g_0 Nil 
+ Cons y ys -> g_1 y (f ys)
+
+%%
+
+Template :: l1:List a -> l2:List b -> c
+%%
+%
+f2 = \l.\r.
+match l with
+  Nil -> g_0 Nil r
+  Cons y ys -> g_1 y r (f2 ys r)
+%%
+
+Template :: l:RList a <{_}> -> b
+%%
+%
+f = \l.
+match l with 
+ Nil  ->  g_1 Nil 
+ Cons y ys -> g_2 y (f ys)
+%%
+
+Template :: ll:ListOfLists a -> b
+%%
+%
+f = \xss.
+ match xss with
+  Nil2 -> g_0 Nil
+  Cons2 ys yss -> g_1 ys (f yss)
+%%
+
+Template :: t:BST a -> b
+%%
+%
+f = \t.
+ match t with
+ Empty -> g_0 Nil
+ Node v l r -> g_1 v (f l) (f r)
+%%

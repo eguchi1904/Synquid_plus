@@ -1,0 +1,67 @@
+data Pair a b where
+ Pair :: xx: a -> yy: b -> Pair a b
+
+
+measure fst :: Pair a b -> a where
+  Pair xx yy -> xx
+  
+measure snd :: Pair a b -> b where
+  Pair xx yy -> yy
+
+-- Pair :: xx:a -> yy:b -> {Pair a b | fst _v == xx && snd _v == yy}
+
+data RList a <r :: a -> a -> Bool> where
+  Nil :: RList a <r>
+  Cons :: x: a -> xs: RList {a | r x _v} <r> -> RList a <r>
+  
+termination measure len :: RList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+
+measure elems :: RList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+  
+
+
+leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
+geq :: x: a -> y: a  -> {Bool | _v == (x >= y)}
+
+
+qsort :: l: RList a <{True}> -> {RList a <{_0 <= _1}>|(len _v == len l) && (elems _v == elems l)}
+
+qsort =
+ let append:: x:a -> l1:RList a <{_}> -> l2:RList a <{_}> ->
+            {RList {a|_} <{_}>|len _v == len l1 + len l2 + 1 && elems _v == elems l1 + elems l2 + [x]} 
+  = \x. \l1. \l2.
+   match l1 with
+     Nil -> Cons x l2
+     Cons y ys -> Cons y (append x ys l2)
+ in
+ \l. match l with
+   Nil -> Nil
+   Cons x xs ->
+     match g_1 x xs with -- len l1 + len l2 = len xs
+       Pair l1 l2 -> append x (qsort l1) (qsort l2)
+
+-- qsort =
+--  \l. match l with
+--    Nil -> Nil
+--    Cons x xs ->
+--     match xs with
+--      Nil ->
+--      Cons y ys ->
+--       let append:: l1:RList a <{_}> -> l2:RList a <{_}> ->
+--             {RList {a|_} <{_}>|len _v == len l1 + len l2 + 1 && elems _v == elems l1 + elems l2 + [x]} 
+--        = \l1. \l2.
+--           match l1 with
+--               Nil -> l2
+--            Cons y ys -> Cons y (append ys l2)
+--      in
+--       match g_1 x xs with -- len l1 + len l2 = len xs
+--        Pair l1 l2 -> append (qsort l1) (qsort l2)
+
+
+--split :: x:a -> l:{RList a <{True}> | len _v >= 2}  -> {Pair (RList {a| _v >= x} <{True}>) (RList {a| _v <= x} <{True}>) | len (fst _v) + len (snd _v) == len l + 1 && elems (fst _v) + elems (snd _v) == elems l + [x] && len (fst _v) <= len l && len (snd _v) <= len l}
+
+-- split = ??
